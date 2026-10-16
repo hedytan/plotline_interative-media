@@ -1,5 +1,7 @@
 # Plotline — walk the board
 
+**▶ Play it in your browser: https://hedytan.github.io/plotline_interative-media/** (click once to start the sound)
+
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You stand in the middle of a board-game main street and keep walking. The street never ends: it loops like a game board, and property value rises the further you go. Every building, sign and sound is drawn or synthesised in code. The only library is p5.js.
 
 ## Concept
