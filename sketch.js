@@ -24,7 +24,7 @@
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
 const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
-const STROLL_SPD = 1.2, WALK_SPD = 1.7, RUN_SPD = 4.2, DASH_SPD = 11;
+const STROLL_SPD = 3, WALK_SPD = 4.5, RUN_SPD = 9, DASH_SPD = 11;   // metres per second
 const TIER_OF = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
 const BOARD_COL = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '#f28c28', red: '#e23b3b', yellow: '#f2d13a', green: '#1fa35b', navy: '#1f4fa8' };
 const DISTRICTS = [
@@ -166,11 +166,11 @@ function draw() {
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
   else if (turnAnim || visit) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
-  stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 3)));
+  stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.
   const ratio = Math.min(1.5, Math.abs(stepSpeed) / WALK_SPD);
-  if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.abs(stepSpeed) * 0.42); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
+  if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
   bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
   lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
