@@ -122,6 +122,8 @@ class StreetSound {
     this.voices += 3; o.onended = () => { this.voices -= 3; o.disconnect(); g.disconnect(); p.disconnect(); };
     o.start(t); o.stop(t + 0.55);
   }
+  // A shop door opening: a small bell.
+  door() { if (!this._ok(6)) {return;} const t = this.context.currentTime; this._note(1760, t, 0.6, 'sine', 0.05); this._note(2217.5, t + 0.07, 0.5, 'sine', 0.035); }
   // Money: a till chime up for pay, down for spending.
   cash(up = true) { if (!this._ok(8)) {return;} const t = this.context.currentTime; const seq = up ? [783.99, 1046.5, 1318.5] : [1318.5, 1046.5]; seq.forEach((f, i) => this._note(f, t + i * 0.08, 0.4, 'triangle', 0.07)); this._burst(t, 0.05, 5000, 0.06); }
   // Turning a corner: a soft swish across the stereo field.
@@ -143,8 +145,7 @@ window.StreetSound = StreetSound;
  *   -> Brick & Glass Quarter -> Pinnacle Heights (skyscrapers) -> pass GO -> Rusty Row
  * Each lap is re-seeded, so the street never repeats exactly.
  * Chance casinos reshape the street ahead when you walk past them (boom, crash or
- * nightfall). A stone jail sits in Rusty Row: just visiting. Rolling the dice sends you
- * dashing forward.
+ * nightfall). A stone jail sits in Rusty Row: just visiting.
  * The street is not built until you walk toward it: beyond about 55 m each lot is only an
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
@@ -155,8 +156,8 @@ window.StreetSound = StreetSound;
  * crossing with A / D.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E to use a shop or office, A / D (or Left / Right) to turn at a crossing,
- *   Enter to stroll on its own, Space to roll the dice, move the mouse to look around,
+ *   E or Space to go into a shop or office, Left / Right (or A / D) to turn at a crossing,
+ *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
@@ -181,7 +182,7 @@ const SHOP_NAMES = [
 
 let seed = 2718, distanceWalked = 0, clockT = 0, paused = false, stepSpeed = 0, autoWalk = false, pointerHeld = false;
 let stepPhase = 0, bobAmp = 0, lookYaw = 0, lookPitch = 0, canvasNode, sound, audioStarted = false, grain;
-let dashTarget = null, dice = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
+let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
 const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
@@ -207,7 +208,7 @@ function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E to use a shop, A or D to turn at a crossing, Space to roll the dice, Enter to stroll, M for sound.');
+  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to go into a shop, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
   sound = new StreetSound(); textFont('Georgia');
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -301,7 +302,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim) { target = 0; }
+  else if (turnAnim || visit) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 3)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -314,7 +315,7 @@ function draw() {
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw; cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw + visitYaw; cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
   // World state: chunks in view, district changes, landmarks, economy.
@@ -757,7 +758,7 @@ function drawBin(q, p) {
   ctx.fillStyle = toneN('#4a5a4a', p.z); ctx.beginPath(); ctx.ellipse(q.x + 0.5 * k, q.y - 0.05 * k, 0.25 * k, 0.08 * k, 0, 0, TWO_PI); ctx.fill();
 }
 
-/* ---------- Overlays: district deed card, Chance card, dice ---------- */
+/* ---------- Overlays: district deed card and Chance card ---------- */
 function drawOverlays() {
   // Vignette and grain.
   const vg = ctx.createRadialGradient(width / 2, height * 0.5, Math.min(width, height) * 0.4, width / 2, height * 0.5, Math.max(width, height) * 0.8);
@@ -779,11 +780,7 @@ function drawOverlays() {
     }
   }
   drawDayHud();
-  if (dice) {
-    const age = clockT - dice.t, rolling = age < 0.8, a = 1 - easeN((age - 2.4) / 0.5);
-    if (a > 0) { push(); drawingContext.globalAlpha = a; for (let i = 0; i < 2; i++) { const v = rolling ? 1 + Math.floor(Math.random() * 6) : dice.v[i]; drawDie(width / 2 + (i - 0.5) * 80, height - 90, 56, v, rolling ? Math.sin(clockT * 30 + i) * 0.4 : 0); }
-      if (!rolling) { fill(255); stroke(0, 90); strokeWeight(3); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(18); text(`Advance ${dice.v[0] + dice.v[1]} lots`, width / 2, height - 140); } pop(); }
-  }
+
 }
 function deedCard(cx, y, a, col, title, tag, foot) {
   push(); const w = Math.min(280, width - 32), x = cx - w / 2; drawingContext.globalAlpha = a; noStroke();
@@ -791,18 +788,6 @@ function deedCard(cx, y, a, col, title, tag, foot) {
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(15); text(title, cx, y + 26);
   textStyle(NORMAL); fill(60, 50, 44); textSize(13); text(tag, cx, y + 60); fill(130, 110, 100); textSize(11); text(foot, cx, y + 79); pop();
 }
-function drawDie(x, y, s, v, rot) {
-  push(); translate(x, y); rotate(rot); fill(255, 252, 245); stroke(60, 40, 30); strokeWeight(2); rectMode(CENTER); rect(0, 0, s, s, 10); noStroke(); fill(200, 40, 40);
-  const pts = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] }[v];
-  for (const [px, py] of pts) {circle(px * s * 0.26, py * s * 0.26, s * 0.17);} pop();
-}
-function rollDice() {
-  if (dashTarget !== null) {return;}
-  const v = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
-  dice = { v, t: clockT }; sound.dice();
-  setTimeout(() => { dashTarget = distanceWalked + (v[0] + v[1]) * 7; }, 800);
-}
-
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
 function mousePressed(e) { if (e.target !== canvasNode) {return;} canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
@@ -812,7 +797,6 @@ function keyPressed(e) {
   if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd'].includes(k)) {return false;}
   beginSound();
   if (!paused && dayKey(e)) {return false;}
-  if (key === ' ') { rollDice(); return false; }
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
@@ -865,10 +849,12 @@ function dayUpdate(z) {
     lastWealthTier = wt;
     for (const [c, ch] of chunks) { if (ch.z0 > z + APPEAR_Z + 12 && !ch.lots.includes(dest)) { chunks.delete(c); } }
   }
+  if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
+  updateVisit();
   // Keep the destination valid: it must still exist and not be behind you.
   const task = currentTask();
   if (dest && ![...chunks.values()].some(ch => ch.lots.includes(dest))) { dest = null; }
-  if (dest && dest.z1 < z - 4) { dest = null; wantDestFrom = z + 60; sayToast(`Missed it. There’s another ${task.place.toLowerCase()} ahead.`); }
+  if (dest && dest.z1 < z - 4 && !visit) { dest = null; wantDestFrom = z + 60; sayToast(`Missed it. There’s another ${task.place.toLowerCase()} ahead.`); }
   if (!dest && task.kind !== 'park' && !dayOver) { pickDest(task, Math.max(wantDestFrom, z + 70)); }
 }
 function pickDest(task, fromZ) {
@@ -886,21 +872,47 @@ function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 &&
 /* ---------- Doing the task ---------- */
 function nearDest(z) {
   const task = currentTask();
-  if (dayOver) { return null; }
+  if (dayOver || visit) { return null; }
   if (task.kind === 'park') { const ch = chunkAt(Math.floor(z / CHUNK_LEN)); return ch.park && modN(z, CHUNK_LEN) > CROSS_W + 4 ? { task, amount: 0 } : null; }
   if (!dest || riseOf(dest.born) < 0.9) { return null; }
   const mid = (dest.z0 + dest.z1) / 2;
   return Math.abs(mid - z) < 8 ? { task, amount: priceAt(task, dest.tier) } : null;
 }
+// Pressing E starts a short stop: you turn to the door, wait while it happens, then walk on.
+const VISIT = {
+  cafe: { dur: 3.2, doing: 'The barista is making your coffee…', item: 'cafe' },
+  office: { dur: 4.5, doing: 'Working…', item: null },
+  deli: { dur: 3.2, doing: 'Making your sandwich…', item: 'deli' },
+  park: { dur: 3.5, doing: 'Sitting on a bench, watching the trees…', item: null }
+};
+let visit = null, visitYaw = 0, heldItem = null, queuedTurn = 0;
 function doTask() {
+  if (visit) { return; }
   const near = nearDest(distanceWalked); if (!near) { return; }
   const { task, amount } = near;
   if (amount < 0 && wallet + amount < 0) { sayToast('Not enough money. Go to work first!'); return; }
+  const side = dest ? dest.side : -1;
+  visit = { task, amount, side, t: clockT, dur: VISIT[task.kind].dur };
+  stepSpeed = 0; autoWalk = false;
+  if (task.kind !== 'park' && task.kind !== 'office') { heldItem = null; }
+  sound.door();
+}
+function updateVisit() {
+  if (!visit) { visitYaw = lerp(visitYaw, 0, 0.12); return; }
+  const age = clockT - visit.t, d = visit.dur;
+  // Turn to face the door, hold, then turn back to the street.
+  const inA = easeN(age / 0.6), outA = 1 - easeN((age - (d - 0.6)) / 0.6);
+  visitYaw = visit.side * 1.05 * Math.min(inA, outA);
+  if (age >= d) { finishVisit(); }
+}
+function finishVisit() {
+  const { task, amount } = visit; visit = null;
   wallet += amount;
   if (amount !== 0) { moneyPops.push({ text: moneyText(amount), t: clockT, up: amount > 0 }); sound.cash(amount > 0); }
   if (dest) { dest.dest = null; dest.doneKind = task.kind; }
   dest = null; wantDestFrom = distanceWalked + 40;
   sayToast(task.done);
+  if (VISIT[task.kind].item) { heldItem = { kind: VISIT[task.kind].item, t: clockT }; }
   if (task.kind === 'park') { endOfDay(); return; }
   taskIdx++;
   const next = currentTask();
@@ -917,8 +929,14 @@ function startNextDay() {
 
 /* ---------- Turning at a crossing ---------- */
 function tryTurn(dir) {
-  if (turnAnim || dayOver) { return; }
-  if (!atCrossing(distanceWalked)) { sayToast('You can turn at the next crossing.'); return; }
+  if (turnAnim || dayOver || visit) { return; }
+  if (!atCrossing(distanceWalked)) {
+    const ahead = nextCrossing(distanceWalked);
+    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left' : 'right'} at the crossing ahead.`); }
+    else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
+    return;
+  }
+  queuedTurn = 0;
   turnAnim = { dir, t: clockT, swapped: false }; sound.turn(dir);
 }
 function updateTurn() {
@@ -1034,6 +1052,15 @@ function drawDayHud() {
     fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(255, 250, 238); rect(bx, by, tw, 46, 23);
     fill(40, 30, 24); textAlign(CENTER, CENTER); text(label, width / 2, by + 24);
   }
+  // Waiting at the door: a progress bar.
+  if (visit) {
+    const u = constrain((clockT - visit.t) / visit.dur, 0, 1), bw = Math.min(360, width - 40), bx = width / 2 - bw / 2, by = height - 200;
+    fill(0, 60); rect(bx + 3, by + 4, bw, 64, 12); fill(255, 250, 238); rect(bx, by, bw, 64, 12);
+    fill(40, 30, 24); textStyle(ITALIC); textSize(15); textAlign(CENTER, TOP);
+    const doing = visit.task.kind === 'office' ? `Working… ${['9', '10', '11', '12'][Math.min(3, Math.floor(u * 4))]}:00` : VISIT[visit.task.kind].doing;
+    text(doing, width / 2, by + 12); fill(225, 215, 195); rect(bx + 20, by + 40, bw - 40, 10, 5); fill(PLACE_COL[visit.task.kind]); rect(bx + 20, by + 40, (bw - 40) * u, 10, 5);
+  }
+  drawHeldItem();
   // Short messages.
   for (let i = toasts.length - 1; i >= 0; i--) {
     const t = toasts[i], age = clockT - t.t; if (age > 3.2) { toasts.splice(i, 1); continue; }
@@ -1059,8 +1086,31 @@ function drawDayHud() {
 /* ---------- Keys ---------- */
 function dayKey(e) {
   const code = e.code;
-  if (code === 'KeyE') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else { doTask(); } return true; }
+  if (code === 'KeyE' || code === 'Space') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else { doTask(); } return true; }
   if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
   if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
   return false;
+}
+
+// What you are carrying, held low in the corner of your view and swaying as you walk.
+function drawHeldItem() {
+  if (!heldItem) { return; }
+  const age = clockT - heldItem.t; if (age > 70) { heldItem = null; return; }
+  const s = Math.min(width, height) * 0.16, sway = Math.sin(PI * stepPhase) * 6 * bobAmp, rise = (1 - easeN(age / 0.5)) * s;
+  const x = width - s * 1.2 + sway, y = height - s * 0.55 + rise + Math.abs(Math.cos(PI * stepPhase)) * 4 * bobAmp;
+  push(); noStroke();
+  fill(232, 190, 160); ellipse(x + s * 0.05, y + s * 0.55, s * 0.95, s * 0.6);                    // hand
+  if (heldItem.kind === 'cafe') {
+    fill(250, 246, 238); quad(x - s * 0.32, y - s * 0.55, x + s * 0.32, y - s * 0.55, x + s * 0.24, y + s * 0.5, x - s * 0.24, y + s * 0.5);
+    fill(PLACE_COL.cafe); quad(x - s * 0.29, y - s * 0.12, x + s * 0.29, y - s * 0.12, x + s * 0.27, y + s * 0.18, x - s * 0.27, y + s * 0.18);
+    fill(60, 50, 44); rect(x - s * 0.36, y - s * 0.68, s * 0.72, s * 0.15, s * 0.05);
+    stroke(255, 255, 255, 120); strokeWeight(2); noFill();
+    for (let i = 0; i < 3; i++) { const sx = x - s * 0.15 + i * s * 0.15, ph = clockT * 2 + i; beginShape(); for (let k = 0; k < 6; k++) { vertex(sx + Math.sin(ph + k * 0.9) * s * 0.04, y - s * 0.75 - k * s * 0.08); } endShape(); }
+  } else {
+    fill(222, 180, 110); triangle(x - s * 0.5, y + s * 0.35, x + s * 0.5, y + s * 0.35, x, y - s * 0.45);
+    fill(120, 180, 90); rect(x - s * 0.42, y + s * 0.12, s * 0.84, s * 0.07);
+    fill(240, 200, 120); rect(x - s * 0.4, y + s * 0.2, s * 0.8, s * 0.06);
+    fill(250, 240, 220); triangle(x - s * 0.44, y + s * 0.3, x + s * 0.44, y + s * 0.3, x, y - s * 0.3);
+  }
+  pop();
 }

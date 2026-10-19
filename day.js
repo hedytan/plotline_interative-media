@@ -40,10 +40,12 @@ function dayUpdate(z) {
     lastWealthTier = wt;
     for (const [c, ch] of chunks) { if (ch.z0 > z + APPEAR_Z + 12 && !ch.lots.includes(dest)) { chunks.delete(c); } }
   }
+  if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
+  updateVisit();
   // Keep the destination valid: it must still exist and not be behind you.
   const task = currentTask();
   if (dest && ![...chunks.values()].some(ch => ch.lots.includes(dest))) { dest = null; }
-  if (dest && dest.z1 < z - 4) { dest = null; wantDestFrom = z + 60; sayToast(`Missed it. There’s another ${task.place.toLowerCase()} ahead.`); }
+  if (dest && dest.z1 < z - 4 && !visit) { dest = null; wantDestFrom = z + 60; sayToast(`Missed it. There’s another ${task.place.toLowerCase()} ahead.`); }
   if (!dest && task.kind !== 'park' && !dayOver) { pickDest(task, Math.max(wantDestFrom, z + 70)); }
 }
 function pickDest(task, fromZ) {
@@ -61,21 +63,47 @@ function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 &&
 /* ---------- Doing the task ---------- */
 function nearDest(z) {
   const task = currentTask();
-  if (dayOver) { return null; }
+  if (dayOver || visit) { return null; }
   if (task.kind === 'park') { const ch = chunkAt(Math.floor(z / CHUNK_LEN)); return ch.park && modN(z, CHUNK_LEN) > CROSS_W + 4 ? { task, amount: 0 } : null; }
   if (!dest || riseOf(dest.born) < 0.9) { return null; }
   const mid = (dest.z0 + dest.z1) / 2;
   return Math.abs(mid - z) < 8 ? { task, amount: priceAt(task, dest.tier) } : null;
 }
+// Pressing E starts a short stop: you turn to the door, wait while it happens, then walk on.
+const VISIT = {
+  cafe: { dur: 3.2, doing: 'The barista is making your coffee…', item: 'cafe' },
+  office: { dur: 4.5, doing: 'Working…', item: null },
+  deli: { dur: 3.2, doing: 'Making your sandwich…', item: 'deli' },
+  park: { dur: 3.5, doing: 'Sitting on a bench, watching the trees…', item: null }
+};
+let visit = null, visitYaw = 0, heldItem = null, queuedTurn = 0;
 function doTask() {
+  if (visit) { return; }
   const near = nearDest(distanceWalked); if (!near) { return; }
   const { task, amount } = near;
   if (amount < 0 && wallet + amount < 0) { sayToast('Not enough money. Go to work first!'); return; }
+  const side = dest ? dest.side : -1;
+  visit = { task, amount, side, t: clockT, dur: VISIT[task.kind].dur };
+  stepSpeed = 0; autoWalk = false;
+  if (task.kind !== 'park' && task.kind !== 'office') { heldItem = null; }
+  sound.door();
+}
+function updateVisit() {
+  if (!visit) { visitYaw = lerp(visitYaw, 0, 0.12); return; }
+  const age = clockT - visit.t, d = visit.dur;
+  // Turn to face the door, hold, then turn back to the street.
+  const inA = easeN(age / 0.6), outA = 1 - easeN((age - (d - 0.6)) / 0.6);
+  visitYaw = visit.side * 1.05 * Math.min(inA, outA);
+  if (age >= d) { finishVisit(); }
+}
+function finishVisit() {
+  const { task, amount } = visit; visit = null;
   wallet += amount;
   if (amount !== 0) { moneyPops.push({ text: moneyText(amount), t: clockT, up: amount > 0 }); sound.cash(amount > 0); }
   if (dest) { dest.dest = null; dest.doneKind = task.kind; }
   dest = null; wantDestFrom = distanceWalked + 40;
   sayToast(task.done);
+  if (VISIT[task.kind].item) { heldItem = { kind: VISIT[task.kind].item, t: clockT }; }
   if (task.kind === 'park') { endOfDay(); return; }
   taskIdx++;
   const next = currentTask();
@@ -92,8 +120,14 @@ function startNextDay() {
 
 /* ---------- Turning at a crossing ---------- */
 function tryTurn(dir) {
-  if (turnAnim || dayOver) { return; }
-  if (!atCrossing(distanceWalked)) { sayToast('You can turn at the next crossing.'); return; }
+  if (turnAnim || dayOver || visit) { return; }
+  if (!atCrossing(distanceWalked)) {
+    const ahead = nextCrossing(distanceWalked);
+    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left' : 'right'} at the crossing ahead.`); }
+    else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
+    return;
+  }
+  queuedTurn = 0;
   turnAnim = { dir, t: clockT, swapped: false }; sound.turn(dir);
 }
 function updateTurn() {
@@ -209,6 +243,15 @@ function drawDayHud() {
     fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(255, 250, 238); rect(bx, by, tw, 46, 23);
     fill(40, 30, 24); textAlign(CENTER, CENTER); text(label, width / 2, by + 24);
   }
+  // Waiting at the door: a progress bar.
+  if (visit) {
+    const u = constrain((clockT - visit.t) / visit.dur, 0, 1), bw = Math.min(360, width - 40), bx = width / 2 - bw / 2, by = height - 200;
+    fill(0, 60); rect(bx + 3, by + 4, bw, 64, 12); fill(255, 250, 238); rect(bx, by, bw, 64, 12);
+    fill(40, 30, 24); textStyle(ITALIC); textSize(15); textAlign(CENTER, TOP);
+    const doing = visit.task.kind === 'office' ? `Working… ${['9', '10', '11', '12'][Math.min(3, Math.floor(u * 4))]}:00` : VISIT[visit.task.kind].doing;
+    text(doing, width / 2, by + 12); fill(225, 215, 195); rect(bx + 20, by + 40, bw - 40, 10, 5); fill(PLACE_COL[visit.task.kind]); rect(bx + 20, by + 40, (bw - 40) * u, 10, 5);
+  }
+  drawHeldItem();
   // Short messages.
   for (let i = toasts.length - 1; i >= 0; i--) {
     const t = toasts[i], age = clockT - t.t; if (age > 3.2) { toasts.splice(i, 1); continue; }
@@ -234,8 +277,31 @@ function drawDayHud() {
 /* ---------- Keys ---------- */
 function dayKey(e) {
   const code = e.code;
-  if (code === 'KeyE') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else { doTask(); } return true; }
+  if (code === 'KeyE' || code === 'Space') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else { doTask(); } return true; }
   if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
   if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
   return false;
+}
+
+// What you are carrying, held low in the corner of your view and swaying as you walk.
+function drawHeldItem() {
+  if (!heldItem) { return; }
+  const age = clockT - heldItem.t; if (age > 70) { heldItem = null; return; }
+  const s = Math.min(width, height) * 0.16, sway = Math.sin(PI * stepPhase) * 6 * bobAmp, rise = (1 - easeN(age / 0.5)) * s;
+  const x = width - s * 1.2 + sway, y = height - s * 0.55 + rise + Math.abs(Math.cos(PI * stepPhase)) * 4 * bobAmp;
+  push(); noStroke();
+  fill(232, 190, 160); ellipse(x + s * 0.05, y + s * 0.55, s * 0.95, s * 0.6);                    // hand
+  if (heldItem.kind === 'cafe') {
+    fill(250, 246, 238); quad(x - s * 0.32, y - s * 0.55, x + s * 0.32, y - s * 0.55, x + s * 0.24, y + s * 0.5, x - s * 0.24, y + s * 0.5);
+    fill(PLACE_COL.cafe); quad(x - s * 0.29, y - s * 0.12, x + s * 0.29, y - s * 0.12, x + s * 0.27, y + s * 0.18, x - s * 0.27, y + s * 0.18);
+    fill(60, 50, 44); rect(x - s * 0.36, y - s * 0.68, s * 0.72, s * 0.15, s * 0.05);
+    stroke(255, 255, 255, 120); strokeWeight(2); noFill();
+    for (let i = 0; i < 3; i++) { const sx = x - s * 0.15 + i * s * 0.15, ph = clockT * 2 + i; beginShape(); for (let k = 0; k < 6; k++) { vertex(sx + Math.sin(ph + k * 0.9) * s * 0.04, y - s * 0.75 - k * s * 0.08); } endShape(); }
+  } else {
+    fill(222, 180, 110); triangle(x - s * 0.5, y + s * 0.35, x + s * 0.5, y + s * 0.35, x, y - s * 0.45);
+    fill(120, 180, 90); rect(x - s * 0.42, y + s * 0.12, s * 0.84, s * 0.07);
+    fill(240, 200, 120); rect(x - s * 0.4, y + s * 0.2, s * 0.8, s * 0.06);
+    fill(250, 240, 220); triangle(x - s * 0.44, y + s * 0.3, x + s * 0.44, y + s * 0.3, x, y - s * 0.3);
+  }
+  pop();
 }

@@ -28,16 +28,15 @@ A task card (top left) walks you through a working day:
 4. **Back to work** (1:30 pm): pays.
 5. **Unwind in the park** (6:00 pm): the park is around a corner, so you have to turn at a crossing.
 
-Each destination rises out of the street ahead with a pin floating over it and the distance under the pin. Walk up to its door and press **E**. Your wallet (top right) goes up or down. Prices and pay scale with the district, so a coffee in Pinnacle Heights costs four times what it does in Rusty Row.
+Each destination rises out of the street ahead with a pin floating over it and the distance under the pin. Walk up to its door and press **E** (or Space). You stop and turn to face the door: the barista makes your coffee, the clock ticks through your shift, the sandwich gets wrapped. Then you turn back to the street and walk on, carrying your coffee or sandwich in the corner of your view. Your wallet (top right) goes up or down. Prices and pay scale with the district, so a coffee in Pinnacle Heights costs four times what it does in Rusty Row.
 
 **Money builds the street.** The street ahead is built as the district you can afford ($0 Rusty Row, $100 Maple Terrace, $300 Gilded Gardens, $600 Brick & Glass, $1000 Pinnacle Heights). When your wallet crosses a line, the plots you have not reached yet are re-planned and rise as the richer district. After the park, press E to sleep; the next day starts in the district your savings can afford.
 
-**Turning.** At any crossing press **A / Left** or **D / Right** to turn the corner. The view swings round, and a new street builds itself around you.
+**Turning.** Walk with the Up arrow. At a crossing press **Left** or **Right** (or A / D) to turn the corner. Press it a little before the crossing and you turn when you get there. The view swings round, and a new street builds itself around you.
 
 ## Interaction
-- **E** uses the shop or office in front of you. **A / D** (or Left / Right) turns at a crossing.
+- **E** or **Space** goes into the shop or office in front of you. **Left / Right** (or A / D) turns at a crossing.
 - Hold W / Up / the mouse to walk. Add Shift to hurry. S / Down steps back. Enter strolls on its own. Move the mouse to look around.
-- **Space rolls two dice**, and you dash forward that many lots.
 - **Chance casinos**: walking past one draws a Chance card that reshapes the street ahead.
   - *Market boom*: buildings in the distance grow taller.
   - *Market crash*: they shrink and the town turns grey.
@@ -49,7 +48,7 @@ Each destination rises out of the street ahead with a pin floating over it and t
 - Each district has its own small band (a pad chord plus an arpeggio), and it gets richer as value rises: bluesy square in Rusty Row, warm triangle in Maple Terrace, harp in Gilded Gardens, jazzy filtered saw in Brick & Glass, shimmering pad in Pinnacle Heights.
 - Footsteps sound on every step, in sync with the head bob.
 - Casino bells get louder as you approach a casino.
-- The dice rattle, passing GO plays a jingle, the jail clanks, and each Chance card has its own sting.
+- A door bell rings when you go into a shop, a till chimes when money changes hands, passing GO plays a jingle, the jail clanks, and each Chance card has its own sting.
 
 ## How it is built
 - **Camera**: a perspective projection at 1.6 m eye height. Walking bobs, nods and rolls the view slightly, in time with the footsteps.
@@ -61,7 +60,7 @@ Each destination rises out of the street ahead with a pin floating over it and t
 
 ## Files
 - index.html and vendor/p5.min.js: run locally with `python3 -m http.server` in this folder, then open http://localhost:8000/.
-- sketch.js: the street, the camera, the districts, Chance, the dice and the overlays.
+- sketch.js: the street, the camera, the districts, Chance and the overlays.
 - day.js: the daily routine: task card, wallet, destinations, turning corners and the park.
 - sketch-all.js: street-sound.js, sketch.js and day.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
 - street-sound.js: the soundscape.

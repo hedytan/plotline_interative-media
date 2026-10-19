@@ -7,8 +7,7 @@
  *   -> Brick & Glass Quarter -> Pinnacle Heights (skyscrapers) -> pass GO -> Rusty Row
  * Each lap is re-seeded, so the street never repeats exactly.
  * Chance casinos reshape the street ahead when you walk past them (boom, crash or
- * nightfall). A stone jail sits in Rusty Row: just visiting. Rolling the dice sends you
- * dashing forward.
+ * nightfall). A stone jail sits in Rusty Row: just visiting.
  * The street is not built until you walk toward it: beyond about 55 m each lot is only an
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
@@ -19,8 +18,8 @@
  * crossing with A / D.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E to use a shop or office, A / D (or Left / Right) to turn at a crossing,
- *   Enter to stroll on its own, Space to roll the dice, move the mouse to look around,
+ *   E or Space to go into a shop or office, Left / Right (or A / D) to turn at a crossing,
+ *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
@@ -45,7 +44,7 @@ const SHOP_NAMES = [
 
 let seed = 2718, distanceWalked = 0, clockT = 0, paused = false, stepSpeed = 0, autoWalk = false, pointerHeld = false;
 let stepPhase = 0, bobAmp = 0, lookYaw = 0, lookPitch = 0, canvasNode, sound, audioStarted = false, grain;
-let dashTarget = null, dice = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
+let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
 const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
@@ -71,7 +70,7 @@ function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E to use a shop, A or D to turn at a crossing, Space to roll the dice, Enter to stroll, M for sound.');
+  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to go into a shop, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
   sound = new StreetSound(); textFont('Georgia');
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -165,7 +164,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim) { target = 0; }
+  else if (turnAnim || visit) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 3)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -178,7 +177,7 @@ function draw() {
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw; cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw + visitYaw; cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
   // World state: chunks in view, district changes, landmarks, economy.
@@ -621,7 +620,7 @@ function drawBin(q, p) {
   ctx.fillStyle = toneN('#4a5a4a', p.z); ctx.beginPath(); ctx.ellipse(q.x + 0.5 * k, q.y - 0.05 * k, 0.25 * k, 0.08 * k, 0, 0, TWO_PI); ctx.fill();
 }
 
-/* ---------- Overlays: district deed card, Chance card, dice ---------- */
+/* ---------- Overlays: district deed card and Chance card ---------- */
 function drawOverlays() {
   // Vignette and grain.
   const vg = ctx.createRadialGradient(width / 2, height * 0.5, Math.min(width, height) * 0.4, width / 2, height * 0.5, Math.max(width, height) * 0.8);
@@ -643,11 +642,7 @@ function drawOverlays() {
     }
   }
   drawDayHud();
-  if (dice) {
-    const age = clockT - dice.t, rolling = age < 0.8, a = 1 - easeN((age - 2.4) / 0.5);
-    if (a > 0) { push(); drawingContext.globalAlpha = a; for (let i = 0; i < 2; i++) { const v = rolling ? 1 + Math.floor(Math.random() * 6) : dice.v[i]; drawDie(width / 2 + (i - 0.5) * 80, height - 90, 56, v, rolling ? Math.sin(clockT * 30 + i) * 0.4 : 0); }
-      if (!rolling) { fill(255); stroke(0, 90); strokeWeight(3); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(18); text(`Advance ${dice.v[0] + dice.v[1]} lots`, width / 2, height - 140); } pop(); }
-  }
+
 }
 function deedCard(cx, y, a, col, title, tag, foot) {
   push(); const w = Math.min(280, width - 32), x = cx - w / 2; drawingContext.globalAlpha = a; noStroke();
@@ -655,18 +650,6 @@ function deedCard(cx, y, a, col, title, tag, foot) {
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(15); text(title, cx, y + 26);
   textStyle(NORMAL); fill(60, 50, 44); textSize(13); text(tag, cx, y + 60); fill(130, 110, 100); textSize(11); text(foot, cx, y + 79); pop();
 }
-function drawDie(x, y, s, v, rot) {
-  push(); translate(x, y); rotate(rot); fill(255, 252, 245); stroke(60, 40, 30); strokeWeight(2); rectMode(CENTER); rect(0, 0, s, s, 10); noStroke(); fill(200, 40, 40);
-  const pts = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] }[v];
-  for (const [px, py] of pts) {circle(px * s * 0.26, py * s * 0.26, s * 0.17);} pop();
-}
-function rollDice() {
-  if (dashTarget !== null) {return;}
-  const v = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
-  dice = { v, t: clockT }; sound.dice();
-  setTimeout(() => { dashTarget = distanceWalked + (v[0] + v[1]) * 7; }, 800);
-}
-
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
 function mousePressed(e) { if (e.target !== canvasNode) {return;} canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
@@ -676,7 +659,6 @@ function keyPressed(e) {
   if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd'].includes(k)) {return false;}
   beginSound();
   if (!paused && dayKey(e)) {return false;}
-  if (key === ' ') { rollDice(); return false; }
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
