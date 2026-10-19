@@ -19,25 +19,26 @@ The pavements are painted in the board colours of each district, in board order.
 
 **The street builds itself as you walk.** Beyond about 55 m, each lot is only a plot outlined on the ground in its district colour, with a corner stake, like land on the board nobody has built on yet. As you approach, its building springs up out of the ground with a little overshoot, a puff of dust and a soft thud. The thud is pitched higher in richer districts. Lamps, trees, bins and banners pop up with it. When the page opens, the first street builds outward from where you stand.
 
-## A day on the board
-A task card (top left) walks you through a working day:
+## Play the board (Monopoly rules, walked)
+Plotline borrows how Monopoly turns money into buildings:
 
-1. **Grab a coffee** (7:30 am): costs money.
-2. **Go to work** (9:00 am): pays.
-3. **Lunch: buy a sandwich** (12:30 pm): costs money.
-4. **Back to work** (1:30 pm): pays.
-5. **Unwind in the park** (6:00 pm): the park is around a corner, so you have to turn at a crossing.
+| Monopoly | Plotline |
+|---|---|
+| Start with $1500 | You start with $1500 in cash (top right). |
+| Collect $200 for passing GO | Every lap of the street passes GO and pays you $200. |
+| Land on a property and buy its title deed | Walk up to a plot with a FOR SALE board and press **E**. Its title deed shows the price and the rent table. |
+| Colour groups, cheap side to expensive side | Each block is one colour group (brown, light blue, pink, orange, red, yellow, green, mint, navy, blue), getting pricier around the board: $60 up to $400. |
+| Own the whole colour group before you build | Own both plots of a colour (one each side of the block) to complete the set. Rent doubles on a complete set. |
+| Houses, then a hotel after four | Stand by your plot and press **E** to build a house ($50–$200 by colour). Four green houses, then a red hotel. |
+| Rent goes up with every house | Your tenants pay rent each time you walk past: base, ×5, ×15, ×45, ×67, ×92 with a hotel. |
+| Chance cards | Chance casinos: a boom pays $100, a crash charges street repairs per house. |
 
-Each destination rises out of the street ahead with a pin floating over it and the distance under the pin. Walk up to its door and press **E** (or Space). You stop and turn to face the door: the barista makes your coffee, the clock ticks through your shift, the sandwich gets wrapped. Then you turn back to the street and walk on, carrying your coffee or sandwich in the corner of your view. Your wallet (top right) goes up or down. Prices and pay scale with the district, so a coffee in Pinnacle Heights costs four times what it does in Rusty Row.
+The first time you buy, you name your place; your name goes on a gold-edged sign on every property. The houses and hotel are giant green and red board pieces, bigger in richer districts so they stand out among the towers. Your properties come back near the start of every new street you turn into, so you keep collecting rent.
 
-**Money builds the street.** The street ahead is built as the district you can afford ($0 Rusty Row, $100 Maple Terrace, $300 Gilded Gardens, $600 Brick & Glass, $1000 Pinnacle Heights). When your wallet crosses a line, the plots you have not reached yet are re-planned and rise as the richer district. After the park, press E to sleep; the next day starts in the district your savings can afford.
-
-**Buy a plot.** Some plots along the street stay empty, with a red FOR SALE board and a price ($60 in Rusty Row up to $1500 in Pinnacle Heights). Walk up to one and press **E** to buy it. The first time, you name your place; your building then rises on the plot with your name on a gold sign and a flag on the roof. From then on, every new street you walk into has your properties near its start, and walking past one pays you rent. The board game's idea, owning the street, becomes something you do with your own hands.
-
-**Turning.** Walk with the Up arrow. At a crossing press **Left** or **Right** (or A / D) to turn the corner. Press it a little before the crossing and you turn when you get there. The view swings round, and a new street builds itself around you.
+**Turning.** Walk with the Up arrow. At a crossing press **Left** or **Right** (or A / D) to turn the corner into a new street at the same place on the board. Press it a little before the crossing and you turn when you get there.
 
 ## Interaction
-- **E** or **Space** goes into the shop or office in front of you. **Left / Right** (or A / D) turns at a crossing.
+- **E** or **Space** buys the plot beside you, or builds a house on it. **Left / Right** (or A / D) turns at a crossing.
 - Hold W / Up / the mouse to walk. Add Shift to hurry. S / Down steps back. Enter strolls on its own. Move the mouse to look around.
 - **Chance casinos**: walking past one draws a Chance card that reshapes the street ahead.
   - *Market boom*: buildings in the distance grow taller.
@@ -50,7 +51,7 @@ Each destination rises out of the street ahead with a pin floating over it and t
 - Each district has its own small band (a pad chord plus an arpeggio), and it gets richer as value rises: bluesy square in Rusty Row, warm triangle in Maple Terrace, harp in Gilded Gardens, jazzy filtered saw in Brick & Glass, shimmering pad in Pinnacle Heights.
 - Footsteps sound on every step, in sync with the head bob.
 - Casino bells get louder as you approach a casino.
-- A door bell rings when you go into a shop, a till chimes when money changes hands, passing GO plays a jingle, the jail clanks, and each Chance card has its own sting.
+- A till chimes when money changes hands, passing GO plays a jingle, the jail clanks, and each Chance card has its own sting.
 
 ## How it is built
 - **Camera**: a perspective projection at 1.6 m eye height. Walking bobs, nods and rolls the view slightly, in time with the footsteps.
@@ -63,9 +64,8 @@ Each destination rises out of the street ahead with a pin floating over it and t
 ## Files
 - index.html and vendor/p5.min.js: run locally with `python3 -m http.server` in this folder, then open http://localhost:8000/.
 - sketch.js: the street, the camera, the districts, Chance and the overlays.
-- day.js: the daily routine: task card, wallet, destinations, turning corners and the park.
-- plots.js: plots for sale, buying and naming your place, your properties and their rent.
-- sketch-all.js: street-sound.js, sketch.js, day.js and plots.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
+- board.js: the Monopoly layer: cash, GO salary, plots for sale and title deeds, colour sets, houses and hotels, rent, and turning corners.
+- sketch-all.js: street-sound.js, sketch.js and board.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
 - street-sound.js: the soundscape.
 
 ## References

@@ -1,6 +1,6 @@
 // noprotect
 // Plotline — combined file for the p5.js Web Editor (works with p5.js 1.x and 2.x).
-// Paste this whole file into sketch.js. It is street-sound.js, sketch.js, day.js and plots.js in one; do not load those separately as well.
+// Paste this whole file into sketch.js. It is street-sound.js, sketch.js and board.js in one; do not load those separately as well.
 
 /* StreetSound — procedural soundscape for Plotline. Native Web Audio, no files.
  * Each district has its own small band: a pad chord and an arpeggio whose timbre
@@ -150,13 +150,12 @@ window.StreetSound = StreetSound;
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
  *
- * A day on the board (day.js): a task card sends you for coffee, to work, to lunch and to
- * the park. Destinations rise ahead with a pin over them; press E at the door. Money you
- * earn decides which district the street ahead is built as. Turn left or right at a
- * crossing with A / D.
+ * Play the board (board.js): start with $1500, collect $200 at GO, buy plots that are for
+ * sale, complete a colour set and build houses and hotels on it, and collect rent from your
+ * tenants as you walk past. Turn left or right at a crossing.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to go into a shop or office or buy a plot that is for sale, Left / Right (or A / D) to turn at a crossing,
+ *   E or Space to buy the plot beside you or build on it, Left / Right (or A / D) to turn at a crossing,
  *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
@@ -208,7 +207,7 @@ function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to go into a shop, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
+  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to buy or build, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
   sound = new StreetSound(); textFont('Georgia');
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -256,7 +255,7 @@ function clipZ(z) { return Math.max(z, cam.z + NEAR_Z); }
 /* ---------- The board: chunks of street ---------- */
 function chunkAt(c) {
   if (chunks.has(c)) {return chunks.get(c);}
-  const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(), z0 = c * CHUNK_LEN;
+  const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(slot), z0 = c * CHUNK_LEN;
   const r = rngN(seed + c * 7919 + lap * 104729);
   const ch = { c, slot, tier, z0, lots: [], props: [], back: [] };
   for (const side of [-1, 1]) {
@@ -276,7 +275,6 @@ function chunkAt(c) {
   if (tier === 1 || tier === 2) {for (let z = z0 + CROSS_W + 5; z < z0 + CHUNK_LEN - 2; z += 9) {for (const side of [-1, 1]) {if (r() < 0.8) {ch.props.push({ kind: 'tree', x: side * (ROAD_W + 2.3), z: z + r() * 2, h: mixN(4, 6.5, r()), tone: r() });}}}}
   if (tier === 0) {for (let i = 0; i < 5; i++) { const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'bin', x: side * (EDGE_X - 0.6), z: z0 + CROSS_W + r() * (CHUNK_LEN - CROSS_W), tone: r() }); }}
   if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, DISTRICTS[tier].stripe) });}}}
-  if (isParkChunk(c)) { ch.back = []; fillPark(ch, r); }
   plotsForChunk(ch, r);
   chunks.set(c, ch); return ch;
 }
@@ -303,7 +301,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || visit || nameBox) { target = 0; }
+  else if (turnAnim || nameBox) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -316,7 +314,7 @@ function draw() {
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw + visitYaw; cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw; cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
   // World state: chunks in view, district changes, landmarks, economy.
@@ -324,9 +322,9 @@ function draw() {
   for (let c = c0; c <= c1; c++) {chunkAt(c);}
   for (const [c] of chunks) {if (c < c0 - 1 || c > c1 + 1) {chunks.delete(c);}}
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
-  if (here.c !== lastChunk) { if (here.slot === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); showCard('go'); } lastChunk = here.c; }
+  if (here.c !== lastChunk) { if (here.slot === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); showCard('go'); onPassGo(); } lastChunk = here.c; }
   if (tier !== lastTier) { districtCard = { tier, t: clockT, lap: Math.floor(here.c / LAP_LEN) + 1 }; lastTier = tier; }
-  updateLandmarks(z); dayUpdate(z);
+  updateLandmarks(z); boardUpdate(z);
   if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
   economy = lerp(economy, economyTarget, 1 - Math.exp(-dt * 0.8)); night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5)); crash = lerp(crash, crashTarget, 1 - Math.exp(-dt * 0.8));
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
@@ -370,7 +368,7 @@ function drawChance(s) {
   if (kind === 'boom') { economyTarget = 1.55; crashTarget = 0; nightTarget = baseNight; }
   if (kind === 'crash') { economyTarget = 0.6; crashTarget = 1; nightTarget = baseNight; }
   if (kind === 'night') { economyTarget = 1; crashTarget = 0; nightTarget = 1; }
-  economyUntil = clockT + 45; sound.chance(kind); showCard(kind);
+  economyUntil = clockT + 45; sound.chance(kind); showCard(kind); onChance(kind);
 }
 function showCard(kind) {
   const cardText = {
@@ -518,10 +516,9 @@ function drawWorld(z) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'bench') {drawBench(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);}
     ctx.restore();
   }
-  drawDestPin();
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {
@@ -556,6 +553,7 @@ function drawBack(b) {
   if (b.z0 > cam.z + NEAR_Z) {polyN(wallQuad(x, b.z0, x + b.side * 20, b.z0, 0, b.h), toneN(b.color, b.z0, 0.6));}
 }
 function drawLot(L) {
+  if (L.owned) { drawOwnedLot(L); return; }
   const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
@@ -573,8 +571,6 @@ function drawLot(L) {
   if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
   if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
   [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H);
-  if (L.dest || L.doneKind) { drawDestFront(L, x, z0, H); }
-  if (L.owned) { drawOwnedFront(L, x, z0, H); }
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
 function facadeWindows(L, x, z0, z1, rows, cols, opt) {
@@ -768,7 +764,7 @@ function drawOverlays() {
   image(grain, 0, 0, width, height);
   if (districtCard) {
     const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Day ${dayNo}`); }
+    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Lap ${districtCard.lap}`); }
   }
   if (card) {
     const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
@@ -781,7 +777,7 @@ function drawOverlays() {
       pop();
     }
   }
-  drawDayHud();
+  drawBoardHud();
 
 }
 function deedCard(cx, y, a, col, title, tag, foot) {
@@ -798,403 +794,141 @@ function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
   if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd'].includes(k)) {return false;}
   beginSound();
-  if (!paused && dayKey(e)) {return false;}
+  if (!paused && boardKey(e)) {return false;}
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
-  if (k === 'r') { seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; dest = null; streetT = clockT; lastTier = -1; lastChunk = -1; economyTarget = 1; nightTarget = 0; crashTarget = 0; buildSkyline(); return false; }
+  if (k === 'r') { seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; ownedFromC = Infinity; lastTier = -1; lastChunk = -1; economyTarget = 1; nightTarget = 0; crashTarget = 0; buildSkyline(); return false; }
   if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(e.code)) {return false;}
 }
 function touchStarted() { canvasNode.focus(); pointerHeld = true; beginSound(); return false; }
 function touchEnded() { pointerHeld = false; return false; }
 function windowResized() { resizeCanvas(windowWidth, windowHeight); }
 
-/* Plotline — a day on the board.
- * A simple daily routine on top of the street: a task card tells you where to go next
- * (coffee, work, lunch, work, the park). Each destination rises out of the street ahead
- * with a pin over it; walk up to its door and press E. Coffee and lunch cost money, work
- * pays. The street ahead is built from what you can afford: the more you earn, the
- * pricier the district you walk into. At any crossing you can turn left or right (A / D)
- * into a new street; the park is always around a corner.
+/* Plotline — play the board like Monopoly.
+ * You start with $1500 and collect $200 every time you pass GO. Some plots along the
+ * street are for sale; each has a colour, a price and a title deed, as on the board.
+ * Walk up to one and press E to buy it. Own both plots of a colour to complete the set:
+ * then you can build houses on them (up to four), and a hotel after that. Your buildings
+ * come back near the start of every street you walk into, and as you walk past them your
+ * tenants pay you rent, which grows with every house. At a crossing, Left / Right turns
+ * the corner into a new street at the same place on the board.
  */
-const DAY_TASKS = [
-  { kind: 'cafe', title: 'Grab a coffee', clock: '7:30 am', base: -4, verb: 'Buy a coffee', done: 'Flat white, thanks!', place: 'Café' },
-  { kind: 'office', title: 'Go to work', clock: '9:00 am', base: 120, verb: 'Work the morning shift', done: 'Morning shift done.', place: 'Office' },
-  { kind: 'deli', title: 'Lunch: buy a sandwich', clock: '12:30 pm', base: -10, verb: 'Buy a sandwich', done: 'Ham, cheese, pickles.', place: 'Sandwich bar' },
-  { kind: 'office', title: 'Back to work', clock: '1:30 pm', base: 150, verb: 'Work the afternoon', done: 'That’s a day’s pay.', place: 'Office' },
-  { kind: 'park', title: 'Unwind in the park', clock: '6:00 pm', base: 0, verb: 'Sit on a bench', done: 'What a day.', place: 'Park' }
-];
-const WEALTH_AT = [0, 100, 300, 600, 1000];            // money needed for each district
-const PRICE_K = [1, 1.5, 2.2, 3, 4];                    // prices and pay rise with the district
-const PLACE_SIGN = { cafe: 'CAFÉ', office: 'OFFICE', deli: 'SANDWICH BAR' };
-const PLACE_COL = { cafe: '#c8742c', office: '#2f5f9e', deli: '#3f9a4a', park: '#3f8a3a' };
+// Colour groups, from the cheap side of the board to the expensive side.
+const GROUPS = {
+  brown: { col: BOARD_COL.brown, tier: 0, price: 60, house: 50 },
+  sky: { col: BOARD_COL.sky, tier: 0, price: 100, house: 50 },
+  pink: { col: BOARD_COL.pink, tier: 1, price: 140, house: 100 },
+  orange: { col: BOARD_COL.orange, tier: 1, price: 180, house: 100 },
+  red: { col: BOARD_COL.red, tier: 2, price: 220, house: 150 },
+  yellow: { col: BOARD_COL.yellow, tier: 2, price: 260, house: 150 },
+  green: { col: BOARD_COL.green, tier: 3, price: 300, house: 200 },
+  mint: { col: '#7fd1a0', tier: 3, price: 320, house: 200 },
+  navy: { col: BOARD_COL.navy, tier: 4, price: 350, house: 200 },
+  blue: { col: '#6f93d8', tier: 4, price: 400, house: 200 }
+};
+const GROUP_OF_TIER = [['brown', 'sky'], ['pink', 'orange'], ['red', 'yellow'], ['green', 'mint'], ['navy', 'blue']];
+const SET_SIZE = 2;                                   // plots needed to complete a colour set
+const RENT_X = [1, 5, 15, 45, 67, 92];               // rent multiplier: bare, 1-4 houses, hotel
+const START_MONEY = 1500, GO_SALARY = 200;
+const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47', HOTEL_COL = '#d8322a';
 
-let wallet = 20, dayNo = 1, taskIdx = 0, dest = null, wantDestFrom = 0, parkFromC = Infinity;
-let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, dayOver = null, lastWealthTier = 0;
+let wallet = START_MONEY, ownerName = '', portfolio = [], ownedFromC = Infinity, nameBox = null;
+let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, deedView = null;
 const toasts = [], moneyPops = [];
 
-function wealthTier() { let t = 0; for (let i = 0; i < WEALTH_AT.length; i++) { if (wallet >= WEALTH_AT[i]) { t = i; } } return t; }
-function currentTask() { return DAY_TASKS[taskIdx]; }
-function priceAt(task, tier) { return Math.round(task.base * PRICE_K[tier]); }
 function moneyText(v) { return (v < 0 ? '−$' : '+$') + Math.abs(v); }
 function sayToast(text) { toasts.push({ text, t: clockT }); }
-
-/* ---------- Called from sketch.js ---------- */
-// Tier for a newly made chunk of street: what you can afford right now.
-function chunkTier() { return wealthTier(); }
-function isParkChunk(c) { return c >= parkFromC; }
-
-function dayUpdate(z) {
-  // Wealth went up: rebuild the part of the street you have not reached yet.
-  const wt = wealthTier();
-  if (wt !== lastWealthTier) {
-    lastWealthTier = wt;
-    for (const [c, ch] of chunks) { if (ch.z0 > z + APPEAR_Z + 12 && !ch.lots.includes(dest)) { chunks.delete(c); } }
-  }
-  if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
-  updateVisit(); plotsUpdate(z);
-  // Keep the destination valid: it must still exist and not be behind you.
-  const task = currentTask();
-  if (dest && ![...chunks.values()].some(ch => ch.lots.includes(dest))) { dest = null; }
-  if (dest && dest.z1 < z - 4 && !visit) { dest = null; wantDestFrom = z + 60; sayToast(`Missed it. There’s another ${task.place.toLowerCase()} ahead.`); }
-  if (!dest && task.kind !== 'park' && !dayOver) { pickDest(task, Math.max(wantDestFrom, z + 70)); }
-}
-function pickDest(task, fromZ) {
-  const lots = [...chunks.values()].flatMap(ch => ch.park ? [] : ch.lots).filter(L => !L.special && !L.forSale && !L.owned && L.z0 >= fromZ).sort((a, b) => a.z0 - b.z0);
-  if (lots.length) { dest = lots[0]; dest.dest = task.kind; dest.sign = false; }
-}
-// Distance to the next crossing ahead (where you can turn).
-function nextCrossing(z) {
-  const c = Math.floor(z / CHUNK_LEN), local = z - c * CHUNK_LEN;
-  if (local < CROSS_W - 1) { return 0; }
-  return (c + 1) * CHUNK_LEN + 2 - z;
-}
-function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
-
-/* ---------- Doing the task ---------- */
-function nearDest(z) {
-  const task = currentTask();
-  if (dayOver || visit) { return null; }
-  if (task.kind === 'park') { const ch = chunkAt(Math.floor(z / CHUNK_LEN)); return ch.park && modN(z, CHUNK_LEN) > CROSS_W + 4 ? { task, amount: 0 } : null; }
-  if (!dest || riseOf(dest.born) < 0.9) { return null; }
-  const mid = (dest.z0 + dest.z1) / 2;
-  return Math.abs(mid - z) < 8 ? { task, amount: priceAt(task, dest.tier) } : null;
-}
-// Pressing E starts a short stop: you turn to the door, wait while it happens, then walk on.
-const VISIT = {
-  cafe: { dur: 3.2, doing: 'The barista is making your coffee…', item: 'cafe' },
-  office: { dur: 4.5, doing: 'Working…', item: null },
-  deli: { dur: 3.2, doing: 'Making your sandwich…', item: 'deli' },
-  park: { dur: 3.5, doing: 'Sitting on a bench, watching the trees…', item: null }
-};
-let visit = null, visitYaw = 0, heldItem = null, queuedTurn = 0;
-function doTask() {
-  if (visit) { return; }
-  const near = nearDest(distanceWalked); if (!near) { return; }
-  const { task, amount } = near;
-  if (amount < 0 && wallet + amount < 0) { sayToast('Not enough money. Go to work first!'); return; }
-  const side = dest ? dest.side : -1;
-  visit = { task, amount, side, t: clockT, dur: VISIT[task.kind].dur };
-  stepSpeed = 0; autoWalk = false;
-  if (task.kind !== 'park' && task.kind !== 'office') { heldItem = null; }
-  sound.door();
-}
-function updateVisit() {
-  if (!visit) { visitYaw = lerp(visitYaw, 0, 0.12); return; }
-  const age = clockT - visit.t, d = visit.dur;
-  // Turn to face the door, hold, then turn back to the street.
-  const inA = easeN(age / 0.6), outA = 1 - easeN((age - (d - 0.6)) / 0.6);
-  visitYaw = visit.side * 1.05 * Math.min(inA, outA);
-  if (age >= d) { finishVisit(); }
-}
-function finishVisit() {
-  const { task, amount } = visit; visit = null;
-  wallet += amount;
-  if (amount !== 0) { moneyPops.push({ text: moneyText(amount), t: clockT, up: amount > 0 }); sound.cash(amount > 0); }
-  if (dest) { dest.dest = null; dest.doneKind = task.kind; }
-  dest = null; wantDestFrom = distanceWalked + 40;
-  sayToast(task.done);
-  if (VISIT[task.kind].item) { heldItem = { kind: VISIT[task.kind].item, t: clockT }; }
-  if (task.kind === 'park') { endOfDay(); return; }
-  taskIdx++;
-  const next = currentTask();
-  if (next.kind === 'park') { baseNight = 0.45; nightTarget = Math.max(nightTarget, baseNight); }
-}
-function endOfDay() {
-  sound.go(); baseNight = 0.85; nightTarget = 0.85;
-  dayOver = { t: clockT, tier: wealthTier() };
-}
-function startNextDay() {
-  dayNo++; taskIdx = 0; dayOver = null; baseNight = 0; nightTarget = 0; parkFromC = Infinity;
-  newStreet(0);
-}
-
-/* ---------- Turning at a crossing ---------- */
-function tryTurn(dir) {
-  if (turnAnim || dayOver || visit) { return; }
-  if (!atCrossing(distanceWalked)) {
-    const ahead = nextCrossing(distanceWalked);
-    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left' : 'right'} at the crossing ahead.`); }
-    else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
-    return;
-  }
-  queuedTurn = 0;
-  turnAnim = { dir, t: clockT, swapped: false }; sound.turn(dir);
-}
-function updateTurn() {
-  if (!turnAnim) { turnYaw = 0; fadeA = Math.max(0, fadeA - 0.05); return; }
-  const u = (clockT - turnAnim.t) / 0.85;
-  turnYaw = turnAnim.dir * HALF_PI * easeN(Math.min(1, u));
-  fadeA = easeN((u - 0.45) / 0.55);
-  if (u >= 1 && !turnAnim.swapped) {
-    turnAnim.swapped = true; turnYaw = 0;
-    newStreet(turnAnim.dir);
-    turnAnim = null; fadeA = 1;
-  }
-}
-// A fresh street: new seed, you stand at its first crossing and it builds around you.
-function newStreet(dir) {
-  seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
-  const startC = 2; ownedFromC = startC + 1; distanceWalked = startC * CHUNK_LEN + 3; lastChunk = startC; lastTier = -1;
-  stepSpeed = 0; dashTarget = null; streetT = clockT; dest = null; wantDestFrom = 0; buildSkyline();
-  parkFromC = (currentTask().kind === 'park' && !dayOver && dir !== 0) ? startC : Infinity;
-  if (parkFromC !== Infinity) { sayToast('The park! Walk in and find a bench.'); }
-}
-
-/* ---------- Drawing ---------- */
-// A pin floating over the destination, visible from far away.
-function drawDestPin() {
-  if (!dest) { return; }
-  const L = dest, mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + L.setback + 1.5);
-  const built = riseOf(L.born), top = (built > 0.01 ? L.H * (L.econNow || 1) * Math.min(1, built) : 0) + 4;
-  const p = P(x, top, mid); if (p.rz < 2) { return; }
-  const bob = Math.sin(clockT * 3) * 4, s = Math.max(16, Math.min(34, p.k * 1.4));
-  const col = PLACE_COL[L.dest];
-  ctx.save();
-  ctx.strokeStyle = rgbaN(col, 0.7); ctx.lineWidth = 2; const g = P(x, 0, mid);
-  ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(p.x, p.y + bob + s); ctx.lineTo(g.x, g.y); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y + bob, s, 0, TWO_PI); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(p.x - s * 0.5, p.y + bob + s * 0.8); ctx.lineTo(p.x + s * 0.5, p.y + bob + s * 0.8); ctx.lineTo(p.x, p.y + bob + s * 1.5); ctx.fill();
-  ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.arc(p.x, p.y + bob, s * 0.78, 0, TWO_PI); ctx.fill();
-  ctx.restore();
-  drawPlaceIcon(L.dest, p.x, p.y + bob, s * 0.9, col);
-  const dist = Math.max(0, Math.round(mid - distanceWalked));
-  push(); textAlign(CENTER, TOP); textStyle(BOLD); textSize(13); fill(255); stroke(0, 120); strokeWeight(3);
-  text(`${currentTask().place} · ${dist} m`, p.x, p.y + bob + s * 1.6); pop();
-}
-// Small hand-drawn icons, so nothing depends on emoji fonts.
-function drawPlaceIcon(kind, x, y, s, col) {
-  push(); translate(x, y); stroke(col); strokeWeight(Math.max(1.5, s * 0.1)); noFill(); strokeJoin(ROUND); strokeCap(ROUND);
-  if (kind === 'cafe') { rect(-s * 0.4, -s * 0.15, s * 0.6, s * 0.5, s * 0.1); arc(s * 0.2, s * 0.08, s * 0.3, s * 0.3, -HALF_PI, HALF_PI); for (let i = 0; i < 3; i++) { line(-s * 0.25 + i * s * 0.15, -s * 0.3, -s * 0.2 + i * s * 0.15, -s * 0.5); } }
-  else if (kind === 'office') { rect(-s * 0.5, -s * 0.2, s, s * 0.6, s * 0.08); rect(-s * 0.18, -s * 0.4, s * 0.36, s * 0.2, s * 0.05); line(-s * 0.5, s * 0.02, s * 0.5, s * 0.02); }
-  else if (kind === 'deli') { triangle(-s * 0.5, s * 0.3, s * 0.5, s * 0.3, 0, -s * 0.4); line(-s * 0.32, s * 0.08, s * 0.32, s * 0.08); }
-  else { line(0, s * 0.45, 0, 0); circle(0, -s * 0.12, s * 0.6); }
-  pop();
-}
-// Shop front for a destination: a sign, a lit door and a little welcome mat.
-function drawDestFront(L, x, z0, H) {
-  const len = L.z1 - L.z0, kind = L.dest || L.doneKind; if (!kind) { return; }
-  const col = PLACE_COL[kind], dz = L.z0 + len * 0.42;
-  if (dz + 1.6 > z0) { polyN(wallQuad(x - L.side * 0.08, Math.max(dz, z0), x - L.side * 0.08, dz + 1.6, 0, 2.6), L.dest ? '#ffe2a0' : toneN('#c8b08a', dz), toneN(col, dz), 3); }
-  facadeSign(L, x, z0, L.z0 + len * 0.2, L.z0 + len * 0.8, Math.min(H - 0.6, 4.2), Math.min(H - 0.6, 4.2) + 1.1, toneN(col, L.z0), '#fffaf0', PLACE_SIGN[kind] || '', L.dest ? '#ffd27a' : null);
-}
-
-/* ---------- Park ---------- */
-function fillPark(ch, r) {
-  ch.park = true; ch.lots = [];
-  for (let z = ch.z0 + CROSS_W + 1; z < ch.z0 + CHUNK_LEN; z += 3.2) {
-    for (const side of [-1, 1]) {
-      ch.props.push({ kind: 'tree', x: side * mixN(ROAD_W + 2, ROAD_W + 4, r()), z: z + r() * 2, h: mixN(4.5, 7.5, r()), tone: r() });
-      for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'tree', x: side * mixN(EDGE_X + 4, EDGE_X + 30, r()), z: z + r() * 3, h: mixN(5, 9, r()), tone: r() }); }
-    }
-  }
-  for (let z = ch.z0 + CROSS_W + 6; z < ch.z0 + CHUNK_LEN; z += 10) { ch.props.push({ kind: 'bench', x: (r() < 0.5 ? -1 : 1) * (ROAD_W + 1.1), z }); }
-}
-function drawBench(q, p) {
-  const k = q.k, dir = p.x > 0 ? -1 : 1;
-  ctx.fillStyle = toneN('#8a5a3a', p.z); ctx.fillRect(q.x - 0.8 * k, q.y - 0.5 * k, 1.6 * k, 0.12 * k);
-  ctx.fillRect(q.x - 0.8 * k + dir * 0.0, q.y - 1.0 * k, 1.6 * k, 0.1 * k);
-  ctx.fillStyle = toneN('#2a2a30', p.z); ctx.fillRect(q.x - 0.7 * k, q.y - 0.5 * k, 0.08 * k, 0.5 * k); ctx.fillRect(q.x + 0.62 * k, q.y - 0.5 * k, 0.08 * k, 0.5 * k);
-}
-
-/* ---------- HUD ---------- */
-function drawDayHud() {
-  const task = currentTask(), z = distanceWalked;
-  push(); textFont('Georgia');
-  // Task card, top left.
-  const w = Math.min(300, width * 0.42), x = 16, y = 16;
-  noStroke(); fill(0, 50); rect(x + 3, y + 4, w, 96, 8); fill(255, 250, 238); rect(x, y, w, 96, 8);
-  fill(PLACE_COL[task.kind]); rect(x, y, 8, 96, 8, 0, 0, 8);
-  fill(120, 100, 90); textSize(12); textAlign(LEFT, TOP); text(`DAY ${dayNo} · ${dayOver ? '9:00 pm' : task.clock}`, x + 20, y + 12);
-  fill(40, 30, 24); textStyle(BOLD); textSize(18); text(dayOver ? 'Home time' : task.title, x + 20, y + 32, w - 28);
-  textStyle(NORMAL); textSize(13); fill(90, 70, 60);
-  let hint = '';
-  if (dayOver) { hint = 'Press E to sleep and start a new day.'; }
-  else if (task.kind === 'park') { hint = chunkAt(Math.floor(z / CHUNK_LEN)).park ? 'Find a bench in the park.' : `Turn left or right at a crossing (A / D). Next one in ${Math.round(nextCrossing(z))} m.`; }
-  else if (dest) { hint = `${task.place} ${Math.max(0, Math.round((dest.z0 + dest.z1) / 2 - z))} m ahead, on your ${dest.side < 0 ? 'left' : 'right'}.`; }
-  else { hint = 'Keep walking…'; }
-  text(hint, x + 20, y + 60, w - 28);
-  // Wallet, top right.
-  const ww = 150, wx = width - ww - 16;
-  fill(0, 50); rect(wx + 3, y + 4, ww, 64, 8); fill(255, 250, 238); rect(wx, y, ww, 64, 8);
-  fill(120, 100, 90); textSize(11); textAlign(RIGHT, TOP); text('WALLET', wx + ww - 14, y + 10);
-  fill(40, 30, 24); textStyle(BOLD); textSize(26); text(`$${wallet}`, wx + ww - 14, y + 26);
-  const wt = wealthTier(); textStyle(NORMAL); textSize(10); fill(DISTRICTS[wt].stripe[0]); textAlign(LEFT, TOP); text(DISTRICTS[wt].name, wx + 12, y + 12, 70);
-  if (portfolio.length) { fill(OWNER_COL); textStyle(BOLD); text(`${portfolio.length} plot${portfolio.length > 1 ? 's' : ''}`, wx + 12, y + 40, 70); }
-  // Money popping up out of the wallet.
-  for (let i = moneyPops.length - 1; i >= 0; i--) {
-    const m = moneyPops[i], age = clockT - m.t; if (age > 2) { moneyPops.splice(i, 1); continue; }
-    fill(m.up ? '#2f8a3a' : '#c8322a'); textStyle(BOLD); textSize(24); textAlign(RIGHT, TOP); drawingContext.globalAlpha = 1 - easeN((age - 1.2) / 0.8);
-    text(m.text, wx + ww - 14, y + 70 + age * 18); drawingContext.globalAlpha = 1;
-  }
-  // "Press E" prompt at the door.
-  const near = nearDest(z), plot = near ? null : nearPlot(z);
-  if (near || dayOver || plot) {
-    const label = dayOver ? 'E  ·  Sleep' : near ? `E  ·  ${near.task.verb}${near.amount ? '  ' + moneyText(near.amount) : ''}`
-      : wallet >= plot.price ? `E  ·  Buy this plot  −$${plot.price}` : `For sale $${plot.price}  ·  you need $${plot.price - wallet} more`;
-    textStyle(BOLD); textSize(18); const tw = textWidth(label) + 40, bx = width / 2 - tw / 2, by = height - 210;
-    fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(255, 250, 238); rect(bx, by, tw, 46, 23);
-    fill(40, 30, 24); textAlign(CENTER, CENTER); text(label, width / 2, by + 24);
-  }
-  // Waiting at the door: a progress bar.
-  if (visit) {
-    const u = constrain((clockT - visit.t) / visit.dur, 0, 1), bw = Math.min(360, width - 40), bx = width / 2 - bw / 2, by = height - 200;
-    fill(0, 60); rect(bx + 3, by + 4, bw, 64, 12); fill(255, 250, 238); rect(bx, by, bw, 64, 12);
-    fill(40, 30, 24); textStyle(ITALIC); textSize(15); textAlign(CENTER, TOP);
-    const doing = visit.task.kind === 'office' ? `Working… ${['9', '10', '11', '12'][Math.min(3, Math.floor(u * 4))]}:00` : VISIT[visit.task.kind].doing;
-    text(doing, width / 2, by + 12); fill(225, 215, 195); rect(bx + 20, by + 40, bw - 40, 10, 5); fill(PLACE_COL[visit.task.kind]); rect(bx + 20, by + 40, (bw - 40) * u, 10, 5);
-  }
-  drawHeldItem();
-  // Short messages.
-  for (let i = toasts.length - 1; i >= 0; i--) {
-    const t = toasts[i], age = clockT - t.t; if (age > 3.2) { toasts.splice(i, 1); continue; }
-    drawingContext.globalAlpha = easeN(age / 0.3) * (1 - easeN((age - 2.6) / 0.6));
-    textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 250 - (toasts.length - 1 - i) * 26);
-    noStroke(); drawingContext.globalAlpha = 1;
-  }
-  // End of the day.
-  if (dayOver) {
-    const a = easeN((clockT - dayOver.t) / 1.2); drawingContext.globalAlpha = a;
-    const cw = Math.min(380, width - 32), cx = width / 2 - cw / 2, cy = height * 0.32;
-    fill(255, 250, 238); rect(cx, cy, cw, 140, 10); fill(PLACE_COL.park); rect(cx, cy, cw, 36, 10, 10, 0, 0);
-    fill(255); textStyle(BOLD); textSize(16); textAlign(CENTER, CENTER); text(`END OF DAY ${dayNo}`, width / 2, cy + 18);
-    fill(40, 30, 24); textSize(22); text(`You have $${wallet}`, width / 2, cy + 66);
-    textStyle(NORMAL); textSize(14); fill(90, 70, 60); text(`Tomorrow starts in ${DISTRICTS[dayOver.tier].name}.`, width / 2, cy + 100);
-    drawingContext.globalAlpha = 1;
-  }
-  pop();
-  // Fade while turning a corner.
-  if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
-}
-
-/* ---------- Keys ---------- */
-function dayKey(e) {
-  const code = e.code;
-  if (code === 'KeyE' || code === 'Space') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else if (nearDest(distanceWalked)) { doTask(); } else { const L = nearPlot(distanceWalked); if (L) { buyPlot(L); } } return true; }
-  if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
-  if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
-  return false;
-}
-
-// What you are carrying, held low in the corner of your view and swaying as you walk.
-function drawHeldItem() {
-  if (!heldItem) { return; }
-  const age = clockT - heldItem.t; if (age > 70) { heldItem = null; return; }
-  const s = Math.min(width, height) * 0.16, sway = Math.sin(PI * stepPhase) * 6 * bobAmp, rise = (1 - easeN(age / 0.5)) * s;
-  const x = width - s * 1.2 + sway, y = height - s * 0.55 + rise + Math.abs(Math.cos(PI * stepPhase)) * 4 * bobAmp;
-  push(); noStroke();
-  fill(232, 190, 160); ellipse(x + s * 0.05, y + s * 0.55, s * 0.95, s * 0.6);                    // hand
-  if (heldItem.kind === 'cafe') {
-    fill(250, 246, 238); quad(x - s * 0.32, y - s * 0.55, x + s * 0.32, y - s * 0.55, x + s * 0.24, y + s * 0.5, x - s * 0.24, y + s * 0.5);
-    fill(PLACE_COL.cafe); quad(x - s * 0.29, y - s * 0.12, x + s * 0.29, y - s * 0.12, x + s * 0.27, y + s * 0.18, x - s * 0.27, y + s * 0.18);
-    fill(60, 50, 44); rect(x - s * 0.36, y - s * 0.68, s * 0.72, s * 0.15, s * 0.05);
-    stroke(255, 255, 255, 120); strokeWeight(2); noFill();
-    for (let i = 0; i < 3; i++) { const sx = x - s * 0.15 + i * s * 0.15, ph = clockT * 2 + i; beginShape(); for (let k = 0; k < 6; k++) { vertex(sx + Math.sin(ph + k * 0.9) * s * 0.04, y - s * 0.75 - k * s * 0.08); } endShape(); }
-  } else {
-    fill(222, 180, 110); triangle(x - s * 0.5, y + s * 0.35, x + s * 0.5, y + s * 0.35, x, y - s * 0.45);
-    fill(120, 180, 90); rect(x - s * 0.42, y + s * 0.12, s * 0.84, s * 0.07);
-    fill(240, 200, 120); rect(x - s * 0.4, y + s * 0.2, s * 0.8, s * 0.06);
-    fill(250, 240, 220); triangle(x - s * 0.44, y + s * 0.3, x + s * 0.44, y + s * 0.3, x, y - s * 0.3);
-  }
-  pop();
-}
-
-/* Plotline — buy a plot.
- * Some plots along the street stay empty with a FOR SALE board. Walk up to one and press
- * E to buy it with the money you have earned. Your own building rises there with your name
- * on it. Every street you walk into after that has your properties near its start, and
- * walking past one of them pays you rent.
- */
-const PLOT_PRICE = [60, 150, 400, 800, 1500];
-const OWNER_COL = '#d4a017';
-let ownerName = '', portfolio = [], ownedFromC = Infinity, nameBox = null;
-
-function rentOf(tier) { return Math.round(PLOT_PRICE[tier] * 0.2); }
+function addMoney(v, why) { wallet += v; moneyPops.push({ text: moneyText(v), t: clockT, up: v > 0 }); sound.cash(v > 0); if (why) { sayToast(why); } }
+function chunkTier(slot) { return TIER_OF[slot]; }
+function ownsSet(group) { return portfolio.filter(p => p.group === group).length >= SET_SIZE; }
+function baseRent(group) { return Math.max(2, Math.round(GROUPS[group].price / 10)); }
+function rentOf(prop) { const b = baseRent(prop.group); return prop.houses === 0 && ownsSet(prop.group) ? b * 2 : b * RENT_X[prop.houses]; }
 
 /* ---------- Called from chunkAt() ---------- */
 function plotsForChunk(ch, r) {
-  if (ch.park) { return; }
   // Your properties come back near the start of every new street.
   const idx = ch.c - ownedFromC;
   if (idx >= 0 && idx < portfolio.length) {
-    const own = portfolio[idx], cand = ch.lots.filter(L => !L.special);
+    const prop = portfolio[idx], cand = ch.lots.filter(L => !L.special);
     if (cand.length) {
-      const old = cand[Math.min(cand.length - 1, 1)], i = ch.lots.indexOf(old);
-      const L = makeLot(null, own.tier, old.side, old.z0, old.z1 - old.z0, rngN(own.seed));
-      Object.assign(L, { owned: true, ownerName: own.name, rentDue: true, sign: false });
-      ch.lots[i] = L;
+      const old = cand[Math.min(cand.length - 1, 1)];
+      Object.assign(old, { owned: true, prop, rentDue: true, sign: false, setback: 0 });
     }
   }
-  // Roughly every other block has one plot for sale.
-  if (r() < 0.6) {
-    const cand = ch.lots.filter(L => !L.special && !L.owned);
-    if (cand.length) { const L = cand[Math.floor(r() * cand.length)]; L.forSale = true; L.price = PLOT_PRICE[L.tier]; }
+  // Each block is one colour group, like a side of the board: one plot for sale on each
+  // side of the street, so a colour set can be bought in a single block.
+  const group = GROUP_OF_TIER[ch.tier][ch.slot % 2];
+  for (const side of [-1, 1]) {
+    if (side === 1 && r() < 0.25) { continue; }
+    const cand = ch.lots.filter(L => !L.special && !L.owned && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
+    if (cand.length) { const L = cand[Math.floor(r() * cand.length)]; Object.assign(L, { forSale: true, group, price: GROUPS[group].price, setback: 0 }); }
   }
 }
 
 /* ---------- Every frame ---------- */
-function plotsUpdate(z) {
+function boardUpdate(z) {
+  if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
+  updateTurn();
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
-      if (L.owned && L.rentDue && (L.z0 + L.z1) / 2 < z) {
-        L.rentDue = false; const rent = rentOf(L.tier); wallet += rent;
-        moneyPops.push({ text: moneyText(rent), t: clockT, up: true }); sound.cash(true);
-        sayToast(`Rent from ${L.ownerName}: +$${rent}`);
-      }
+      if (L.owned && L.rentDue && (L.z0 + L.z1) / 2 < z) { L.rentDue = false; addMoney(rentOf(L.prop), `Tenants at ${L.prop.name} pay rent: +$${rentOf(L.prop)}`); }
     }
   }
 }
-function nearPlot(z) {
-  if (visit || dayOver || turnAnim || nameBox) { return null; }
+function onPassGo() { addMoney(GO_SALARY, `Passed GO. Collect $${GO_SALARY}.`); }
+function onChance(kind) {
+  if (kind === 'boom') { addMoney(100, 'Bank error in your favour: +$100'); }
+  if (kind === 'crash') { const cost = 25 * portfolio.reduce((n, p) => n + p.houses, 0) + 50; addMoney(-cost, `Street repairs: −$${cost}`); }
+}
+
+/* ---------- What is next to you ---------- */
+// The for-sale or owned plot beside you, if any.
+function plotHere(z) {
+  if (turnAnim || nameBox) { return null; }
   let best = null;
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
-      if (!L.forSale || L.owned) { continue; }
+      if (!L.forSale && !L.owned) { continue; }
       const d = Math.abs((L.z0 + L.z1) / 2 - z);
-      if (d < 9 && (!best || d < best.d)) { best = { L, d }; }
+      if (d < 10 && (!best || d < best.d)) { best = { L, d }; }
     }
   }
   return best ? best.L : null;
 }
-function buyPlot(L) {
-  if (wallet < L.price) { sayToast(`This plot costs $${L.price}. Earn $${L.price - wallet} more at work.`); return; }
-  wallet -= L.price; moneyPops.push({ text: moneyText(-L.price), t: clockT, up: false }); sound.cash(false);
-  L.owned = true; L.forSale = false; L.rentDue = false; L.sign = false; L.born = clockT + 0.3;
-  const seedHere = L.seed;
-  if (dest === L) { dest = null; }
-  if (ownerName) { claim(L, seedHere); sayToast(`Sold! ${ownerName} is going up.`); }
-  else { askName(L, seedHere); }
+function actionFor(L) {
+  if (!L) { return null; }
+  if (L.forSale) { return wallet >= L.price ? { label: `E  ·  Buy this plot  −$${L.price}`, ok: true } : { label: `For sale $${L.price}  ·  you need $${L.price - wallet} more`, ok: false }; }
+  const p = L.prop, g = GROUPS[p.group];
+  if (p.houses >= 5) { return { label: `${p.name} has a hotel. Rent $${rentOf(p)}`, ok: false }; }
+  if (!ownsSet(p.group)) { return { label: `Own both ${p.group} plots to build here`, ok: false }; }
+  const what = p.houses === 4 ? 'a hotel' : 'a house';
+  return wallet >= g.house ? { label: `E  ·  Build ${what}  −$${g.house}`, ok: true } : { label: `Building ${what} costs $${g.house}`, ok: false };
 }
-function claim(L, s) {
-  L.ownerName = ownerName;
-  portfolio.push({ name: ownerName, tier: L.tier, seed: s });
+function useHere() {
+  const L = plotHere(distanceWalked); if (!L) { return; }
+  const act = actionFor(L); if (!act.ok) { sayToast(act.label.replace('E  ·  ', '')); return; }
+  if (L.forSale) { buyPlot(L); } else { buildOn(L); }
+}
+function buyPlot(L) {
+  addMoney(-L.price);
+  const prop = { name: ownerName || 'My Place', group: L.group, houses: 0, n: portfolio.length + 1 };
+  portfolio.push(prop);
+  Object.assign(L, { forSale: false, owned: true, prop, rentDue: false, born: clockT + 0.2 });
+  deedView = { prop, t: clockT };
+  if (!ownerName) { askName(prop); } else { sayToast(ownsSet(L.group) ? `Colour set complete! You can build houses on ${L.group}.` : `You bought a ${L.group} plot.`); }
+}
+function buildOn(L) {
+  const p = L.prop; addMoney(-GROUPS[p.group].house);
+  p.houses++; L.born = clockT;                       // the new building rises again
+  sayToast(p.houses === 5 ? `A hotel! Rent is now $${rentOf(p)}.` : `House ${p.houses} built. Rent is now $${rentOf(p)}.`);
 }
 // First purchase: name your place. A small text box over the canvas.
-function askName(L, s) {
+function askName(prop) {
   stepSpeed = 0;
   const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);background:#fffaee;border-radius:10px;padding:18px 20px;box-shadow:0 6px 24px rgba(0,0,0,.3);font:16px Georgia,serif;color:#2a1e18;text-align:center;z-index:10;width:min(320px,86vw)';
-  box.innerHTML = '<div style="font-weight:bold;font-size:18px;margin-bottom:6px">Sold! Name your place</div><div style="font-size:13px;color:#6a5a50;margin-bottom:10px">It goes on the sign. Press Enter.</div>';
+  box.style.cssText = 'position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);background:#fffaee;border-radius:10px;padding:18px 20px;box-shadow:0 6px 24px rgba(0,0,0,.3);font:16px Georgia,serif;color:#2a1e18;text-align:center;z-index:10;width:min(320px,86vw)';
+  box.innerHTML = '<div style="font-weight:bold;font-size:18px;margin-bottom:6px">Your first property! Name it</div><div style="font-size:13px;color:#6a5a50;margin-bottom:10px">It goes on all your signs. Press Enter.</div>';
   const input = document.createElement('input');
   input.maxLength = 16; input.placeholder = 'e.g. Hedy’s';
   input.style.cssText = 'width:100%;box-sizing:border-box;font:18px Georgia,serif;padding:8px 10px;border:2px solid #d4a017;border-radius:6px;outline:none;text-align:center';
@@ -1202,38 +936,164 @@ function askName(L, s) {
   setTimeout(() => input.focus(), 30);
   const done = () => {
     ownerName = (input.value.trim() || 'My Place').slice(0, 16);
-    claim(L, s); box.remove(); nameBox = null; canvasNode.focus({ preventScroll: true });
-    sayToast(`${ownerName} is going up!`);
+    for (const p of portfolio) { p.name = ownerName; }
+    box.remove(); nameBox = null; canvasNode.focus({ preventScroll: true });
+    sayToast(`${ownerName} is yours. Buy the other ${prop.group} plot to build houses.`);
   };
   input.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { done(); } });
 }
 
-/* ---------- Drawing ---------- */
-// A FOR SALE board on its post, standing on the empty plot by the pavement.
+/* ---------- Turning at a crossing ---------- */
+function nextCrossing(z) { const local = modN(z, CHUNK_LEN); return local < CROSS_W - 1 ? 0 : CHUNK_LEN - local + 2; }
+function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
+function tryTurn(dir) {
+  if (turnAnim || nameBox) { return; }
+  if (!atCrossing(distanceWalked)) {
+    const ahead = nextCrossing(distanceWalked);
+    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left' : 'right'} at the crossing ahead.`); }
+    else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
+    return;
+  }
+  queuedTurn = 0; turnAnim = { dir, t: clockT }; sound.turn(dir);
+}
+function updateTurn() {
+  if (!turnAnim) { turnYaw = 0; fadeA = Math.max(0, fadeA - 0.05); return; }
+  const u = (clockT - turnAnim.t) / 0.85;
+  turnYaw = turnAnim.dir * HALF_PI * easeN(Math.min(1, u));
+  fadeA = easeN((u - 0.45) / 0.55);
+  if (u >= 1) { turnAnim = null; turnYaw = 0; fadeA = 1; newStreet(); }
+}
+// A fresh street at the same place on the board: new seed, and it builds around you.
+function newStreet() {
+  const c = Math.floor(distanceWalked / CHUNK_LEN);
+  seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
+  distanceWalked = c * CHUNK_LEN + 3; lastChunk = c; lastTier = -1; ownedFromC = c + 1;
+  stepSpeed = 0; dashTarget = null; streetT = clockT; buildSkyline();
+}
+
+/* ---------- Drawing on the street ---------- */
+// A FOR SALE board in the plot's colour, standing on the empty plot by the pavement.
 function drawForSale(L) {
   const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
   if (base.rz < 1.5 || base.rz > FAR_Z * 0.8) { return; }
-  const k = base.k, fog = fogFor(mid), w = 3.2 * k, h = 1.7 * k, top = base.y - 3 * k;
-  ctx.save(); ctx.globalAlpha = 1 - fog * 0.8;
+  const k = base.k, col = GROUPS[L.group].col, w = 3.2 * k, h = 1.7 * k, top = base.y - 3 * k;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(mid) * 0.8;
   ctx.fillStyle = '#5a4030'; ctx.fillRect(base.x - 0.07 * k, top, 0.14 * k, 3 * k);
-  ctx.fillStyle = '#fffaee'; ctx.strokeStyle = '#c8322a'; ctx.lineWidth = Math.max(1, 0.08 * k);
+  ctx.fillStyle = '#fffaee'; ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.06 * k);
   ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
-  ctx.fillStyle = '#c8322a'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.38);
+  ctx.fillStyle = col; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.38);
   if (w > 26) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${h * 0.26}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('FOR SALE', base.x, top - h * 0.2 + h * 0.19);
+    ctx.font = `bold ${h * 0.24}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('FOR SALE', base.x, top - h * 0.2 + h * 0.19);
     ctx.font = `bold ${h * 0.32}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(`$${L.price}`, base.x, top - h * 0.2 + h * 0.68);
   }
   ctx.restore();
 }
-// Your building: a gold sign with your name and a little flag on the roof.
-function drawOwnedFront(L, x, z0, H) {
-  if (!L.ownerName) { return; }
-  const len = L.z1 - L.z0, ya = Math.min(H - 0.8, 4.4);
-  facadeSign(L, x, z0, L.z0 + len * 0.15, L.z0 + len * 0.85, ya, ya + 1.2, '#2a1e18', '#ffe9a8', L.ownerName.toUpperCase(), OWNER_COL);
-  const fz = L.z0 + len * 0.5; if (fz < z0) { return; }
-  const pole = P(x + L.side * 0.6, H, fz), tip = P(x + L.side * 0.6, H + 3, fz); if (pole.rz < 1) { return; }
-  ctx.strokeStyle = toneN('#3a2a20', fz); ctx.lineWidth = Math.max(1, 0.06 * pole.k); ctx.beginPath(); ctx.moveTo(pole.x, pole.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-  const wave = Math.sin(clockT * 4) * 0.15 * tip.k;
-  ctx.fillStyle = OWNER_COL; ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x + 1.3 * tip.k * -L.side, tip.y + 0.35 * tip.k + wave); ctx.lineTo(tip.x, tip.y + 0.7 * tip.k); ctx.fill();
+// A box with a pitched roof standing on the plot: one Monopoly house or the hotel.
+function drawPiece(L, za, zb, d, h, col) {
+  const x = L.side * (EDGE_X + 0.1), xo = x + L.side * d, xm = (x + xo) / 2, z0 = clipZ(za); if (zb <= z0) { return; }
+  polyN(wallQuad(x, z0, x, zb, 0, h), toneN(col, midN(z0, zb), 1.05), 'rgba(0,0,0,0.25)', 1);
+  if (za > cam.z + NEAR_Z) { polyN(wallQuad(x, za, xo, za, 0, h), toneN(col, za, 0.7)); polyN([P(x, h, za), P(xo, h, za), P(xm, h + d * 0.45, za)], toneN(col, za, 0.62)); }
+  polyN([P(x, h, z0), P(x, h, zb), P(xm, h + d * 0.45, zb), P(xm, h + d * 0.45, z0)], toneN(col, midN(z0, zb), 0.82), 'rgba(0,0,0,0.25)', 1);
+  // Two windows and a door on the street side.
+  const len = zb - za;
+  for (const u of [0.18, 0.62]) { const wa = za + len * u, wb = wa + len * 0.2; if (wb > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(wa, z0), x - L.side * 0.05, wb, h * 0.45, h * 0.75), toneN('#fff2c0', wa)); } }
+  const da = za + len * 0.42; if (da + len * 0.16 > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(da, z0), x - L.side * 0.05, da + len * 0.16, 0, h * 0.42), toneN('#3a2a20', da)); }
+}
+function drawOwnedLot(L) {
+  const p = L.prop, col = GROUPS[p.group].col, len = L.z1 - L.z0, z0 = clipZ(L.z0);
+  if (L.z1 <= z0) { return; }
+  // The plot, paved in its colour.
+  const xa = L.side * (EDGE_X + 0.3), xb = L.side * (EDGE_X + L.depth);
+  polyN([P(xa, 0.04, z0), P(xb, 0.04, z0), P(xb, 0.04, L.z1), P(xa, 0.04, L.z1)], rgbaN(col, 0.55), rgbaN(col, 0.9), 2);
+  // Giant board pieces, bigger in richer districts so they stand out among the towers.
+  const hh = 6 + L.tier * 3;
+  if (p.houses === 5) { drawPiece(L, L.z0 + len * 0.06, L.z1 - len * 0.06, Math.max(8, L.depth), hh * 2, HOTEL_COL); }
+  else {
+    const n = p.houses, slot = len / 4;
+    for (let i = n - 1; i >= 0; i--) { drawPiece(L, L.z0 + slot * i + slot * 0.1, L.z0 + slot * (i + 1) - slot * 0.1, Math.max(5, L.depth * 0.7), hh, HOUSE_COL); }
+  }
+  // A sign by the pavement with your name and a flag.
+  const sx = L.side * (EDGE_X + 0.5), sz = Math.max(L.z0 + 0.6, z0 + 0.1), b = P(sx, 0, sz); if (b.rz < 1.2) { return; }
+  const k = b.k, w = 2.6 * k, h = 1 * k, top = b.y - 2.6 * k;
+  ctx.save(); ctx.fillStyle = '#3a2a20'; ctx.fillRect(b.x - 0.05 * k, top, 0.1 * k, 2.6 * k);
+  ctx.fillStyle = '#2a1e18'; ctx.fillRect(b.x - w / 2, top - h, w, h); ctx.strokeStyle = OWNER_COL; ctx.lineWidth = Math.max(1, 0.08 * k); ctx.strokeRect(b.x - w / 2, top - h, w, h);
+  if (w > 30) { ctx.fillStyle = '#ffe9a8'; ctx.font = `bold ${h * 0.5}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.name.toUpperCase(), b.x, top - h / 2, w * 0.92); }
+  ctx.fillStyle = col; ctx.fillRect(b.x - w / 2, top - h - 0.18 * k, w, 0.18 * k);
+  ctx.restore();
+}
+
+/* ---------- HUD ---------- */
+function drawBoardHud() {
+  const z = distanceWalked;
+  push(); textFont('Georgia');
+  // Title deeds you own, top left.
+  const x = 16, y = 16, w = Math.min(250, width * 0.4), rowH = 26, rows = Math.max(1, portfolio.length), h = 44 + rows * rowH;
+  noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
+  fill(120, 100, 90); textSize(11); textAlign(LEFT, TOP); text('YOUR TITLE DEEDS', x + 14, y + 12);
+  if (!portfolio.length) { fill(90, 70, 60); textSize(13); text('None yet. Look for FOR SALE boards.', x + 14, y + 32, w - 24); }
+  portfolio.forEach((p, i) => {
+    const ry = y + 32 + i * rowH, g = GROUPS[p.group];
+    fill(g.col); rect(x + 14, ry, 16, 16, 3);
+    fill(40, 30, 24); textSize(13); textStyle(BOLD); text(p.group, x + 38, ry + 1); textStyle(NORMAL);
+    for (let k = 0; k < (p.houses < 5 ? p.houses : 0); k++) { fill(HOUSE_COL); rect(x + 96 + k * 14, ry + 3, 10, 10, 2); }
+    if (p.houses === 5) { fill(HOTEL_COL); rect(x + 96, ry + 3, 30, 10, 2); }
+    fill(90, 70, 60); textAlign(RIGHT, TOP); text(`rent $${rentOf(p)}`, x + w - 12, ry + 1); textAlign(LEFT, TOP);
+    if (ownsSet(p.group)) { fill(OWNER_COL); text('★', x + 80, ry); }
+  });
+  // Wallet, top right.
+  const ww = 150, wx = width - ww - 16;
+  fill(0, 50); rect(wx + 3, y + 4, ww, 64, 8); fill(255, 250, 238); rect(wx, y, ww, 64, 8);
+  fill(120, 100, 90); textSize(11); textAlign(RIGHT, TOP); text('CASH', wx + ww - 14, y + 10);
+  fill(40, 30, 24); textStyle(BOLD); textSize(26); text(`$${wallet}`, wx + ww - 14, y + 26); textStyle(NORMAL);
+  for (let i = moneyPops.length - 1; i >= 0; i--) {
+    const m = moneyPops[i], age = clockT - m.t; if (age > 2) { moneyPops.splice(i, 1); continue; }
+    fill(m.up ? '#2f8a3a' : '#c8322a'); textStyle(BOLD); textSize(24); textAlign(RIGHT, TOP); drawingContext.globalAlpha = 1 - easeN((age - 1.2) / 0.8);
+    text(m.text, wx + ww - 14, y + 70 + age * 18); drawingContext.globalAlpha = 1; textStyle(NORMAL);
+  }
+  // The plot beside you: its title deed and what you can do.
+  const L = plotHere(z), act = actionFor(L);
+  if (L) { drawDeed(L.forSale ? { name: 'For sale', group: L.group, houses: 0 } : L.prop, width - 16 - 190, y + 84, 1); }
+  if (act) {
+    textStyle(BOLD); textSize(18); const tw = textWidth(act.label) + 40, bx = width / 2 - tw / 2, by = height - 120;
+    fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(act.ok ? color(255, 250, 238) : color(240, 232, 220)); rect(bx, by, tw, 46, 23);
+    fill(act.ok ? color(40, 30, 24) : color(110, 90, 80)); textAlign(CENTER, CENTER); text(act.label, width / 2, by + 24);
+  }
+  // A big deed when you have just bought.
+  if (deedView) { const age = clockT - deedView.t; if (age > 4) { deedView = null; } else { const a = easeN(age / 0.3) * (1 - easeN((age - 3.4) / 0.6)); drawDeed(deedView.prop, width / 2 - 110, height * 0.24, a, 220); } }
+  // Short messages.
+  for (let i = toasts.length - 1; i >= 0; i--) {
+    const t = toasts[i], age = clockT - t.t; if (age > 3.4) { toasts.splice(i, 1); continue; }
+    drawingContext.globalAlpha = easeN(age / 0.3) * (1 - easeN((age - 2.8) / 0.6));
+    textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 150 - (toasts.length - 1 - i) * 26);
+    noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
+  }
+  // Help line.
+  fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
+  text('↑ walk  ·  Shift hurry  ·  ← → turn at a crossing  ·  E buy / build  ·  mouse look around', width / 2, height - 14);
+  pop();
+  if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
+}
+// A Monopoly-style title deed: colour band, rent with 0-4 houses and a hotel, house cost.
+function drawDeed(prop, x, y, a, w = 190) {
+  const g = GROUPS[prop.group], b = baseRent(prop.group), s = w / 190;
+  push(); drawingContext.globalAlpha = a; noStroke();
+  fill(0, 50); rect(x + 3, y + 4, w, 200 * s, 6); fill(255, 252, 244); rect(x, y, w, 200 * s, 6);
+  fill(g.col); rect(x + 8 * s, y + 8 * s, w - 16 * s, 38 * s, 3);
+  fill(prop.group === 'yellow' || prop.group === 'sky' || prop.group === 'mint' ? 30 : 255); textAlign(CENTER, CENTER); textStyle(BOLD);
+  textSize(9 * s); text('TITLE DEED', x + w / 2, y + 18 * s); textSize(14 * s); text(`${prop.group.toUpperCase()} · $${g.price}`, x + w / 2, y + 34 * s);
+  textStyle(NORMAL); textSize(11 * s); fill(40, 30, 24);
+  const lines = [['Rent', b], ['With 1 house', b * RENT_X[1]], ['With 2 houses', b * RENT_X[2]], ['With 3 houses', b * RENT_X[3]], ['With 4 houses', b * RENT_X[4]], ['With a hotel', b * RENT_X[5]]];
+  lines.forEach(([t, v], i) => { const ly = y + (58 + i * 18) * s, here = prop.houses === i; fill(here ? color(200, 50, 40) : color(40, 30, 24)); textStyle(here ? BOLD : NORMAL); textAlign(LEFT, CENTER); text(t, x + 14 * s, ly); textAlign(RIGHT, CENTER); text(`$${v}`, x + w - 14 * s, ly); });
+  textStyle(ITALIC); fill(110, 90, 80); textAlign(CENTER, TOP); textSize(10 * s); text(`Houses cost $${g.house} each.\nOwn both ${prop.group} plots to build.`, x + 8 * s, y + 166 * s, w - 16 * s);
+  pop();
+}
+
+/* ---------- Keys ---------- */
+function boardKey(e) {
+  const code = e.code;
+  if (code === 'KeyE' || code === 'Space') { useHere(); return true; }
+  if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
+  if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
+  return false;
 }
