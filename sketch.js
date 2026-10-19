@@ -13,7 +13,13 @@
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
  *
+ * A day on the board (day.js): a task card sends you for coffee, to work, to lunch and to
+ * the park. Destinations rise ahead with a pin over them; press E at the door. Money you
+ * earn decides which district the street ahead is built as. Turn left or right at a
+ * crossing with A / D.
+ *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
+ *   E to use a shop or office, A / D (or Left / Right) to turn at a crossing,
  *   Enter to stroll on its own, Space to roll the dice, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
@@ -65,7 +71,7 @@ function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, Space to roll the dice, Enter to stroll, M for sound.');
+  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E to use a shop, A or D to turn at a crossing, Space to roll the dice, Enter to stroll, M for sound.');
   sound = new StreetSound(); textFont('Georgia');
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -113,7 +119,7 @@ function clipZ(z) { return Math.max(z, cam.z + NEAR_Z); }
 /* ---------- The board: chunks of street ---------- */
 function chunkAt(c) {
   if (chunks.has(c)) {return chunks.get(c);}
-  const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = TIER_OF[slot], z0 = c * CHUNK_LEN;
+  const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(), z0 = c * CHUNK_LEN;
   const r = rngN(seed + c * 7919 + lap * 104729);
   const ch = { c, slot, tier, z0, lots: [], props: [], back: [] };
   for (const side of [-1, 1]) {
@@ -133,6 +139,7 @@ function chunkAt(c) {
   if (tier === 1 || tier === 2) {for (let z = z0 + CROSS_W + 5; z < z0 + CHUNK_LEN - 2; z += 9) {for (const side of [-1, 1]) {if (r() < 0.8) {ch.props.push({ kind: 'tree', x: side * (ROAD_W + 2.3), z: z + r() * 2, h: mixN(4, 6.5, r()), tone: r() });}}}}
   if (tier === 0) {for (let i = 0; i < 5; i++) { const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'bin', x: side * (EDGE_X - 0.6), z: z0 + CROSS_W + r() * (CHUNK_LEN - CROSS_W), tone: r() }); }}
   if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, DISTRICTS[tier].stripe) });}}}
+  if (isParkChunk(c)) { ch.back = []; fillPark(ch, r); }
   chunks.set(c, ch); return ch;
 }
 function lotLength(tier, r) { return [mixN(5, 7.5, r()), mixN(6, 8.5, r()), mixN(14, 18, r()), mixN(10, 15, r()), mixN(16, 24, r())][tier]; }
@@ -158,6 +165,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
+  else if (turnAnim) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 3)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -168,8 +176,9 @@ function draw() {
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
   lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
+  updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw; cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw; cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
   // World state: chunks in view, district changes, landmarks, economy.
@@ -179,14 +188,15 @@ function draw() {
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
   if (here.c !== lastChunk) { if (here.slot === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); showCard('go'); } lastChunk = here.c; }
   if (tier !== lastTier) { districtCard = { tier, t: clockT, lap: Math.floor(here.c / LAP_LEN) + 1 }; lastTier = tier; }
-  updateLandmarks(z);
-  if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = 0; crashTarget = 0; economyUntil = 0; }
+  updateLandmarks(z); dayUpdate(z);
+  if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
   economy = lerp(economy, economyTarget, 1 - Math.exp(-dt * 0.8)); night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5)); crash = lerp(crash, crashTarget, 1 - Math.exp(-dt * 0.8));
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
   sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
-  drawSky(); drawSkyline(); drawGround(z); drawWorld(z);
+  // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
+  try { drawSky(); drawSkyline(); drawGround(z); drawWorld(z); } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
   pop();
   drawOverlays();
 }
@@ -199,7 +209,7 @@ function riseOf(born) {
 }
 function birthDelay(seedish, ahead) {
   // A little randomness, and at the very start the street builds outward from where you stand.
-  return (modN(seedish, 50) / 100) + (clockT < 2 ? Math.max(0, ahead) / 30 : 0);
+  return (modN(seedish, 50) / 100) + (clockT - streetT < 2 ? Math.max(0, ahead) / 30 : 0);
 }
 function updateLandmarks(z) {
   for (const ch of chunks.values()) {
@@ -219,8 +229,8 @@ function updateLandmarks(z) {
 }
 function drawChance(s) {
   const kinds = ['boom', 'crash', 'night'], kind = kinds[modN(s, 3)];
-  if (kind === 'boom') { economyTarget = 1.55; crashTarget = 0; nightTarget = 0; }
-  if (kind === 'crash') { economyTarget = 0.6; crashTarget = 1; nightTarget = 0; }
+  if (kind === 'boom') { economyTarget = 1.55; crashTarget = 0; nightTarget = baseNight; }
+  if (kind === 'crash') { economyTarget = 0.6; crashTarget = 1; nightTarget = baseNight; }
   if (kind === 'night') { economyTarget = 1; crashTarget = 0; nightTarget = 1; }
   economyUntil = clockT + 45; sound.chance(kind); showCard(kind);
 }
@@ -327,7 +337,7 @@ function drawGround(z) {
         polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#e8dcc4' : '#d8cab0'));
         // Board-colour band along the kerb.
         polyN([P(side * (ROAD_W + 0.15), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, zb), P(side * (ROAD_W + 0.15), 0.13, zb)], f(stripe[tile]));
-        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 ? '#6f9a52' : '#a89478'));
+        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park ? '#6f9a52' : '#a89478'));
       }
     }
     // Centre line and zebra crossings.
@@ -336,7 +346,7 @@ function drawGround(z) {
   }
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
-    paintText(ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
+    paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
 function paintText(label, x, zz, size, col) {
@@ -370,9 +380,10 @@ function drawWorld(z) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} 
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'bench') {drawBench(it.q, it.p);}
     ctx.restore();
   }
+  drawDestPin();
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {
@@ -424,6 +435,7 @@ function drawLot(L) {
   if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
   if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
   [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H);
+  if (L.dest || L.doneKind) { drawDestFront(L, x, z0, H); }
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
 function facadeWindows(L, x, z0, z1, rows, cols, opt) {
@@ -569,6 +581,7 @@ function drawCasino(L, x, z0, z1, H) {
   // A big marquee facing down the street: question mark, bulbs and a spinning wheel.
   const mz = L.z0 + 3; if (mz < cam.z + NEAR_Z) {return;}
   const xa = x - L.side * 4.5, xb = x - L.side * 0.2, a = P(xa, 5.5, mz), b = P(xb, 5.5, mz), c = P(xb, 15, mz), d = P(xa, 15, mz);
+  if ([a, b, c, d].some(q => q.rz < 1)) {return;}
   polyN([a, b, c, d], '#3a0a2a', '#ffcf3a', Math.max(1, a.k * 0.08));
   const cx = (a.x + b.x) / 2, w = Math.abs(b.x - a.x), top = c.y, hgt = a.y - c.y;
   ctx.save(); ctx.font = `bold ${hgt * 0.62}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -616,7 +629,7 @@ function drawOverlays() {
   image(grain, 0, 0, width, height);
   if (districtCard) {
     const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Lap ${districtCard.lap}`); }
+    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Day ${dayNo}`); }
   }
   if (card) {
     const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
@@ -629,6 +642,7 @@ function drawOverlays() {
       pop();
     }
   }
+  drawDayHud();
   if (dice) {
     const age = clockT - dice.t, rolling = age < 0.8, a = 1 - easeN((age - 2.4) / 0.5);
     if (a > 0) { push(); drawingContext.globalAlpha = a; for (let i = 0; i < 2; i++) { const v = rolling ? 1 + Math.floor(Math.random() * 6) : dice.v[i]; drawDie(width / 2 + (i - 0.5) * 80, height - 90, 56, v, rolling ? Math.sin(clockT * 30 + i) * 0.4 : 0); }
@@ -659,13 +673,14 @@ function mousePressed(e) { if (e.target !== canvasNode) {return;} canvasNode.foc
 function mouseReleased() { pointerHeld = false; }
 function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
-  if (e.repeat && ['m', 'p', 'r', ' ', 'enter'].includes(k)) {return false;}
+  if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd'].includes(k)) {return false;}
   beginSound();
+  if (!paused && dayKey(e)) {return false;}
   if (key === ' ') { rollDice(); return false; }
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
-  if (k === 'r') { seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; lastTier = -1; lastChunk = -1; economyTarget = 1; nightTarget = 0; crashTarget = 0; buildSkyline(); return false; }
+  if (k === 'r') { seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; dest = null; streetT = clockT; lastTier = -1; lastChunk = -1; economyTarget = 1; nightTarget = 0; crashTarget = 0; buildSkyline(); return false; }
   if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(e.code)) {return false;}
 }
 function touchStarted() { canvasNode.focus(); pointerHeld = true; beginSound(); return false; }

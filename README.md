@@ -19,7 +19,23 @@ The pavements are painted in the board colours of each district, in board order.
 
 **The street builds itself as you walk.** Beyond about 55 m, each lot is only a plot outlined on the ground in its district colour, with a corner stake, like land on the board nobody has built on yet. As you approach, its building springs up out of the ground with a little overshoot, a puff of dust and a soft thud. The thud is pitched higher in richer districts. Lamps, trees, bins and banners pop up with it. When the page opens, the first street builds outward from where you stand.
 
+## A day on the board
+A task card (top left) walks you through a working day:
+
+1. **Grab a coffee** (7:30 am): costs money.
+2. **Go to work** (9:00 am): pays.
+3. **Lunch: buy a sandwich** (12:30 pm): costs money.
+4. **Back to work** (1:30 pm): pays.
+5. **Unwind in the park** (6:00 pm): the park is around a corner, so you have to turn at a crossing.
+
+Each destination rises out of the street ahead with a pin floating over it and the distance under the pin. Walk up to its door and press **E**. Your wallet (top right) goes up or down. Prices and pay scale with the district, so a coffee in Pinnacle Heights costs four times what it does in Rusty Row.
+
+**Money builds the street.** The street ahead is built as the district you can afford ($0 Rusty Row, $100 Maple Terrace, $300 Gilded Gardens, $600 Brick & Glass, $1000 Pinnacle Heights). When your wallet crosses a line, the plots you have not reached yet are re-planned and rise as the richer district. After the park, press E to sleep; the next day starts in the district your savings can afford.
+
+**Turning.** At any crossing press **A / Left** or **D / Right** to turn the corner. The view swings round, and a new street builds itself around you.
+
 ## Interaction
+- **E** uses the shop or office in front of you. **A / D** (or Left / Right) turns at a crossing.
 - Hold W / Up / the mouse to walk. Add Shift to hurry. S / Down steps back. Enter strolls on its own. Move the mouse to look around.
 - **Space rolls two dice**, and you dash forward that many lots.
 - **Chance casinos**: walking past one draws a Chance card that reshapes the street ahead.
@@ -46,7 +62,8 @@ The pavements are painted in the board colours of each district, in board order.
 ## Files
 - index.html and vendor/p5.min.js: run locally with `python3 -m http.server` in this folder, then open http://localhost:8000/.
 - sketch.js: the street, the camera, the districts, Chance, the dice and the overlays.
-- sketch-all.js: street-sound.js and sketch.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
+- day.js: the daily routine: task card, wallet, destinations, turning corners and the park.
+- sketch-all.js: street-sound.js, sketch.js and day.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
 - street-sound.js: the soundscape.
 
 ## References
