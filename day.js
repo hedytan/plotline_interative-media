@@ -41,7 +41,7 @@ function dayUpdate(z) {
     for (const [c, ch] of chunks) { if (ch.z0 > z + APPEAR_Z + 12 && !ch.lots.includes(dest)) { chunks.delete(c); } }
   }
   if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
-  updateVisit();
+  updateVisit(); plotsUpdate(z);
   // Keep the destination valid: it must still exist and not be behind you.
   const task = currentTask();
   if (dest && ![...chunks.values()].some(ch => ch.lots.includes(dest))) { dest = null; }
@@ -49,7 +49,7 @@ function dayUpdate(z) {
   if (!dest && task.kind !== 'park' && !dayOver) { pickDest(task, Math.max(wantDestFrom, z + 70)); }
 }
 function pickDest(task, fromZ) {
-  const lots = [...chunks.values()].flatMap(ch => ch.park ? [] : ch.lots).filter(L => !L.special && L.z0 >= fromZ).sort((a, b) => a.z0 - b.z0);
+  const lots = [...chunks.values()].flatMap(ch => ch.park ? [] : ch.lots).filter(L => !L.special && !L.forSale && !L.owned && L.z0 >= fromZ).sort((a, b) => a.z0 - b.z0);
   if (lots.length) { dest = lots[0]; dest.dest = task.kind; dest.sign = false; }
 }
 // Distance to the next crossing ahead (where you can turn).
@@ -144,7 +144,7 @@ function updateTurn() {
 // A fresh street: new seed, you stand at its first crossing and it builds around you.
 function newStreet(dir) {
   seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
-  const startC = 2; distanceWalked = startC * CHUNK_LEN + 3; lastChunk = startC; lastTier = -1;
+  const startC = 2; ownedFromC = startC + 1; distanceWalked = startC * CHUNK_LEN + 3; lastChunk = startC; lastTier = -1;
   stepSpeed = 0; dashTarget = null; streetT = clockT; dest = null; wantDestFrom = 0; buildSkyline();
   parkFromC = (currentTask().kind === 'park' && !dayOver && dir !== 0) ? startC : Infinity;
   if (parkFromC !== Infinity) { sayToast('The park! Walk in and find a bench.'); }
@@ -229,6 +229,7 @@ function drawDayHud() {
   fill(120, 100, 90); textSize(11); textAlign(RIGHT, TOP); text('WALLET', wx + ww - 14, y + 10);
   fill(40, 30, 24); textStyle(BOLD); textSize(26); text(`$${wallet}`, wx + ww - 14, y + 26);
   const wt = wealthTier(); textStyle(NORMAL); textSize(10); fill(DISTRICTS[wt].stripe[0]); textAlign(LEFT, TOP); text(DISTRICTS[wt].name, wx + 12, y + 12, 70);
+  if (portfolio.length) { fill(OWNER_COL); textStyle(BOLD); text(`${portfolio.length} plot${portfolio.length > 1 ? 's' : ''}`, wx + 12, y + 40, 70); }
   // Money popping up out of the wallet.
   for (let i = moneyPops.length - 1; i >= 0; i--) {
     const m = moneyPops[i], age = clockT - m.t; if (age > 2) { moneyPops.splice(i, 1); continue; }
@@ -236,9 +237,10 @@ function drawDayHud() {
     text(m.text, wx + ww - 14, y + 70 + age * 18); drawingContext.globalAlpha = 1;
   }
   // "Press E" prompt at the door.
-  const near = nearDest(z);
-  if (near || dayOver) {
-    const label = dayOver ? 'E  ·  Sleep' : `E  ·  ${near.task.verb}${near.amount ? '  ' + moneyText(near.amount) : ''}`;
+  const near = nearDest(z), plot = near ? null : nearPlot(z);
+  if (near || dayOver || plot) {
+    const label = dayOver ? 'E  ·  Sleep' : near ? `E  ·  ${near.task.verb}${near.amount ? '  ' + moneyText(near.amount) : ''}`
+      : wallet >= plot.price ? `E  ·  Buy this plot  −$${plot.price}` : `For sale $${plot.price}  ·  you need $${plot.price - wallet} more`;
     textStyle(BOLD); textSize(18); const tw = textWidth(label) + 40, bx = width / 2 - tw / 2, by = height - 210;
     fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(255, 250, 238); rect(bx, by, tw, 46, 23);
     fill(40, 30, 24); textAlign(CENTER, CENTER); text(label, width / 2, by + 24);
@@ -277,7 +279,7 @@ function drawDayHud() {
 /* ---------- Keys ---------- */
 function dayKey(e) {
   const code = e.code;
-  if (code === 'KeyE' || code === 'Space') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else { doTask(); } return true; }
+  if (code === 'KeyE' || code === 'Space') { if (dayOver) { if (clockT - dayOver.t > 1) { startNextDay(); } } else if (nearDest(distanceWalked)) { doTask(); } else { const L = nearPlot(distanceWalked); if (L) { buyPlot(L); } } return true; }
   if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
   if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
   return false;

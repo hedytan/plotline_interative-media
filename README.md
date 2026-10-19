@@ -32,6 +32,8 @@ Each destination rises out of the street ahead with a pin floating over it and t
 
 **Money builds the street.** The street ahead is built as the district you can afford ($0 Rusty Row, $100 Maple Terrace, $300 Gilded Gardens, $600 Brick & Glass, $1000 Pinnacle Heights). When your wallet crosses a line, the plots you have not reached yet are re-planned and rise as the richer district. After the park, press E to sleep; the next day starts in the district your savings can afford.
 
+**Buy a plot.** Some plots along the street stay empty, with a red FOR SALE board and a price ($60 in Rusty Row up to $1500 in Pinnacle Heights). Walk up to one and press **E** to buy it. The first time, you name your place; your building then rises on the plot with your name on a gold sign and a flag on the roof. From then on, every new street you walk into has your properties near its start, and walking past one pays you rent. The board game's idea, owning the street, becomes something you do with your own hands.
+
 **Turning.** Walk with the Up arrow. At a crossing press **Left** or **Right** (or A / D) to turn the corner. Press it a little before the crossing and you turn when you get there. The view swings round, and a new street builds itself around you.
 
 ## Interaction
@@ -62,7 +64,8 @@ Each destination rises out of the street ahead with a pin floating over it and t
 - index.html and vendor/p5.min.js: run locally with `python3 -m http.server` in this folder, then open http://localhost:8000/.
 - sketch.js: the street, the camera, the districts, Chance and the overlays.
 - day.js: the daily routine: task card, wallet, destinations, turning corners and the park.
-- sketch-all.js: street-sound.js, sketch.js and day.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
+- plots.js: plots for sale, buying and naming your place, your properties and their rent.
+- sketch-all.js: street-sound.js, sketch.js, day.js and plots.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
 - street-sound.js: the soundscape.
 
 ## References

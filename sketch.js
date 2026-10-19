@@ -18,7 +18,7 @@
  * crossing with A / D.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to go into a shop or office, Left / Right (or A / D) to turn at a crossing,
+ *   E or Space to go into a shop or office or buy a plot that is for sale, Left / Right (or A / D) to turn at a crossing,
  *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
@@ -139,6 +139,7 @@ function chunkAt(c) {
   if (tier === 0) {for (let i = 0; i < 5; i++) { const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'bin', x: side * (EDGE_X - 0.6), z: z0 + CROSS_W + r() * (CHUNK_LEN - CROSS_W), tone: r() }); }}
   if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, DISTRICTS[tier].stripe) });}}}
   if (isParkChunk(c)) { ch.back = []; fillPark(ch, r); }
+  plotsForChunk(ch, r);
   chunks.set(c, ch); return ch;
 }
 function lotLength(tier, r) { return [mixN(5, 7.5, r()), mixN(6, 8.5, r()), mixN(14, 18, r()), mixN(10, 15, r()), mixN(16, 24, r())][tier]; }
@@ -164,7 +165,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || visit) { target = 0; }
+  else if (turnAnim || visit || nameBox) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -217,7 +218,7 @@ function updateLandmarks(z) {
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(L.forSale && !L.owned)) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -364,7 +365,7 @@ function drawWorld(z) {
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
     const g = riseOf(L.born);
-    if (g <= 0.01) { drawPlot(L); continue; }
+    if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
     riseK = g; drawLot(L); riseK = 1;
     const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
   }
@@ -435,6 +436,7 @@ function drawLot(L) {
   if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
   [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H);
   if (L.dest || L.doneKind) { drawDestFront(L, x, z0, H); }
+  if (L.owned) { drawOwnedFront(L, x, z0, H); }
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
 function facadeWindows(L, x, z0, z1, rows, cols, opt) {
