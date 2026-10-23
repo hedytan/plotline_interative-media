@@ -20,6 +20,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
 
 - `spray2d/` — Talk Back on the 2D engine (her preferred building style): `spray2d/sketch.js` is a copy of the root sketch.js with look driven by `lookAim` and `toneN` greyed by `ch.warmNow`; `spray2d/talkback.js` replaces board.js (same hooks): ad lots are `devSite` (hoarding → garden in `drawOwnedLot`), billboards are props drawn with two affine-mapped triangles (`imageTri`), picked by barycentric hit-test on last frame's corners (`pickBillboard`). Rebuild `spray2d/sketch-all.js` = street-sound.js + spray2d/sketch.js + spray2d/talkback.js.
 
+- `afford/` — "The House at the End of the Street" (idea A + B, newest): `afford/sketch.js` = root sketch.js + hooks `introCam()` (crane shot), `drawDreamHouse(z)` (after drawGround), `afterLot(L)` (inside riseK scope: facade slogans via `imageTri`, records `L.hit` for clicks), `landmarkScale()`. `afford/game.js`: time = walked metres (1 block = half a year), savings vs deposit by zone, turning (left = further out), `pickBuilding`/`whoLivesHere` (occupancy per lot), sleepers (`drawOpenHome`), HTML HUD/opening/endings. Rebuild `afford/sketch-all.js` = street-sound.js + afford/sketch.js + afford/game.js.
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.
