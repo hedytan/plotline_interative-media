@@ -14,6 +14,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
   **Regenerate it after any change** (see below). Starts with `// noprotect`.
 - `index.html` loads `vendor/p5.min.js` (1.11.3), then street-sound.js, sketch.js, board.js.
 
+- `3d/` — WEBGL version: `3d/sketch.js` (street in 48 m chunks, static parts baked per chunk with `buildGeometry`, lots drawn live, `POST_FRAG` post shader on a framebuffer — framebuffer rows are flipped, sample with `1 - vUv.y`), HTML HUD, `3d/sketch-all.js` = street-sound.js + 3d/sketch.js. Headless test: chromium with `--use-angle=swiftshader`, `noLoop()` + manual `stepWorld`/`redraw` (swiftshader runs ~1 fps).
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.

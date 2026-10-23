@@ -4,6 +4,9 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
+## 3D version (work in progress)
+**▶ https://hedytan.github.io/plotline_interative-media/3d/**: the same game in p5.js WEBGL. Low-poly toy-town buildings, trees and people, all generated in code, with a painterly post-process shader (ink outlines from the depth buffer, soft haze, a painted sky with watercolour clouds, paper grain) and satirical signs in front of what you build. Files: `3d/index.html`, `3d/sketch.js`, and `3d/sketch-all.js` to paste into the p5 Web Editor.
+
 ## Concept: You Plan the Street
 You're the new city planner. The street is a row of empty plots, and every plot you walk up to is your decision:
 
