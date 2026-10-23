@@ -4,7 +4,12 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
-## Talk Back: the spray-paint version (newest)
+## Talk Back in the 2D street style (newest)
+**▶ https://hedytan.github.io/plotline_interative-media/spray2d/**
+
+The same spray-paint game on the original 2D board street: districts from shacks to towers, built out of the ground as you walk. Each block has a development site behind a hoarding with a developer billboard; the blocks are washed-out grey until you rewrite their billboards, then the colour comes back, the hoarding sinks, the site becomes a garden and people come out. Files: `spray2d/index.html`, `spray2d/sketch.js` (the 2D engine, with the mouse freed for aiming and colour tied to each block), `spray2d/talkback.js` (the game), `spray2d/sketch-all.js` (paste into the p5 Web Editor).
+
+## Talk Back: the 3D spray-paint version
 **▶ https://hedytan.github.io/plotline_interative-media/spray/**
 
 The street grows in front of you as you walk, and the developers got there first: every new block goes up with a billboard telling you what to want (*Luxury living from $2.4M*, *Invest in your future*, *Sold out to investors*). You carry a spray can. Aim with the mouse and hold to spray. Cover enough of a billboard and your rewrite goes up in your paint (*Homes, not assets*, *We can't even rent*, *Sold out. Still empty.*), and that block answers: its buildings fill with colour, windows light up, a roof garden grows and people come out. Walk past and the ad stays, and the block stays grey and empty. After 14 billboards you see what you rewrote.

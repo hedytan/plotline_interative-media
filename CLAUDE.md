@@ -18,6 +18,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
 
 - `spray/` — "Talk Back", the newest direction: same 3D engine; ad lots carry tilted billboards (`makeAdLot`, `L.ad` with C/N/U/V), mouse ray picking (`pickBillboard`), painting into `paintG` with a 16×8 coverage grid (`sprayAt`, tag at 42%), `composeAd` layers ad + paint + rewrite (Permanent Marker), `tagWall` warms the block (`ch.warm`, `warmN`), spawns people/flowers. `textureWrap(REPEAT)` is called once in setup (calling it later iterates every texture and crashes on removed graphics).
 
+- `spray2d/` — Talk Back on the 2D engine (her preferred building style): `spray2d/sketch.js` is a copy of the root sketch.js with look driven by `lookAim` and `toneN` greyed by `ch.warmNow`; `spray2d/talkback.js` replaces board.js (same hooks): ad lots are `devSite` (hoarding → garden in `drawOwnedLot`), billboards are props drawn with two affine-mapped triangles (`imageTri`), picked by barycentric hit-test on last frame's corners (`pickBillboard`). Rebuild `spray2d/sketch-all.js` = street-sound.js + spray2d/sketch.js + spray2d/talkback.js.
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.
