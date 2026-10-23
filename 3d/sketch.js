@@ -10,7 +10,7 @@
  * card), Enter stroll, move the mouse to look, M sound, R plan a new street.
  */
 const CH = 48, CROSS = 10, ROAD = 4, PAVE = 3.5, EDGE = ROAD + PAVE, EYE = 1.65, NEAR = 0.3, FAR = 360;
-const WALK = 4.5, RUN = 9, STROLL = 2.6, SLOW = 1.4, RISE = 1.1, APPEAR = 75, PLOTS = 16;
+const WALK = 4.5, RUN = 9, STROLL = 2.6, SLOW = 1.4, RISE = 1.1, GROW = 40, PLOTS = 16;   // nothing is built further ahead than GROW m: the street grows as you walk
 const PAL = {
   ink: '#3d3553', road: '#a19ea9', roadX: '#aeabb6', pave: '#ece0cd', kerb: '#e7d8c2', grass: '#a9d48f', grass2: '#97c97f',
   houses: ['#f4b6c2', '#f7c59f', '#f4d58d', '#b8d8be', '#b8c8ec', '#d6c4ec', '#f2a7a0'], roofs: ['#c96f7e', '#5b7fb8', '#e08f5f', '#6d9f84', '#8f78b8'],
@@ -80,6 +80,9 @@ function chunkAtN(c) {
       ch.props.push({ kind: 'tree', x: side * (ROAD + 0.9), z: z + (side > 0 ? 6 : 0), h: mixN(4.5, 6.5, r()), r: mixN(1.4, 2.1, r()), tone: r(), cone: r() < 0.25 });
       ch.props.push({ kind: 'lamp', x: side * (ROAD + 0.45), z: z + (side > 0 ? 0 : 6) });
     }
+    // Pavement tiles, hedges and flowers: they sprout as you walk up to them.
+    for (let z = z0 + CROSS; z < z0 + CH - 0.1; z += 4) { ch.props.push({ kind: 'pave', side, z: z + 2, len: Math.min(4, z0 + CH - z) }); }
+    for (let z = z0 + CROSS + 1.5; z < z0 + CH - 1; z += mixN(2.5, 5, r())) { ch.props.push({ kind: r() < 0.55 ? 'bush' : 'flower', x: side * (EDGE + mixN(0.25, 0.6, r())), z, r: mixN(0.35, 0.6, r()), col: pickN(r, ['#ff8fb3', '#f7b267', '#fff0a0', '#b48cdc', '#ffffff']) }); }
     // Soft hills and a far row of pastel blocks behind the plots.
     ch.back.push({ x: side * mixN(34, 46, r()), z: z0 + mixN(8, 40, r()), w: mixN(10, 18, r()), h: mixN(8, 22, r()), d: mixN(10, 16, r()), col: pickN(r, ['#d9cff5', '#cfe0f5', '#f7d3de', '#d4ecdc']) });
   }
@@ -169,7 +172,10 @@ function stepWorld(dt) {
   let best = null;
   forEachLot((L, ch) => {
     const mid = (L.z0 + L.z1) / 2, d = mid - walkZ;
-    if (L.kind === 'neighbour' && L.born === undefined && L.z0 - walkZ < APPEAR) { L.born = clockT + (clockT < 1 ? Math.max(0, d) * 0.012 : rngN(L.seed)() * 0.3); }
+    if (L.kind === 'neighbour' && L.born === undefined && L.z0 - walkZ < GROW) {
+      L.born = clockT + (clockT < 1 ? 0.4 + Math.max(0, d) * 0.03 : rngN(L.seed)() * 0.25);
+      if (sound && clockT > 1 && clockT - (stepWorld.lastRise || 0) > 0.15) { stepWorld.lastRise = clockT; sound.rise(1, -L.side, d); }
+    }
     if (L.kind !== 'pending') { return; }
     if (mid < walkZ - 25 || ((intro || ending) && mid < walkZ + 3)) { dressLot(L, 'neighbour'); L.born = clockT; return; }
     if (mid < walkZ + 3) { decide(L, ch, landValue > 1.25 ? 'tower' : 'shop', true); return; }
@@ -177,6 +183,9 @@ function stepWorld(dt) {
   });
   const was = plotTarget; plotTarget = intro || ending ? null : best ? best.L : null;
   if (was !== plotTarget) { updateHud(); }
+  for (const ch of chunks.values()) {
+    for (const p of ch.props) { if (p.born === undefined && p.z - walkZ < GROW) { p.born = clockT + (clockT < 1 ? 0.2 + Math.max(0, p.z - walkZ) * 0.025 : Math.random() * 0.35); } }
+  }
   for (const ch of chunks.values()) { for (const p of ch.people) { p.z += p.v * dt; if (p.z > p.hi || p.z < p.lo) { p.v = -p.v; } } }
   if (sound) { sound.update({ dt, tier: soundTier(), casino: 1, night: 0, moving: Math.abs(speed) > 0.1 }); }
   // Passing GO at the start of every tenth block: council rates.
@@ -202,6 +211,7 @@ function renderScene() {
   for (const ch of all) { if (!ch.geom) { ch.geom = buildGeometry(() => bakeChunk(ch)); } model(ch.geom); }
   for (const ch of all) {
     for (const L of ch.lots) { if (L.z1 > walkZ - 6 && L.z0 < walkZ + FAR) { drawLot(L); } }
+    for (const p of ch.props) { if (p.z > walkZ - 6) { drawProp(p); } }
     for (const p of ch.people) { if (p.z > walkZ - 3) { drawPersonN(p); } }
   }
   if (plotTarget) { drawMarker(plotTarget); }
@@ -210,7 +220,31 @@ function renderScene() {
 function bakeChunk(ch) {
   drawGround(ch);
   for (const b of ch.back) { blockN(b.x, 0, b.z, b.d, b.h, b.w, b.col); }
-  for (const p of ch.props) { if (p.kind === 'tree') { drawTreeN(p.x, p.z, p.h, p.r, p.tone, p.cone, 1); } else { drawLamp(p.x, p.z); } }
+}
+// Trees, lamps, pavement tiles, hedges and flowers pop up out of the ground with a little overshoot.
+function drawProp(p) {
+  const g = riseOf(p.born); if (g <= 0.005) { return; }
+  if (p.kind === 'pave') {
+    const k = Math.min(1, g);
+    push(); translate(p.side * (ROAD + PAVE / 2), -0.12 * g, p.z); scale(k, Math.max(0.01, g), k); fill(PAL.pave); box(PAVE - 0.05, 0.24, p.len - 0.08); pop();
+    push(); translate(p.side * (ROAD + 0.12), -0.14 * g, p.z); scale(1, Math.max(0.01, g), k); fill(PAL.kerb); box(0.24, 0.28, p.len); pop();
+    return;
+  }
+  push(); translate(p.x || 0, 0, p.z); scale(Math.max(0.01, g)); translate(-(p.x || 0), 0, -p.z);
+  if (p.kind === 'tree') { drawTreeN(p.x, p.z, p.h, p.r, p.tone, p.cone, 1); }
+  else if (p.kind === 'lamp') { drawLamp(p.x, p.z); }
+  else if (p.kind === 'bush') { fill('#7cbf6a'); push(); translate(p.x, -p.r * 0.7, p.z); sphere(p.r, 7, 5); pop(); }
+  else { fill('#7cbf6a'); push(); translate(p.x, -0.2, p.z); cylinder(0.03, 0.4, 4, 1); pop(); fill(p.col); push(); translate(p.x, -0.45, p.z); sphere(0.16, 6, 4); pop(); }
+  pop();
+}
+// A puff of little clouds while something rises.
+function drawPuff(x, z, w, born, seed) {
+  const a = clockT - born; if (a < 0 || a > 0.9) { return; }
+  const r = rngN(seed), u = a / 0.9; fill('#fffaf4');
+  for (let i = 0; i < 9; i++) {
+    const ang = r() * TWO_PI, dist = (0.6 + r() * 0.8) * w * (0.3 + u * 0.7);
+    push(); translate(x + Math.cos(ang) * dist, -0.3 - u * 1.2 * r(), z + Math.sin(ang) * dist); sphere((0.5 + r() * 0.5) * (1 - u) * 1.4, 6, 4); pop();
+  }
 }
 function blockN(x, y, z, w, h, d, col) { push(); translate(x, -(y + h / 2), z); fill(col); box(w, h, d); pop(); }
 function drawGround(ch) {
@@ -221,15 +255,15 @@ function drawGround(ch) {
   for (let x = -ROAD + 0.4; x < ROAD; x += 1.1) { push(); translate(x + 0.3, -0.07, z0 + CROSS - 2.2); fill('#fbf6ee'); box(0.6, 0.02, 2.6); pop(); }
   for (let z = z0 + CROSS + 1; z < z0 + CH - 1; z += 4) { push(); translate(0, -0.07, z + 1); fill('#f6e7b0'); box(0.18, 0.02, 2); pop(); }
   for (const s of [-1, 1]) {
-    push(); translate(s * (ROAD + PAVE / 2), -0.12, z0 + CROSS + (CH - CROSS) / 2); fill(PAL.pave); box(PAVE, 0.24, CH - CROSS); pop();
-    push(); translate(s * (ROAD + 0.12), -0.14, z0 + CROSS + (CH - CROSS) / 2); fill(PAL.kerb); box(0.24, 0.28, CH - CROSS); pop();
+    push(); translate(s * (ROAD + PAVE / 2), -0.02, z0 + CROSS + (CH - CROSS) / 2); fill('#c9dfb4'); box(PAVE, 0.04, CH - CROSS); pop();   // bare earth until the tiles grow
   }
 }
 // Buildings face the street; x grows away from it on each side.
 function drawLot(L) {
   const g = L.kind === 'pending' ? 0 : riseOf(L.born), s = L.side, len = L.z1 - L.z0;
-  if (L.kind === 'pending') { drawPlotOutline(L); return; }
-  if (g <= 0.005) { return; }
+  if (L.kind === 'pending') { if (L.z0 - walkZ < GROW + 15) { drawPlotOutline(L); } else { drawFuturePlot(L); } return; }
+  if (L.born !== undefined) { drawPuff(s * (EDGE + 6), (L.z0 + L.z1) / 2, 5, L.born, L.seed); }
+  if (g <= 0.005) { if (L.born === undefined) { drawFuturePlot(L); } return; }
   push(); translate(0, 0, L.z0); scale(1, Math.max(0.01, g), 1);
   if (L.kind === 'neighbour' || L.kind === 'homes') {
     let z = 0.3;
@@ -349,6 +383,14 @@ function drawPlotOutline(L) {
   fill(PAL.grass); push(); translate(s * (xa + xb) / 2, -0.12, L.z0 + len / 2); box(xb - xa - 0.8, 0.04, len - 1.8); pop();
   // A little stake with a FOR SALE board.
   signBoardN(s * (EDGE + 2.6), 0.9, L.z0 + 1.2, 2.8, 1.1, 'Empty plot · your call', '#ff6fa0', 'face', 1);
+}
+// Land nobody has built on yet: just a faint stake-and-string outline in the grass.
+function drawFuturePlot(L) {
+  const s = L.side, xa = EDGE + 0.8, xb = EDGE + 12, len = L.z1 - L.z0; fill('#f6efe2');
+  for (const [x, z, w, d] of [[(xa + xb) / 2, L.z0 + 0.5, xb - xa, 0.12], [(xa + xb) / 2, L.z1 - 0.5, xb - xa, 0.12], [xa, L.z0 + len / 2, 0.12, len - 1], [xb, L.z0 + len / 2, 0.12, len - 1]]) {
+    push(); translate(s * x, -0.06, z); box(w, 0.06, d); pop();
+  }
+  for (const [x, z] of [[xa, L.z0 + 0.5], [xb, L.z0 + 0.5], [xa, L.z1 - 0.5], [xb, L.z1 - 0.5]]) { push(); translate(s * x, -0.4, z); box(0.12, 0.8, 0.12); pop(); }
 }
 function drawMarker(L) {
   const s = L.side, y = 6 + Math.sin(clockT * 3) * 0.35;
