@@ -1,25 +1,17 @@
-/* Plotline — walk the board.
- * A first-person, endless board-game main street in p5.js (Canvas 2D). Every building,
- * person, sign and sound is generated in code.
+/* Plotline — You Plan the Street.
+ * A first-person, endless board-game street in p5.js (Canvas 2D). Every building,
+ * person and sound is generated in code. This file is the street engine: camera and
+ * projection, near-plane clipping, 48 m blocks, buildings that spring up out of the ground,
+ * props, the sky and the input. The game (board.js) decides what each plot becomes.
  *
- * The street is a loop of ten blocks. Property value rises the further you walk:
- *   Rusty Row (shacks) -> Maple Terrace (townhouses) -> Gilded Gardens (mansions)
- *   -> Brick & Glass Quarter -> Pinnacle Heights (skyscrapers) -> pass GO -> Rusty Row
- * Each lap is re-seeded, so the street never repeats exactly.
- * Chance casinos reshape the street ahead when you walk past them (boom, crash or
- * nightfall). A stone jail sits in Rusty Row: just visiting.
- * The street is not built until you walk toward it: beyond about 55 m each lot is only an
- * outlined plot on the ground. As you approach, its building springs up out of the ground
- * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
- *
- * The Landlord's Walk (board.js): you are 24, renting, saving for a deposit. Every lap past
- * GO is a year. Generated billboards, rising prices, investors and open-home queues line the
- * street. Turn left to move further out, right to move back in. Buy a home before 30.
+ * Every block has empty plots. Walk up to one and choose: homes, a tower, a shop or a park.
+ * Your choice rises in front of you, and people, sound and land value follow it.
+ * Walk past without choosing and the market decides.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to buy the plot beside you, Left (further out) / Right (toward the city) to turn,
+ *   1-4 or click a card to choose, Left / Right to turn at a corner,
  *   Enter to stroll on its own, move the mouse to look around,
- *   M sound, P pause, R new town.
+ *   M sound, P pause, R plan a new street.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
 const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
@@ -69,7 +61,7 @@ function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to buy or build, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
+  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, press 1 to 4 to choose homes, tower, shop or park for the plot ahead, Left or Right arrow to turn at a corner, Enter to stroll, M for sound.');
   sound = new StreetSound(); textFont('Georgia');
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -122,7 +114,7 @@ function chunkAt(c) {
   const ch = { c, slot, tier, z0, lots: [], props: [], back: [] };
   for (const side of [-1, 1]) {
     let z = z0 + CROSS_W + 0.5;
-    const special = (slot === 1 && side === 1) ? 'jail' : (slot === 4 && side === -1) || (slot === 7 && side === 1) ? 'casino' : null;
+    const special = null;
     let specialAt = special ? z0 + CROSS_W + 6 + r() * 6 : Infinity;
     while (z < z0 + CHUNK_LEN - 3) {
       if (z >= specialAt - 0.5) { const len = special === 'jail' ? 20 : 18; ch.lots.push(makeLot(special, tier, side, z, len, r)); z += len + 0.6; specialAt = Infinity; continue; }
@@ -165,6 +157,8 @@ function draw() {
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
   else if (turnAnim || nameBox || intro || ending) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
+  // Slow down beside a plot still waiting for your decision (Shift hurries past and lets the market choose).
+  if (plotTarget && !hurry && target > 1.4 && (plotTarget.z0 + plotTarget.z1) / 2 - distanceWalked < 15) { target = 1.4; }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.
@@ -190,7 +184,7 @@ function draw() {
   if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
   economy = lerp(economy, economyTarget, 1 - Math.exp(-dt * 0.8)); night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5)); crash = lerp(crash, crashTarget, 1 - Math.exp(-dt * 0.8));
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
-  sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
+  sound.update({ dt: paused ? 0 : dt, tier: soundTier(), casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
   // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
@@ -216,7 +210,7 @@ function updateLandmarks(z) {
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(L.forSale && !L.owned)) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z && canRise(L)) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -238,14 +232,14 @@ function showCard(kind) {
     crash: ['CHANCE', 'Market crash!', 'The street ahead shrinks and fades.'],
     night: ['CHANCE', 'Night on the town', 'The lights come on early.'],
     jail: ['JAIL', 'Just visiting', 'Wave to the guard and keep walking.'],
-    go: ['GO', 'Another year', 'Pay day. Rent day. Birthday.']
+    go: ['GO', 'Rates day', 'Your residents pay council rates.']
   }[kind];
   card = { kind, text: cardText, t: clockT };
 }
 
 /* ---------- Sky and skyline ---------- */
 function skyColors() {
-  const dayCols = ['#ffb36b', '#ffd79a', '#fff0c4', '#7aa7d8'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
+  const dayCols = ['#ffd9e6', '#cfe8ff', '#fff4e0', '#8ec5ff'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
   return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), '#9a9aa0', crash * 0.45));
 }
 function drawSky() {
@@ -257,12 +251,12 @@ function drawSky() {
   // Sun behind the landmark tower and soft volumetric rays.
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55);
-  sg.addColorStop(0, `rgba(255,236,170,${0.75 * (1 - night)})`); sg.addColorStop(0.25, `rgba(255,190,110,${0.3 * (1 - night)})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
+  sg.addColorStop(0, `rgba(255,250,225,${0.6 * (1 - night)})`); sg.addColorStop(0.25, `rgba(255,220,235,${0.18 * (1 - night)})`); sg.addColorStop(1, 'rgba(255,220,235,0)');
   ctx.fillStyle = sg; ctx.fillRect(-80, -height * 0.3, width + 160, height * 1.3);
   for (let i = 0; i < 9; i++) {
     const a = -Math.PI / 2 + (i - 4) * 0.28 + Math.sin(clockT * 0.05 + i) * 0.04, len = height * 1.4, w = 0.05 + (i % 3) * 0.02;
     const rg = ctx.createLinearGradient(sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len);
-    rg.addColorStop(0, `rgba(255,220,150,${0.1 * (1 - night)})`); rg.addColorStop(1, 'rgba(255,220,150,0)');
+    rg.addColorStop(0, `rgba(255,250,235,${0.05 * (1 - night)})`); rg.addColorStop(1, 'rgba(255,220,150,0)');
     ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(a - w) * len, sy + Math.sin(a - w) * len); ctx.lineTo(sx + Math.cos(a + w) * len, sy + Math.sin(a + w) * len); ctx.fill();
   }
   ctx.restore();
@@ -275,7 +269,7 @@ function drawSky() {
     for (let k = 0; k < 11; k++) {
       const u = k / 10, px = (u - 0.5) * s * 1.6, py = -Math.sin(u * PI) * s * 0.45 + Math.sin(k * 2.3 + i) * s * 0.06, rad = s * (0.32 + Math.sin(u * PI) * 0.25);
       const cg = ctx.createRadialGradient(px, py - rad * 0.45, rad * 0.05, px, py, rad);
-      cg.addColorStop(0, rgbaN(mixHex('#fff6e2', '#d8b0d0', night), 0.85)); cg.addColorStop(0.6, rgbaN(mixHex('#ffcf98', '#8a6a9a', night), 0.45)); cg.addColorStop(1, rgbaN('#ffb070', 0));
+      cg.addColorStop(0, rgbaN(mixHex('#ffffff', '#d8b0d0', night), 0.95)); cg.addColorStop(0.6, rgbaN(mixHex('#ffffff', '#8a6a9a', night), 0.6)); cg.addColorStop(1, rgbaN('#ffffff', 0));
       ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(px, py, rad, 0, TWO_PI); ctx.fill();
     }
     ctx.restore();
@@ -288,7 +282,7 @@ function drawSkyline() {
   for (const b of skyline) {
     const x = cam.cx + Math.tan(b.a - cam.yaw) * cam.f, w = b.w * H, h = b.h * H;
     const g = ctx.createLinearGradient(0, hy - h, 0, hy);
-    g.addColorStop(0, mixHex(mixHex('#e8b27a', '#3a3060', night), haze, 0.3 + b.tone * 0.3)); g.addColorStop(1, mixHex('#f6c88a', '#2a2448', night));
+    g.addColorStop(0, mixHex(mixHex(['#c9b8f0', '#a8d0ff', '#ffc2d6'][Math.floor(b.tone * 3) % 3], '#3a3060', night), haze, 0.35 + b.tone * 0.3)); g.addColorStop(1, mixHex('#e6ecff', '#2a2448', night));
     ctx.fillStyle = g; ctx.fillRect(x - w / 2, hy - h, w, h + 2);
     if (b.spire) { ctx.beginPath(); ctx.moveTo(x - w * 0.2, hy - h); ctx.lineTo(x, hy - h - w * 1.2); ctx.lineTo(x + w * 0.2, hy - h); ctx.fill(); }
     ctx.fillStyle = `rgba(255,236,170,${0.25 + night * 0.5})`;
@@ -300,7 +294,7 @@ function drawSkyline() {
   ctx.save();
   for (const [w, h] of tiers) {
     const g = ctx.createLinearGradient(x - w * s, 0, x + w * s, 0);
-    g.addColorStop(0, mixHex('#c88a50', '#3a3366', night)); g.addColorStop(0.5, mixHex('#fff0c0', '#8a7ac8', night)); g.addColorStop(1, mixHex('#b07a48', '#2e2a55', night));
+    g.addColorStop(0, mixHex('#b9a8f0', '#3a3366', night)); g.addColorStop(0.5, mixHex('#fff4fa', '#8a7ac8', night)); g.addColorStop(1, mixHex('#a898e8', '#2e2a55', night));
     ctx.fillStyle = g; ctx.fillRect(x - w * s, hy - h * s, w * 2 * s, h * s - (tiers[0] === undefined ? 0 : 0) + 2);
   }
   ctx.fillStyle = mixHex('#fff4c8', '#c8b8ff', night); ctx.beginPath(); ctx.moveTo(x - 5 * s, hy - 350 * s); ctx.lineTo(x, hy - 440 * s); ctx.lineTo(x + 5 * s, hy - 350 * s); ctx.fill();
@@ -310,32 +304,32 @@ function drawSkyline() {
   ctx.restore();
   // Golden haze over the horizon.
   const g = ctx.createLinearGradient(0, hy - H * 0.18, 0, hy + 4);
-  g.addColorStop(0, rgbaN(haze, 0)); g.addColorStop(1, rgbaN(mixHex('#ffd79a', '#7a5a8a', night), 0.75));
+  g.addColorStop(0, rgbaN(haze, 0)); g.addColorStop(1, rgbaN(mixHex('#eef4ff', '#7a5a8a', night), 0.7));
   ctx.fillStyle = g; ctx.fillRect(-80, hy - H * 0.18, width + 160, H * 0.18 + 4);
 }
 
 /* ---------- Ground: road, pavements, crossings ---------- */
 function drawGround(z) {
   const hy = cam.hy;
-  ctx.fillStyle = mixHex('#b89a78', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80);
+  ctx.fillStyle = mixHex('#9fd98a', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80);
   const steps = 90;
   for (let i = steps; i > 0; i--) {
     const d0 = NEAR_Z + Math.pow((i - 1) / steps, 2.2) * FAR_Z, d1 = NEAR_Z + Math.pow(i / steps, 2.2) * FAR_Z;
     const za = z + d0, zb = z + d1, ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = za - ch.z0, crossing = local < CROSS_W;
-    const fog = easeN(d0 / FAR_Z), fogC = mixHex('#ffd79a', '#5a4a70', night);
+    const fog = easeN(d0 / FAR_Z), fogC = mixHex('#e8f1ff', '#5a4a70', night);
     const f = (hex) => mixHex(mixHex(hex, '#2a2440', night * 0.55), fogC, fog * 0.8);
     // Road.
-    polyN([P(-ROAD_W, 0, za), P(ROAD_W, 0, za), P(ROAD_W, 0, zb), P(-ROAD_W, 0, zb)], f(crossing ? '#5a5a62' : mixHex('#4a4a52', '#7a7a80', crash * 0.4)));
+    polyN([P(-ROAD_W, 0, za), P(ROAD_W, 0, za), P(ROAD_W, 0, zb + 0.02 * d1), P(-ROAD_W, 0, zb + 0.02 * d1)], f(crossing ? '#9a9cb6' : '#8c8fa8'));
     for (const side of [-1, 1]) {
       if (crossing) {
         // Cross street running off to the sides.
-        polyN([P(side * ROAD_W, 0, za), P(side * 90, 0, za), P(side * 90, 0, zb), P(side * ROAD_W, 0, zb)], f('#55555d'));
+        polyN([P(side * ROAD_W, 0, za), P(side * 90, 0, za), P(side * 90, 0, zb), P(side * ROAD_W, 0, zb)], f('#7d8098'));
       } else {
         const tile = Math.floor(za / 1.6) % 2, stripe = DISTRICTS[ch.tier].stripe;
-        polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#e8dcc4' : '#d8cab0'));
+        polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#fff6e8' : '#ffeedd'));
         // Board-colour band along the kerb.
         polyN([P(side * (ROAD_W + 0.15), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, zb), P(side * (ROAD_W + 0.15), 0.13, zb)], f(stripe[tile]));
-        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park ? '#6f9a52' : '#a89478'));
+        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f('#9fd98a'));
       }
     }
     // Centre line and zebra crossings.
@@ -381,11 +375,12 @@ function drawWorld(z) {
     else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);}
     ctx.restore();
   }
+  drawTargetMarker();
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {
   const z0 = clipZ(L.z0); if (L.z1 <= z0) {return;}
-  const xa = L.side * (EDGE_X + L.setback + 0.3), xb = L.side * (EDGE_X + L.setback + L.depth), col = DISTRICTS[L.tier].stripe[0], mz = (z0 + L.z1) / 2;
+  const xa = L.side * (EDGE_X + L.setback + 0.3), xb = L.side * (EDGE_X + L.setback + L.depth), col = L.pending ? '#ff8fb3' : DISTRICTS[L.tier].stripe[0], mz = (z0 + L.z1) / 2;
   const q = [P(xa, 0.03, z0), P(xb, 0.03, z0), P(xb, 0.03, L.z1), P(xa, 0.03, L.z1)];
   ctx.save(); ctx.setLineDash([6, 5]); polyN(q, rgbaN(col, 0.18 * (1 - fogFor(mz))), rgbaN(col, 0.6 * (1 - fogFor(mz))), 1.5); ctx.restore();
   // A small corner stake, so the plot reads as land waiting to be built on.
@@ -399,15 +394,15 @@ function drawDust(L, age) {
     const p = P(x - L.side * (0.3 + r() * 1.2), 0.2 + age * 0.4 * r(), zz); if (p.rz < 6) {continue;}
     const rad = Math.min(height * 0.12, p.k * (0.4 + age * 0.9) * (0.6 + r() * 0.6));
     const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
-    g.addColorStop(0, rgbaN(mixHex('#e8d4b0', '#8a7a9a', night), 0.45 * a)); g.addColorStop(1, rgbaN('#e8d4b0', 0));
+    g.addColorStop(0, rgbaN(mixHex('#ffffff', '#c8b8ff', night), 0.55 * a)); g.addColorStop(1, rgbaN('#ffe6f2', 0));
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, TWO_PI); ctx.fill();
   }
 }
 function fogFor(zz) { return easeN((zz - cam.z - 40) / (FAR_Z - 40)) * 0.85; }
 function toneN(hexCol, zz, k = 1) {
-  let c = mixHex(shadeN(hexCol, k), '#8a8a90', crash * 0.5);
+  let c = mixHex(shadeN(hexCol, 0.5 + 0.5 * k), '#8a8a90', crash * 0.5);
   c = mixHex(c, '#2a2a48', night * 0.5);
-  return mixHex(c, mixHex('#ffd79a', '#5a4a70', night), fogFor(zz));
+  return mixHex(c, mixHex('#e8f1ff', '#5a4a70', night), fogFor(zz));
 }
 function drawBack(b) {
   const z0 = clipZ(b.z0), x = b.side * b.x;
@@ -415,7 +410,7 @@ function drawBack(b) {
   if (b.z0 > cam.z + NEAR_Z) {polyN(wallQuad(x, b.z0, x + b.side * 20, b.z0, 0, b.h), toneN(b.color, b.z0, 0.6));}
 }
 function drawLot(L) {
-  if (L.owned) { drawOwnedLot(L); return; }
+  if (isCustomLot(L)) { drawOwnedLot(L); return; }
   const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
@@ -506,7 +501,7 @@ function drawYard(L) {
   polyN(wallQuad(xh, z0, xh, L.z1, 0, 1.0), toneN('#3f6f3a', midN(z0, L.z1)));
   polyN([P(xh, 1.0, z0), P(xh, 1.0, L.z1), P(xh + L.side * 0.6, 1.1, L.z1), P(xh + L.side * 0.6, 1.1, z0)], toneN('#5a8f4a', midN(z0, L.z1)));
   ctx.strokeStyle = toneN('#2a2a30', L.z0); ctx.lineWidth = 1;
-  for (let zz = Math.ceil(z0 / 0.5) * 0.5; zz < L.z1; zz += 0.5) { if ((zz - L.z0) / (L.z1 - L.z0) > 0.42 && (zz - L.z0) / (L.z1 - L.z0) < 0.58) {continue;} const a = P(xh - L.side * 0.1, 1.0, zz), b = P(xh - L.side * 0.1, 1.7, zz); if (a.rz > 0.5) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  for (let zz = Math.ceil(z0 / 0.5) * 0.5; zz < L.z1; zz += 0.5) { if ((zz - L.z0) / (L.z1 - L.z0) > 0.42 && (zz - L.z0) / (L.z1 - L.z0) < 0.58) {continue;} const a = P(xh - L.side * 0.1, 1.0, zz), b = P(xh - L.side * 0.1, 1.7, zz); if (a.rz > 0.5) { if (a.rz < 0.5 || b.rz < 0.5) {continue;} ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
   if (L.fountain) {
     const fz = midN(L.z0, L.z1), fx = L.side * (EDGE_X + L.setback * 0.55), c = P(fx, 0, fz); if (c.rz < 1.5) {return;}
     const k = c.k; ctx.fillStyle = toneN('#e8e0d0', fz); ctx.beginPath(); ctx.ellipse(c.x, c.y - 0.3 * k, 1.4 * k, 1.4 * k * cam.eye / c.rz + 0.3 * k * 0.3, 0, 0, TWO_PI); ctx.fill();
@@ -533,8 +528,8 @@ function drawTower(L, x, z0, z1, H) {
   polyN(fq, g);
   ctx.strokeStyle = toneN('#3a4a5a', midN(z0, z1)); ctx.lineWidth = 1;
   const floors = Math.floor(H / 3.6), floorStep = Math.max(1, Math.floor(floors / Math.max(4, Math.abs(fq[1].y - fq[2].y) / 6)));
-  for (let f = 1; f < floors; f += floorStep) { const a = P(x, f * 3.6, z0), b = P(x, f * 3.6, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-  for (let zz = Math.ceil(L.z0 / 2) * 2; zz < z1; zz += 2) { if (zz < z0) {continue;} const a = P(x, 0, zz), b = P(x, H, zz); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let f = 1; f < floors; f += floorStep) { const a = P(x, f * 3.6, z0), b = P(x, f * 3.6, z1); if (a.rz < 0.5 || b.rz < 0.5) {continue;} ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let zz = Math.ceil(L.z0 / 2) * 2; zz < z1; zz += 2) { if (zz < z0) {continue;} const a = P(x, 0, zz), b = P(x, H, zz); if (a.rz < 0.5 || b.rz < 0.5) {continue;} ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   if (night > 0.2) { const r = rngN(L.seed); ctx.fillStyle = `rgba(255,220,140,${night * 0.8})`; for (let i = 0; i < 40; i++) { const zz = L.z0 + r() * len, y = r() * H; if (zz > z0) { const p = P(x - L.side * 0.05, y, zz); ctx.fillRect(p.x - 1, p.y - 1, Math.max(2, p.k * 1.2), Math.max(1.5, p.k * 0.8)); } } }
   polyN(wallQuad(x, z0, x, z1, 0, 4), toneN('#2a3440', midN(z0, z1)));
   facadeWindows(L, x, z0, z1, [[0.3, 3.6]], Math.max(2, Math.round(len / 4)), { padU: 0.05, lit: 0.9, glass: '#ffd98a' });
@@ -548,7 +543,7 @@ function drawJail(L, x, z0, z1, H) {
   const len = L.z1 - L.z0;
   // Stone blocks.
   ctx.strokeStyle = toneN('#55565e', midN(z0, z1)); ctx.lineWidth = 1;
-  for (let y = 0.6; y < H; y += 0.6) { const a = P(x - L.side * 0.02, y, z0), b = P(x - L.side * 0.02, y, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let y = 0.6; y < H; y += 0.6) { const a = P(x - L.side * 0.02, y, z0), b = P(x - L.side * 0.02, y, z1); if (a.rz < 0.5 || b.rz < 0.5) {continue;} ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   // Barred windows in orange and blue stripes.
   const r = rngN(L.seed);
   for (let i = 0; i < 5; i++) {for (const [ya, yb] of [[2.2, 3.8], [5.2, 6.8]]) {
@@ -622,11 +617,10 @@ function drawBin(q, p) {
 function drawOverlays() {
   // Vignette and grain.
   const vg = ctx.createRadialGradient(width / 2, height * 0.5, Math.min(width, height) * 0.4, width / 2, height * 0.5, Math.max(width, height) * 0.8);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(30,14,6,0.35)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, width, height);
-  image(grain, 0, 0, width, height);
-  if (districtCard) {
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(120,90,160,0.12)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, width, height);
+  if (districtCard && !HIDE_DISTRICT_CARD) {
     const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Age ${lifeAge}`); }
+    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Lap ${districtCard.lap}`); }
   }
   if (card) {
     const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
@@ -650,7 +644,7 @@ function deedCard(cx, y, a, col, title, tag, foot) {
 }
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
-function mousePressed(e) { if (e.target !== canvasNode) {return;} if (intro) { intro = false; } canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
+function mousePressed(e) { if (e.target !== canvasNode) {return;} if (boardClick(e.clientX - canvasNode.getBoundingClientRect().left, e.clientY - canvasNode.getBoundingClientRect().top)) { beginSound(); return false; } canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
 function mouseReleased() { pointerHeld = false; }
 function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
