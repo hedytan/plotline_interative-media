@@ -2,16 +2,13 @@
 
 Hedy's p5.js project for the UTS Interactive Media "Generative Landscape" assignment.
 A first-person, endless board-game street (Canvas 2D, no WEBGL) that builds itself as you
-walk, played with Monopoly rules. Live: https://hedytan.github.io/plotline_interative-media/
+walk. Current concept: "The Landlord's Walk" — a satirical walk through housing affordability (Monopoly began as The Landlord's Game, 1904). Live: https://hedytan.github.io/plotline_interative-media/
 
 ## Files
 - `sketch.js` — the street: camera/projection `P(x,y,z)`, near-plane clipping (`clipNear`),
   48 m chunks (`chunkAt`, 10 per lap, tiers by slot via `TIER_OF`), rising buildings
   (`riseOf`, ease-out-back over `RISE_T`), districts, Chance casinos, jail, overlays, input.
-- `board.js` — the Monopoly layer: $1500 start, $200 at GO (`onPassGo`), FOR SALE plots and
-  title deeds, colour groups (`GROUPS`, 2 plots per set, one block = one colour), houses and
-  hotel (`drawPiece`, `drawOwnedLot`), rent when walking past your property, naming your place,
-  turning left/right at crossings (`tryTurn`, `newStreet`), HUD (`drawBoardHud`, `drawDeed`).
+- `board.js` — The Landlord's Walk: age/savings, each lap past GO = a year (`onPassGo`), FOR SALE listings with rising prices (`priceOf`, `market`), investors buying plots, generated billboards (`SIGNS`, `pickSign`), open-home queues, zones and commute (left = further out), buying a home, intro/ending cards (`storyCard`), HUD (`drawBoardHud`, `drawListing`).
 - `street-sound.js` — Web Audio soundscape (`StreetSound`), no audio files.
 - `sketch-all.js` — street-sound.js + sketch.js + board.js in one file for the p5 Web Editor.
   **Regenerate it after any change** (see below). Starts with `// noprotect`.
@@ -19,7 +16,7 @@ walk, played with Monopoly rules. Live: https://hedytan.github.io/plotline_inter
 
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
-- Don't name globals after p5 functions/constants (`day`, `CROSS`, `key`… ). Helpers use an `N` suffix.
+- Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ). Helpers use an `N` suffix.
 - Held keys come from the `keysHeld` Set (p5 2.x changed `keyIsDown`).
 - Drawing in `draw()` is wrapped in try/catch so one bad polygon can't freeze the sketch.
 
@@ -29,7 +26,7 @@ walk, played with Monopoly rules. Live: https://hedytan.github.io/plotline_inter
 ```
 
 ## Controls
-↑ walk, Shift hurry, ↓ back, ← → turn at a crossing, E / Space buy or build, mouse look,
+↑ walk, Shift hurry, ↓ back, ← further out / → toward the city (at a crossing), E / Space buy, mouse look,
 Enter auto-walk, M sound, P pause, R new town.
 
 ## Working with Hedy

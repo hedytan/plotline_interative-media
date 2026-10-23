@@ -150,12 +150,12 @@ window.StreetSound = StreetSound;
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
  *
- * Play the board (board.js): start with $1500, collect $200 at GO, buy plots that are for
- * sale, complete a colour set and build houses and hotels on it, and collect rent from your
- * tenants as you walk past. Turn left or right at a crossing.
+ * The Landlord's Walk (board.js): you are 24, renting, saving for a deposit. Every lap past
+ * GO is a year. Generated billboards, rising prices, investors and open-home queues line the
+ * street. Turn left to move further out, right to move back in. Buy a home before 30.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to buy the plot beside you or build on it, Left / Right (or A / D) to turn at a crossing,
+ *   E or Space to buy the plot beside you, Left (further out) / Right (toward the city) to turn,
  *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
@@ -301,7 +301,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || nameBox) { target = 0; }
+  else if (turnAnim || nameBox || intro || ending) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -376,7 +376,7 @@ function showCard(kind) {
     crash: ['CHANCE', 'Market crash!', 'The street ahead shrinks and fades.'],
     night: ['CHANCE', 'Night on the town', 'The lights come on early.'],
     jail: ['JAIL', 'Just visiting', 'Wave to the guard and keep walking.'],
-    go: ['GO', 'You passed GO', 'A new lap, a new town.']
+    go: ['GO', 'Another year', 'Pay day. Rent day. Birthday.']
   }[kind];
   card = { kind, text: cardText, t: clockT };
 }
@@ -516,7 +516,7 @@ function drawWorld(z) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);}
     ctx.restore();
   }
 }
@@ -764,7 +764,7 @@ function drawOverlays() {
   image(grain, 0, 0, width, height);
   if (districtCard) {
     const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Lap ${districtCard.lap}`); }
+    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Age ${lifeAge}`); }
   }
   if (card) {
     const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
@@ -788,7 +788,7 @@ function deedCard(cx, y, a, col, title, tag, foot) {
 }
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
-function mousePressed(e) { if (e.target !== canvasNode) {return;} canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
+function mousePressed(e) { if (e.target !== canvasNode) {return;} if (intro) { intro = false; } canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
 function mouseReleased() { pointerHeld = false; }
 function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
@@ -805,64 +805,91 @@ function touchStarted() { canvasNode.focus(); pointerHeld = true; beginSound(); 
 function touchEnded() { pointerHeld = false; return false; }
 function windowResized() { resizeCanvas(windowWidth, windowHeight); }
 
-/* Plotline — play the board like Monopoly.
- * You start with $1500 and collect $200 every time you pass GO. Some plots along the
- * street are for sale; each has a colour, a price and a title deed, as on the board.
- * Walk up to one and press E to buy it. Own both plots of a colour to complete the set:
- * then you can build houses on them (up to four), and a hotel after that. Your buildings
- * come back near the start of every street you walk into, and as you walk past them your
- * tenants pay you rent, which grows with every house. At a crossing, Left / Right turns
- * the corner into a new street at the same place on the board.
+/* Plotline — The Landlord's Walk.
+ * Monopoly began in 1904 as Lizzie Magie's "The Landlord's Game", a warning about how
+ * landlords get richer while tenants pay. Plotline walks you back into that warning.
+ *
+ * You are 24, you rent a room, and you are saving for a deposit. Walk forward and the street
+ * grows grander. Every lap past GO is a year: pay day, rent day, and you get a year older.
+ * Billboards along the street are generated from the prices around you. FOR SALE plots tick
+ * up while you look at them, and investors sometimes buy them before you get there.
+ * Turn left to move further out (cheaper, longer commute, quieter music) or right to move
+ * back toward the city. Buy a home if you can; the walk ends when you do, or at 30.
  */
-// Colour groups, from the cheap side of the board to the expensive side.
-const GROUPS = {
-  brown: { col: BOARD_COL.brown, tier: 0, price: 60, house: 50 },
-  sky: { col: BOARD_COL.sky, tier: 0, price: 100, house: 50 },
-  pink: { col: BOARD_COL.pink, tier: 1, price: 140, house: 100 },
-  orange: { col: BOARD_COL.orange, tier: 1, price: 180, house: 100 },
-  red: { col: BOARD_COL.red, tier: 2, price: 220, house: 150 },
-  yellow: { col: BOARD_COL.yellow, tier: 2, price: 260, house: 150 },
-  green: { col: BOARD_COL.green, tier: 3, price: 300, house: 200 },
-  mint: { col: '#7fd1a0', tier: 3, price: 320, house: 200 },
-  navy: { col: BOARD_COL.navy, tier: 4, price: 350, house: 200 },
-  blue: { col: '#6f93d8', tier: 4, price: 400, house: 200 }
-};
-const GROUP_OF_TIER = [['brown', 'sky'], ['pink', 'orange'], ['red', 'yellow'], ['green', 'mint'], ['navy', 'blue']];
-const SET_SIZE = 2;                                   // plots needed to complete a colour set
-const RENT_X = [1, 5, 15, 45, 67, 92];               // rent multiplier: bare, 1-4 houses, hotel
-const START_MONEY = 1500, GO_SALARY = 200;
-const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47', HOTEL_COL = '#d8322a';
+const START_AGE = 24, END_AGE = 30, START_SAVINGS = 22000;
+const WAGES = 52000, LIVING = 24000, RENT_WEEK = 380;     // take-home pay, living costs, rent
+const BASE_PRICE = [520000, 780000, 1600000, 2400000, 4800000];  // by district tier, inner city
+const ZONE_PRICE = 0.8, DEPOSIT = 0.1, GROWTH = 0.07;          // prices fall 20% per zone out; 7% a year
+const ZONE_NAMES = ['Inner city', 'Inner ring', 'Middle ring', 'Outer suburbs', 'New estates', 'Paddock estates'];
+const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47';
 
-let wallet = START_MONEY, ownerName = '', portfolio = [], ownedFromC = Infinity, nameBox = null;
-let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, deedView = null;
+let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid = 0, rentWeek = RENT_WEEK;
+let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
+let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
 const toasts = [], moneyPops = [];
 
-function moneyText(v) { return (v < 0 ? '−$' : '+$') + Math.abs(v); }
+const money = v => '$' + Math.round(v).toLocaleString('en-AU');
+const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
+function commuteMin() { return 15 + zone * 25; }
+function commuteText() { const m = commuteMin(); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; }
 function sayToast(text) { toasts.push({ text, t: clockT }); }
-function addMoney(v, why) { wallet += v; moneyPops.push({ text: moneyText(v), t: clockT, up: v > 0 }); sound.cash(v > 0); if (why) { sayToast(why); } }
-function chunkTier(slot) { return TIER_OF[slot]; }
-function ownsSet(group) { return portfolio.filter(p => p.group === group).length >= SET_SIZE; }
-function baseRent(group) { return Math.max(2, Math.round(GROUPS[group].price / 10)); }
-function rentOf(prop) { const b = baseRent(prop.group); return prop.houses === 0 && ownsSet(prop.group) ? b * 2 : b * RENT_X[prop.houses]; }
+function popMoney(v, label) { moneyPops.push({ text: (v < 0 ? '−' : '+') + money(Math.abs(v)) + (label ? '  ' + label : ''), t: clockT + moneyPops.length * 0.35, up: v > 0 }); }
+function addMoney(v, label) { wallet += v; popMoney(v, label); sound.cash(v > 0); }
+function priceOf(L) { return BASE_PRICE[L.tier] * Math.pow(ZONE_PRICE, zone) * market * L.priceK; }
+function chunkTier(slot) { return Math.max(0, TIER_OF[slot] - zone); }
+
+/* ---------- Generated billboards ---------- */
+// Sentence templates; {tokens} are filled with live numbers from the street around you.
+const SIGNS = {
+  0: ['Charming fixer-upper. Roof sold separately.', 'Rent {rent}/wk. Mould included at no extra cost.', 'Cosy! (It means small.)', 'Room in share house. 6 housemates, 1 bathroom, endless vibes.', 'Walk to everything you can’t afford.'],
+  1: ['{people} people at today’s inspection. Bring a CV.', 'Must love stairs, no parking and your landlord.', 'Renovated: we painted it grey.', 'Just {deposit} deposit. Just 6 years of saving.', 'Light-filled! (One window.)'],
+  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s investment.', 'Heritage charm from {price}. Heritage wages not included.', 'Live where your barista can’t.', 'Second home? Third home? Why stop?'],
+  3: ['Luxury apartments. 80% empty. 100% sold.', 'Off the plan from {price}. Off your budget forever.', 'Rooftop pool for owners. Rooftop view of it for renters.', 'Prices up {growth}% this year. Wages up 3%.', 'Invest in bricks. Live in a shoebox.'],
+  4: ['Penthouse {price}. Studio from your dreams.', 'Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
+  out: ['New estate! Commute just {commute}.', 'Paddock to palace. Shops coming 2041.', 'Room to breathe. Nothing to do.', 'Only {commute} to the city. Each way.'],
+  landlord: ['Welcome, landlord. Rent goes up Monday.', 'Your tenant is 24 and saving for a deposit. Sound familiar?', 'Raise the rent? Everyone else is.', 'Congratulations. You are the market now.']
+};
+function fillSign(text, tier) {
+  const L = { tier, priceK: 1 };
+  return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + Math.floor(Math.random() * 15))
+    .replace('{price}', moneyK(priceOf(L))).replace('{deposit}', moneyK(priceOf(L) * DEPOSIT))
+    .replace('{growth}', Math.round(GROWTH * 100 + 4)).replace(/{commute}/g, commuteText());
+}
+function pickSign(tier, r) {
+  const pool = landlordMode ? SIGNS.landlord : zone >= 3 && r() < 0.5 ? SIGNS.out : SIGNS[tier];
+  return fillSign(pool[Math.floor(r() * pool.length)], tier);
+}
 
 /* ---------- Called from chunkAt() ---------- */
 function plotsForChunk(ch, r) {
-  // Your properties come back near the start of every new street.
-  const idx = ch.c - ownedFromC;
-  if (idx >= 0 && idx < portfolio.length) {
-    const prop = portfolio[idx], cand = ch.lots.filter(L => !L.special);
+  // Your home appears near the start of every new street once you own it.
+  if (home && ch.c === ownedFromC) {
+    const cand = ch.lots.filter(L => !L.special);
+    if (cand.length) { Object.assign(cand[Math.min(1, cand.length - 1)], { owned: true, sign: false, setback: 0 }); }
+  }
+  // One or two plots for sale per block; some will be bought by investors before you get there.
+  for (const side of [-1, 1]) {
+    if (r() < 0.35) { continue; }
+    const cand = ch.lots.filter(L => !L.special && !L.owned && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
     if (cand.length) {
-      const old = cand[Math.min(cand.length - 1, 1)];
-      Object.assign(old, { owned: true, prop, rentDue: true, sign: false, setback: 0 });
+      const L = cand[Math.floor(r() * cand.length)];
+      Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: r() < 0.35 ? mixN(22, 45, r()) : -1 });
     }
   }
-  // Each block is one colour group, like a side of the board: one plot for sale on each
-  // side of the street, so a colour set can be bought in a single block.
-  const group = GROUP_OF_TIER[ch.tier][ch.slot % 2];
-  for (const side of [-1, 1]) {
-    if (side === 1 && r() < 0.25) { continue; }
-    const cand = ch.lots.filter(L => !L.special && !L.owned && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
-    if (cand.length) { const L = cand[Math.floor(r() * cand.length)]; Object.assign(L, { forSale: true, group, price: GROUPS[group].price, setback: 0 }); }
+  // Billboards on the pavement, written from the prices on this block.
+  for (let i = 0; i < 2; i++) {
+    if (r() < 0.25) { continue; }
+    const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
+    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, text: pickSign(ch.tier, r), col: DISTRICTS[ch.tier].stripe[0] });
+  }
+  // An open home with a queue down the pavement, in the cheaper districts.
+  if (ch.tier <= 2 && r() < 0.55) {
+    const L = ch.lots.find(l => !l.special && !l.forSale && !l.owned && l.tier <= 2);
+    if (L) {
+      const n = 8 + Math.floor(r() * 10), zz = L.z0 + 1;
+      ch.props.push({ kind: 'openhome', x: L.side * (EDGE_X - 0.4), z: zz, side: L.side, n });
+      for (let k = 0; k < n; k++) { ch.props.push({ kind: 'person', x: L.side * (EDGE_X - 1.2 - (k % 2) * 0.5), z: zz - 1.2 - k * 0.75, tone: r(), h: mixN(1.55, 1.85, r()), ph: r() * 6 }); }
+    }
   }
 }
 
@@ -870,26 +897,42 @@ function plotsForChunk(ch, r) {
 function boardUpdate(z) {
   if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
   updateTurn();
+  if (!paused && !intro && !ending) { market *= 1 + GROWTH * Math.min(deltaTime / 1000, 0.05) / 100; }   // ~7% for every 100 s walked
+  // Investors buy plots out from under you.
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
-      if (L.owned && L.rentDue && (L.z0 + L.z1) / 2 < z) { L.rentDue = false; addMoney(rentOf(L.prop), `Tenants at ${L.prop.name} pay rent: +$${rentOf(L.prop)}`); }
+      if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
+        const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
+        Object.assign(L, { forSale: false, investorAt: -1, sold: true, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
+        sound.jail(); sayToast('Sold, to an investor. Before you even got there.');
+      }
     }
   }
+  if (home && !ending && clockT - home.t > 6) { endWalk('owner'); }
 }
-function onPassGo() { addMoney(GO_SALARY, `Passed GO. Collect $${GO_SALARY}.`); }
+// Every lap past GO is a year.
+function onPassGo() {
+  if (ending || intro) { return; }
+  lifeAge++; const rentYear = rentWeek * 52; rentPaid += rentYear;
+  addMoney(WAGES, 'wages'); setTimeout(() => addMoney(-rentYear, 'rent'), 500); setTimeout(() => addMoney(-LIVING, 'living costs'), 1000);
+  if (home) { setTimeout(() => addMoney(rentWeek * 52 * 0.9, 'rent from your tenant'), 1500); }
+  rentWeek = Math.round(rentWeek * 1.06);
+  sayToast(`A year passes. You’re ${lifeAge}. Your rent goes up to ${money(rentWeek)}/wk.`);
+  if (lifeAge >= END_AGE && !home) { setTimeout(() => endWalk('renter'), 2400); }
+}
 function onChance(kind) {
-  if (kind === 'boom') { addMoney(100, 'Bank error in your favour: +$100'); }
-  if (kind === 'crash') { const cost = 25 * portfolio.reduce((n, p) => n + p.houses, 0) + 50; addMoney(-cost, `Street repairs: −$${cost}`); }
+  if (kind === 'boom') { market *= 1.08; sayToast('Interest rates cut! Everything for sale just went up 8%.'); }
+  if (kind === 'crash') { rentWeek += 40; sayToast(`Rates rise. Your landlord passes it on: rent ${money(rentWeek)}/wk.`); }
 }
 
-/* ---------- What is next to you ---------- */
-// The for-sale or owned plot beside you, if any.
+/* ---------- The plot beside you ---------- */
 function plotHere(z) {
-  if (turnAnim || nameBox) { return null; }
+  if (turnAnim || intro || ending) { return null; }
   let best = null;
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
-      if (!L.forSale && !L.owned) { continue; }
+      if (!L.forSale) { continue; }
       const d = Math.abs((L.z0 + L.z1) / 2 - z);
       if (d < 10 && (!best || d < best.d)) { best = { L, d }; }
     }
@@ -898,59 +941,37 @@ function plotHere(z) {
 }
 function actionFor(L) {
   if (!L) { return null; }
-  if (L.forSale) { return wallet >= L.price ? { label: `E  ·  Buy this plot  −$${L.price}`, ok: true } : { label: `For sale $${L.price}  ·  you need $${L.price - wallet} more`, ok: false }; }
-  const p = L.prop, g = GROUPS[p.group];
-  if (p.houses >= 5) { return { label: `${p.name} has a hotel. Rent $${rentOf(p)}`, ok: false }; }
-  if (!ownsSet(p.group)) { return { label: `Own both ${p.group} plots to build here`, ok: false }; }
-  const what = p.houses === 4 ? 'a hotel' : 'a house';
-  return wallet >= g.house ? { label: `E  ·  Build ${what}  −$${g.house}`, ok: true } : { label: `Building ${what} costs $${g.house}`, ok: false };
+  if (home) { return { label: 'You already own a home.', ok: false }; }
+  const dep = priceOf(L) * DEPOSIT;
+  return wallet >= dep ? { label: `E  ·  Buy it  (deposit ${money(dep)})`, ok: true } : { label: `Deposit ${money(dep)}  ·  you have ${money(wallet)}`, ok: false };
 }
 function useHere() {
-  const L = plotHere(distanceWalked); if (!L) { return; }
-  const act = actionFor(L); if (!act.ok) { sayToast(act.label.replace('E  ·  ', '')); return; }
-  if (L.forSale) { buyPlot(L); } else { buildOn(L); }
+  if (intro) { intro = false; return; }
+  if (ending) { return; }
+  const L = plotHere(distanceWalked), act = actionFor(L); if (!act) { return; }
+  if (!act.ok) { sayToast(home ? act.label : `Not yet. Keep saving, or move further out (turn left).`); return; }
+  const price = priceOf(L), dep = price * DEPOSIT;
+  addMoney(-dep, 'deposit');
+  home = { price, t: clockT, commute: commuteText(), zone, lifeAge };
+  Object.assign(L, { forSale: false, owned: true, born: clockT + 0.2, rentDue: false });
+  landlordMode = true;
+  sayToast(`You bought a home! ${commuteText()} from the city.`);
 }
-function buyPlot(L) {
-  addMoney(-L.price);
-  const prop = { name: ownerName || 'My Place', group: L.group, houses: 0, n: portfolio.length + 1 };
-  portfolio.push(prop);
-  Object.assign(L, { forSale: false, owned: true, prop, rentDue: false, born: clockT + 0.2 });
-  deedView = { prop, t: clockT };
-  if (!ownerName) { askName(prop); } else { sayToast(ownsSet(L.group) ? `Colour set complete! You can build houses on ${L.group}.` : `You bought a ${L.group} plot.`); }
-}
-function buildOn(L) {
-  const p = L.prop; addMoney(-GROUPS[p.group].house);
-  p.houses++; L.born = clockT;                       // the new building rises again
-  sayToast(p.houses === 5 ? `A hotel! Rent is now $${rentOf(p)}.` : `House ${p.houses} built. Rent is now $${rentOf(p)}.`);
-}
-// First purchase: name your place. A small text box over the canvas.
-function askName(prop) {
-  stepSpeed = 0;
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);background:#fffaee;border-radius:10px;padding:18px 20px;box-shadow:0 6px 24px rgba(0,0,0,.3);font:16px Georgia,serif;color:#2a1e18;text-align:center;z-index:10;width:min(320px,86vw)';
-  box.innerHTML = '<div style="font-weight:bold;font-size:18px;margin-bottom:6px">Your first property! Name it</div><div style="font-size:13px;color:#6a5a50;margin-bottom:10px">It goes on all your signs. Press Enter.</div>';
-  const input = document.createElement('input');
-  input.maxLength = 16; input.placeholder = 'e.g. Hedy’s';
-  input.style.cssText = 'width:100%;box-sizing:border-box;font:18px Georgia,serif;padding:8px 10px;border:2px solid #d4a017;border-radius:6px;outline:none;text-align:center';
-  box.appendChild(input); document.body.appendChild(box); nameBox = box;
-  setTimeout(() => input.focus(), 30);
-  const done = () => {
-    ownerName = (input.value.trim() || 'My Place').slice(0, 16);
-    for (const p of portfolio) { p.name = ownerName; }
-    box.remove(); nameBox = null; canvasNode.focus({ preventScroll: true });
-    sayToast(`${ownerName} is yours. Buy the other ${prop.group} plot to build houses.`);
-  };
-  input.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { done(); } });
+function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = 0.6; nightTarget = 0.6; }
+function restartWalk() {
+  wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true;
+  seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
 
-/* ---------- Turning at a crossing ---------- */
+/* ---------- Turning: left moves you further out, right moves you back in ---------- */
 function nextCrossing(z) { const local = modN(z, CHUNK_LEN); return local < CROSS_W - 1 ? 0 : CHUNK_LEN - local + 2; }
 function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
 function tryTurn(dir) {
-  if (turnAnim || nameBox) { return; }
+  if (turnAnim || intro || ending) { return; }
   if (!atCrossing(distanceWalked)) {
     const ahead = nextCrossing(distanceWalked);
-    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left' : 'right'} at the crossing ahead.`); }
+    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left (further out)' : 'right (toward the city)'} at the crossing ahead.`); }
     else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
     return;
   }
@@ -961,9 +982,13 @@ function updateTurn() {
   const u = (clockT - turnAnim.t) / 0.85;
   turnYaw = turnAnim.dir * HALF_PI * easeN(Math.min(1, u));
   fadeA = easeN((u - 0.45) / 0.55);
-  if (u >= 1) { turnAnim = null; turnYaw = 0; fadeA = 1; newStreet(); }
+  if (u >= 1) {
+    const dir = turnAnim.dir; turnAnim = null; turnYaw = 0; fadeA = 1;
+    zone = constrain(zone - dir, 0, ZONE_NAMES.length - 1);
+    newStreet();
+    sayToast(dir < 0 ? `Further out: ${ZONE_NAMES[zone]}. Prices −20%. Commute ${commuteText()}.` : `Back toward the city: ${ZONE_NAMES[zone]}. Commute ${commuteText()}.`);
+  }
 }
-// A fresh street at the same place on the board: new seed, and it builds around you.
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
   seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
@@ -972,54 +997,84 @@ function newStreet() {
 }
 
 /* ---------- Drawing on the street ---------- */
-// A FOR SALE board in the plot's colour, standing on the empty plot by the pavement.
 function drawForSale(L) {
   const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
   if (base.rz < 1.5 || base.rz > FAR_Z * 0.8) { return; }
-  const k = base.k, col = GROUPS[L.group].col, w = 3.2 * k, h = 1.7 * k, top = base.y - 3 * k;
+  const k = base.k, w = 3.4 * k, h = 1.9 * k, top = base.y - 3 * k;
   ctx.save(); ctx.globalAlpha = 1 - fogFor(mid) * 0.8;
   ctx.fillStyle = '#5a4030'; ctx.fillRect(base.x - 0.07 * k, top, 0.14 * k, 3 * k);
   ctx.fillStyle = '#fffaee'; ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.06 * k);
   ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
-  ctx.fillStyle = col; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.38);
+  ctx.fillStyle = '#c8322a'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.34);
   if (w > 26) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${h * 0.24}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('FOR SALE', base.x, top - h * 0.2 + h * 0.19);
-    ctx.font = `bold ${h * 0.32}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(`$${L.price}`, base.x, top - h * 0.2 + h * 0.68);
+    ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('FOR SALE', base.x, top - h * 0.2 + h * 0.17);
+    ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
+    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(`deposit ${moneyK(priceOf(L) * DEPOSIT)}`, base.x, top - h * 0.2 + h * 0.8);
   }
   ctx.restore();
 }
-// A box with a pitched roof standing on the plot: one Monopoly house or the hotel.
+// A big roadside billboard; the text is generated from the street's own prices.
+function drawBillboard(q, p) {
+  const k = q.k; if (k < 2) { return; }
+  const w = 4.6 * k, h = 2.3 * k, top = q.y - 4.6 * k, x = q.x;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
+  ctx.fillStyle = '#2a2a30'; ctx.fillRect(x - w * 0.36, top, 0.12 * k, 4.6 * k); ctx.fillRect(x + w * 0.36 - 0.12 * k, top, 0.12 * k, 4.6 * k);
+  ctx.fillStyle = '#fffaf0'; ctx.fillRect(x - w / 2, top - h, w, h);
+  ctx.fillStyle = p.col; ctx.fillRect(x - w / 2, top - h, w, h * 0.12); ctx.fillRect(x - w / 2, top - h * 0.12, w, h * 0.12);
+  ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x - w / 2, top - h, w, h);
+  if (w > 50) {
+    ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const size = Math.max(7, h * 0.16); ctx.font = `bold ${size}px Georgia, serif`;
+    const words = p.text.split(' '), lines = []; let line = '';
+    for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.86 && line) { lines.push(line); line = wd; } else { line = t; } }
+    lines.push(line);
+    const lh = size * 1.15, y0 = top - h / 2 - (lines.length - 1) * lh / 2;
+    lines.slice(0, 4).forEach((ln, i) => ctx.fillText(ln, x, y0 + i * lh));
+  }
+  ctx.restore();
+}
+// People queueing for an open home.
+function drawPerson(q, p) {
+  const k = q.k; if (k < 1.5) { return; }
+  const h = p.h, sway = Math.sin(clockT * 1.5 + p.ph) * 0.03 * k;
+  const coats = ['#3f5a7a', '#7a3f4a', '#4a6a4a', '#8a6a3a', '#5a4a6a', '#2a3a4a', '#9a5a3a'], skin = ['#e8c4a0', '#c8946a', '#8a5a3a', '#f0d0b0'];
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
+  ctx.fillStyle = toneN('#2a2a30', p.z); ctx.fillRect(q.x - 0.14 * k, q.y - 0.8 * k, 0.11 * k, 0.8 * k); ctx.fillRect(q.x + 0.03 * k, q.y - 0.8 * k, 0.11 * k, 0.8 * k);
+  ctx.fillStyle = toneN(coats[Math.floor(p.tone * coats.length)], p.z);
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k, 0.12 * k) : ctx.rect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k); ctx.fill();
+  ctx.fillStyle = toneN(skin[Math.floor(p.tone * 7) % skin.length], p.z); ctx.beginPath(); ctx.arc(q.x + sway, q.y - (h - 0.12) * k, 0.13 * k, 0, TWO_PI); ctx.fill();
+  if (p.tone > 0.6) { ctx.fillStyle = '#e8e8f0'; ctx.fillRect(q.x + 0.15 * k + sway, q.y - (h - 0.55) * k, 0.12 * k, 0.2 * k); }   // a phone, checking listings
+  ctx.restore();
+}
+function drawOpenHome(q, p) {
+  const k = q.k; if (k < 2) { return; }
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
+  ctx.fillStyle = '#2a2a30'; ctx.fillRect(q.x - 0.05 * k, q.y - 2.6 * k, 0.1 * k, 2.6 * k);
+  ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - 1 * k, q.y - 2.6 * k, 2 * k, 0.8 * k);
+  if (k > 14) { ctx.fillStyle = '#fff'; ctx.font = `bold ${0.32 * k}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OPEN HOME', q.x, q.y - 2.32 * k); ctx.font = `${0.2 * k}px Georgia, serif`; ctx.fillText(`${p.n * 4} registered`, q.x, q.y - 2.02 * k); }
+  ctx.restore();
+}
+// A small box with a pitched roof: your home.
 function drawPiece(L, za, zb, d, h, col) {
   const x = L.side * (EDGE_X + 0.1), xo = x + L.side * d, xm = (x + xo) / 2, z0 = clipZ(za); if (zb <= z0) { return; }
   polyN(wallQuad(x, z0, x, zb, 0, h), toneN(col, midN(z0, zb), 1.05), 'rgba(0,0,0,0.25)', 1);
   if (za > cam.z + NEAR_Z) { polyN(wallQuad(x, za, xo, za, 0, h), toneN(col, za, 0.7)); polyN([P(x, h, za), P(xo, h, za), P(xm, h + d * 0.45, za)], toneN(col, za, 0.62)); }
   polyN([P(x, h, z0), P(x, h, zb), P(xm, h + d * 0.45, zb), P(xm, h + d * 0.45, z0)], toneN(col, midN(z0, zb), 0.82), 'rgba(0,0,0,0.25)', 1);
-  // Two windows and a door on the street side.
   const len = zb - za;
   for (const u of [0.18, 0.62]) { const wa = za + len * u, wb = wa + len * 0.2; if (wb > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(wa, z0), x - L.side * 0.05, wb, h * 0.45, h * 0.75), toneN('#fff2c0', wa)); } }
   const da = za + len * 0.42; if (da + len * 0.16 > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(da, z0), x - L.side * 0.05, da + len * 0.16, 0, h * 0.42), toneN('#3a2a20', da)); }
 }
 function drawOwnedLot(L) {
-  const p = L.prop, col = GROUPS[p.group].col, len = L.z1 - L.z0, z0 = clipZ(L.z0);
-  if (L.z1 <= z0) { return; }
-  // The plot, paved in its colour.
+  const len = L.z1 - L.z0, z0 = clipZ(L.z0); if (L.z1 <= z0) { return; }
   const xa = L.side * (EDGE_X + 0.3), xb = L.side * (EDGE_X + L.depth);
-  polyN([P(xa, 0.04, z0), P(xb, 0.04, z0), P(xb, 0.04, L.z1), P(xa, 0.04, L.z1)], rgbaN(col, 0.55), rgbaN(col, 0.9), 2);
-  // Giant board pieces, bigger in richer districts so they stand out among the towers.
-  const hh = 6 + L.tier * 3;
-  if (p.houses === 5) { drawPiece(L, L.z0 + len * 0.06, L.z1 - len * 0.06, Math.max(8, L.depth), hh * 2, HOTEL_COL); }
-  else {
-    const n = p.houses, slot = len / 4;
-    for (let i = n - 1; i >= 0; i--) { drawPiece(L, L.z0 + slot * i + slot * 0.1, L.z0 + slot * (i + 1) - slot * 0.1, Math.max(5, L.depth * 0.7), hh, HOUSE_COL); }
-  }
-  // A sign by the pavement with your name and a flag.
-  const sx = L.side * (EDGE_X + 0.5), sz = Math.max(L.z0 + 0.6, z0 + 0.1), b = P(sx, 0, sz); if (b.rz < 1.2) { return; }
-  const k = b.k, w = 2.6 * k, h = 1 * k, top = b.y - 2.6 * k;
-  ctx.save(); ctx.fillStyle = '#3a2a20'; ctx.fillRect(b.x - 0.05 * k, top, 0.1 * k, 2.6 * k);
+  polyN([P(xa, 0.04, z0), P(xb, 0.04, z0), P(xb, 0.04, L.z1), P(xa, 0.04, L.z1)], rgbaN('#6f9a52', 0.8));
+  drawPiece(L, L.z0 + len * 0.2, L.z1 - len * 0.2, Math.max(5, L.depth * 0.7), 5, HOUSE_COL);
+  const b = P(L.side * (EDGE_X + 0.5), 0, Math.max(L.z0 + 0.6, z0 + 0.1)); if (b.rz < 1.2) { return; }
+  const k = b.k, w = 2.4 * k, h = 0.9 * k, top = b.y - 2.4 * k;
+  ctx.save(); ctx.fillStyle = '#3a2a20'; ctx.fillRect(b.x - 0.05 * k, top, 0.1 * k, 2.4 * k);
   ctx.fillStyle = '#2a1e18'; ctx.fillRect(b.x - w / 2, top - h, w, h); ctx.strokeStyle = OWNER_COL; ctx.lineWidth = Math.max(1, 0.08 * k); ctx.strokeRect(b.x - w / 2, top - h, w, h);
-  if (w > 30) { ctx.fillStyle = '#ffe9a8'; ctx.font = `bold ${h * 0.5}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.name.toUpperCase(), b.x, top - h / 2, w * 0.92); }
-  ctx.fillStyle = col; ctx.fillRect(b.x - w / 2, top - h - 0.18 * k, w, 0.18 * k);
+  if (w > 30) { ctx.fillStyle = '#ffe9a8'; ctx.font = `bold ${h * 0.45}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('HOME', b.x, top - h / 2); }
   ctx.restore();
 }
 
@@ -1027,72 +1082,88 @@ function drawOwnedLot(L) {
 function drawBoardHud() {
   const z = distanceWalked;
   push(); textFont('Georgia');
-  // Title deeds you own, top left.
-  const x = 16, y = 16, w = Math.min(250, width * 0.4), rowH = 26, rows = Math.max(1, portfolio.length), h = 44 + rows * rowH;
-  noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
-  fill(120, 100, 90); textSize(11); textAlign(LEFT, TOP); text('YOUR TITLE DEEDS', x + 14, y + 12);
-  if (!portfolio.length) { fill(90, 70, 60); textSize(13); text('None yet. Look for FOR SALE boards.', x + 14, y + 32, w - 24); }
-  portfolio.forEach((p, i) => {
-    const ry = y + 32 + i * rowH, g = GROUPS[p.group];
-    fill(g.col); rect(x + 14, ry, 16, 16, 3);
-    fill(40, 30, 24); textSize(13); textStyle(BOLD); text(p.group, x + 38, ry + 1); textStyle(NORMAL);
-    for (let k = 0; k < (p.houses < 5 ? p.houses : 0); k++) { fill(HOUSE_COL); rect(x + 96 + k * 14, ry + 3, 10, 10, 2); }
-    if (p.houses === 5) { fill(HOTEL_COL); rect(x + 96, ry + 3, 30, 10, 2); }
-    fill(90, 70, 60); textAlign(RIGHT, TOP); text(`rent $${rentOf(p)}`, x + w - 12, ry + 1); textAlign(LEFT, TOP);
-    if (ownsSet(p.group)) { fill(OWNER_COL); text('★', x + 80, ry); }
-  });
-  // Wallet, top right.
-  const ww = 150, wx = width - ww - 16;
-  fill(0, 50); rect(wx + 3, y + 4, ww, 64, 8); fill(255, 250, 238); rect(wx, y, ww, 64, 8);
-  fill(120, 100, 90); textSize(11); textAlign(RIGHT, TOP); text('CASH', wx + ww - 14, y + 10);
-  fill(40, 30, 24); textStyle(BOLD); textSize(26); text(`$${wallet}`, wx + ww - 14, y + 26); textStyle(NORMAL);
-  for (let i = moneyPops.length - 1; i >= 0; i--) {
-    const m = moneyPops[i], age = clockT - m.t; if (age > 2) { moneyPops.splice(i, 1); continue; }
-    fill(m.up ? '#2f8a3a' : '#c8322a'); textStyle(BOLD); textSize(24); textAlign(RIGHT, TOP); drawingContext.globalAlpha = 1 - easeN((age - 1.2) / 0.8);
-    text(m.text, wx + ww - 14, y + 70 + age * 18); drawingContext.globalAlpha = 1; textStyle(NORMAL);
+  if (!intro && !ending) {
+    // Your life, top left.
+    const x = 16, y = 16, w = Math.min(270, width * 0.42), h = 104;
+    noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
+    fill(120, 100, 90); textSize(11); textAlign(LEFT, TOP); text(`AGE ${lifeAge}  ·  ${home ? 'HOME OWNER' : 'RENTING'}`, x + 14, y + 12);
+    fill(40, 30, 24); textStyle(BOLD); textSize(17); text(ZONE_NAMES[zone], x + 14, y + 30); textStyle(NORMAL);
+    fill(90, 70, 60); textSize(13);
+    text(`Commute: ${commuteText()}`, x + 14, y + 56);
+    text(home ? `Your tenant pays you ${money(rentWeek * 0.9)}/wk` : `Rent: ${money(rentWeek)}/wk  ·  paid so far ${moneyK(rentPaid)}`, x + 14, y + 76, w - 24);
+    // Savings, top right.
+    const ww = 170, wx = width - ww - 16;
+    fill(0, 50); rect(wx + 3, y + 4, ww, 64, 8); fill(255, 250, 238); rect(wx, y, ww, 64, 8);
+    fill(120, 100, 90); textSize(11); textAlign(RIGHT, TOP); text('SAVINGS', wx + ww - 14, y + 10);
+    fill(40, 30, 24); textStyle(BOLD); textSize(24); text(money(wallet), wx + ww - 14, y + 26); textStyle(NORMAL);
+    for (let i = moneyPops.length - 1; i >= 0; i--) {
+      const m = moneyPops[i], age2 = clockT - m.t; if (age2 > 2.4) { moneyPops.splice(i, 1); continue; } if (age2 < 0) { continue; }
+      fill(m.up ? '#2f8a3a' : '#c8322a'); textStyle(BOLD); textSize(16); textAlign(RIGHT, TOP); drawingContext.globalAlpha = 1 - easeN((age2 - 1.6) / 0.8);
+      text(m.text, wx + ww - 14, y + 72 + age2 * 16); drawingContext.globalAlpha = 1; textStyle(NORMAL);
+    }
+    // The plot beside you.
+    const L = plotHere(z), act = actionFor(L);
+    if (L) { drawListing(L, width - 16 - 200, y + 84); }
+    if (act) {
+      textStyle(BOLD); textSize(17); const tw = textWidth(act.label) + 40, bx = width / 2 - tw / 2, by = height - 116;
+      fill(0, 60); rect(bx + 3, by + 4, tw, 44, 22); fill(act.ok ? color(255, 250, 238) : color(240, 232, 220)); rect(bx, by, tw, 44, 22);
+      fill(act.ok ? color(40, 30, 24) : color(110, 90, 80)); textAlign(CENTER, CENTER); text(act.label, width / 2, by + 23); textStyle(NORMAL);
+    }
+    for (let i = toasts.length - 1; i >= 0; i--) {
+      const t = toasts[i], a2 = clockT - t.t; if (a2 > 3.6) { toasts.splice(i, 1); continue; }
+      drawingContext.globalAlpha = easeN(a2 / 0.3) * (1 - easeN((a2 - 3) / 0.6));
+      textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 146 - (toasts.length - 1 - i) * 26);
+      noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
+    }
+    fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
+    text('↑ walk  ·  Shift hurry  ·  ← further out  ·  → toward the city  ·  E buy  ·  mouse look around', width / 2, height - 14); noStroke();
   }
-  // The plot beside you: its title deed and what you can do.
-  const L = plotHere(z), act = actionFor(L);
-  if (L) { drawDeed(L.forSale ? { name: 'For sale', group: L.group, houses: 0 } : L.prop, width - 16 - 190, y + 84, 1); }
-  if (act) {
-    textStyle(BOLD); textSize(18); const tw = textWidth(act.label) + 40, bx = width / 2 - tw / 2, by = height - 120;
-    fill(0, 60); rect(bx + 3, by + 4, tw, 46, 23); fill(act.ok ? color(255, 250, 238) : color(240, 232, 220)); rect(bx, by, tw, 46, 23);
-    fill(act.ok ? color(40, 30, 24) : color(110, 90, 80)); textAlign(CENTER, CENTER); text(act.label, width / 2, by + 24);
+  if (intro) { storyCard('THE LANDLORD’S WALK', [
+    'You’re 24. You moved to the city for work.',
+    `You rent a room for ${money(RENT_WEEK)} a week, and you’ve saved ${money(START_SAVINGS)} for a deposit.`,
+    'Walk the board. Every lap past GO is a year.',
+    'Turn left to move further out, where it’s cheaper.',
+    'Buy a home before you turn 30.'
+  ], 'Press E or click to start walking'); }
+  if (ending) {
+    const lines = ending.kind === 'owner'
+      ? [`You bought a home at ${home.lifeAge}, ${home.commute} from the city.`, `It cost ${money(home.price)}. You’ll be paying it off until you’re ${home.lifeAge + 30}.`, `Along the way you paid ${money(rentPaid)} in rent.`, `Prices rose ${Math.round((market - 1) * 100)}% while you saved.`, 'You’re a landlord now, too. Someone your age rents from you.']
+      : [`You’re ${lifeAge}, and you’re still renting.`, `You paid ${money(rentPaid)} in rent.`, `You saved ${money(wallet)}.`, `Prices rose ${Math.round((market - 1) * 100)}% while you saved.`, 'The street grew grander every year. None of it was yours.'];
+    storyCard(ending.kind === 'owner' ? 'YOU OWN A HOME' : 'STILL RENTING', [...lines, '', 'Monopoly began in 1904 as The Landlord’s Game, a warning about landlords.'], 'Press R to walk again', easeN((clockT - ending.t) / 1.2));
   }
-  // A big deed when you have just bought.
-  if (deedView) { const age = clockT - deedView.t; if (age > 4) { deedView = null; } else { const a = easeN(age / 0.3) * (1 - easeN((age - 3.4) / 0.6)); drawDeed(deedView.prop, width / 2 - 110, height * 0.24, a, 220); } }
-  // Short messages.
-  for (let i = toasts.length - 1; i >= 0; i--) {
-    const t = toasts[i], age = clockT - t.t; if (age > 3.4) { toasts.splice(i, 1); continue; }
-    drawingContext.globalAlpha = easeN(age / 0.3) * (1 - easeN((age - 2.8) / 0.6));
-    textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 150 - (toasts.length - 1 - i) * 26);
-    noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
-  }
-  // Help line.
-  fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
-  text('↑ walk  ·  Shift hurry  ·  ← → turn at a crossing  ·  E buy / build  ·  mouse look around', width / 2, height - 14);
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
 }
-// A Monopoly-style title deed: colour band, rent with 0-4 houses and a hotel, house cost.
-function drawDeed(prop, x, y, a, w = 190) {
-  const g = GROUPS[prop.group], b = baseRent(prop.group), s = w / 190;
+function storyCard(title, lines, foot, a = 1) {
   push(); drawingContext.globalAlpha = a; noStroke();
-  fill(0, 50); rect(x + 3, y + 4, w, 200 * s, 6); fill(255, 252, 244); rect(x, y, w, 200 * s, 6);
-  fill(g.col); rect(x + 8 * s, y + 8 * s, w - 16 * s, 38 * s, 3);
-  fill(prop.group === 'yellow' || prop.group === 'sky' || prop.group === 'mint' ? 30 : 255); textAlign(CENTER, CENTER); textStyle(BOLD);
-  textSize(9 * s); text('TITLE DEED', x + w / 2, y + 18 * s); textSize(14 * s); text(`${prop.group.toUpperCase()} · $${g.price}`, x + w / 2, y + 34 * s);
-  textStyle(NORMAL); textSize(11 * s); fill(40, 30, 24);
-  const lines = [['Rent', b], ['With 1 house', b * RENT_X[1]], ['With 2 houses', b * RENT_X[2]], ['With 3 houses', b * RENT_X[3]], ['With 4 houses', b * RENT_X[4]], ['With a hotel', b * RENT_X[5]]];
-  lines.forEach(([t, v], i) => { const ly = y + (58 + i * 18) * s, here = prop.houses === i; fill(here ? color(200, 50, 40) : color(40, 30, 24)); textStyle(here ? BOLD : NORMAL); textAlign(LEFT, CENTER); text(t, x + 14 * s, ly); textAlign(RIGHT, CENTER); text(`$${v}`, x + w - 14 * s, ly); });
-  textStyle(ITALIC); fill(110, 90, 80); textAlign(CENTER, TOP); textSize(10 * s); text(`Houses cost $${g.house} each.\nOwn both ${prop.group} plots to build.`, x + 8 * s, y + 166 * s, w - 16 * s);
+  fill(20, 14, 10, 120); rect(0, 0, width, height);
+  const w = Math.min(560, width - 32), h = 120 + lines.length * 26, x = width / 2 - w / 2, y = height / 2 - h / 2;
+  fill(255, 250, 238); rect(x, y, w, h, 10); fill('#c8322a'); rect(x, y, w, 46, 10, 10, 0, 0);
+  fill(255); textStyle(BOLD); textSize(18); textAlign(CENTER, CENTER); text(title, width / 2, y + 23);
+  textStyle(NORMAL); textSize(15); fill(40, 30, 24); textAlign(CENTER, TOP);
+  lines.forEach((ln, i) => { if (i === lines.length - 1 && ln.startsWith('Monopoly')) { textStyle(ITALIC); fill(110, 90, 80); } text(ln, x + 20, y + 62 + i * 26, w - 40); });
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD); fill('#c8322a'); textSize(14); text(foot, width / 2, y + h - 24);
+  pop();
+}
+// A listing card in the style of a Monopoly title deed.
+function drawListing(L, x, y) {
+  const price = priceOf(L), dep = price * DEPOSIT, w = 200, weekly = price * 0.9 * 0.065 / 52;
+  push(); noStroke(); fill(0, 50); rect(x + 3, y + 4, w, 168, 6); fill(255, 252, 244); rect(x, y, w, 168, 6);
+  fill(DISTRICTS[L.tier].stripe[0]); rect(x + 8, y + 8, w - 16, 38, 3);
+  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(9); text('TITLE DEED · FOR SALE', x + w / 2, y + 18); textSize(13); text(DISTRICTS[L.tier].name.toUpperCase(), x + w / 2, y + 34);
+  textStyle(NORMAL); textSize(12); fill(40, 30, 24);
+  const rows = [['Price', moneyK(price)], ['Deposit (10%)', money(dep)], ['Repayments', money(weekly) + '/wk'], ['Commute', commuteText()], ['Your savings', money(wallet)]];
+  rows.forEach(([a, b], i) => { const ly = y + 60 + i * 20, short = i === 4 && wallet < dep; fill(short ? color(200, 50, 40) : color(40, 30, 24)); textAlign(LEFT, CENTER); text(a, x + 14, ly); textAlign(RIGHT, CENTER); text(b, x + w - 14, ly); });
+  textStyle(ITALIC); fill(110, 90, 80); textAlign(CENTER, CENTER); textSize(10); text('Price rises while you read this.', x + w / 2, y + 158);
   pop();
 }
 
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
-  if (code === 'KeyE' || code === 'Space') { useHere(); return true; }
+  if (code === 'KeyE' || code === 'Space' || code === 'Enter' && intro) { useHere(); return true; }
+  if (code === 'KeyR') { restartWalk(); return true; }
   if (code === 'KeyA' || code === 'ArrowLeft') { tryTurn(-1); return true; }
   if (code === 'KeyD' || code === 'ArrowRight') { tryTurn(1); return true; }
   return false;

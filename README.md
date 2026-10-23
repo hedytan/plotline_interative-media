@@ -19,26 +19,23 @@ The pavements are painted in the board colours of each district, in board order.
 
 **The street builds itself as you walk.** Beyond about 55 m, each lot is only a plot outlined on the ground in its district colour, with a corner stake, like land on the board nobody has built on yet. As you approach, its building springs up out of the ground with a little overshoot, a puff of dust and a soft thud. The thud is pitched higher in richer districts. Lamps, trees, bins and banners pop up with it. When the page opens, the first street builds outward from where you stand.
 
-## Play the board (Monopoly rules, walked)
-Plotline borrows how Monopoly turns money into buildings:
+## The Landlord's Walk
+Monopoly began in 1904 as Lizzie Magie's *The Landlord's Game*, made to show how landlords grow richer while tenants pay. Plotline walks you back into that warning.
 
-| Monopoly | Plotline |
-|---|---|
-| Start with $1500 | You start with $1500 in cash (top right). |
-| Collect $200 for passing GO | Every lap of the street passes GO and pays you $200. |
-| Land on a property and buy its title deed | Walk up to a plot with a FOR SALE board and press **E**. Its title deed shows the price and the rent table. |
-| Colour groups, cheap side to expensive side | Each block is one colour group (brown, light blue, pink, orange, red, yellow, green, mint, navy, blue), getting pricier around the board: $60 up to $400. |
-| Own the whole colour group before you build | Own both plots of a colour (one each side of the block) to complete the set. Rent doubles on a complete set. |
-| Houses, then a hotel after four | Stand by your plot and press **E** to build a house ($50–$200 by colour). Four green houses, then a red hotel. |
-| Rent goes up with every house | Your tenants pay rent each time you walk past: base, ×5, ×15, ×45, ×67, ×92 with a hotel. |
-| Chance cards | Chance casinos: a boom pays $100, a crash charges street repairs per house. |
+**Who it's for:** young renters in a big city (students, first jobbers) who feel the city getting grander and further out of reach. **What they take away:** what it feels like when homes become game pieces for investors.
 
-The first time you buy, you name your place; your name goes on a gold-edged sign on every property. The houses and hotel are giant green and red board pieces, bigger in richer districts so they stand out among the towers. Your properties come back near the start of every new street you turn into, so you keep collecting rent.
-
-**Turning.** Walk with the Up arrow. At a crossing press **Left** or **Right** (or A / D) to turn the corner into a new street at the same place on the board. Press it a little before the crossing and you turn when you get there.
+**How it plays**
+- You're 24, renting a room for $380 a week, with $22,000 saved for a deposit.
+- Walk forward and the street grows grander, from shacks to towers, with music to match.
+- Every lap past GO is a year: wages in, rent and living costs out, you get a year older, and your rent goes up.
+- FOR SALE plots show a title-deed listing: price, 10% deposit, repayments, commute. Prices tick up while you look. Investors sometimes buy a plot before you reach it, and an empty tower rises in its place.
+- Billboards are generated from the prices around you: satirical real-estate copy that changes by district.
+- Open homes have queues of people down the pavement.
+- **Turn left** at a crossing to move further out (cheaper, quieter, longer commute). **Turn right** to move back toward the city.
+- Buy a home with **E** when your savings cover the deposit. The walk ends when you buy, or when you turn 30 still renting, with a card that sums up your years.
 
 ## Interaction
-- **E** or **Space** buys the plot beside you, or builds a house on it. **Left / Right** (or A / D) turns at a crossing.
+- **E** or **Space** buys the plot beside you. **Left** moves you further out, **Right** back toward the city (at a crossing). **R** starts the walk again.
 - Hold W / Up / the mouse to walk. Add Shift to hurry. S / Down steps back. Enter strolls on its own. Move the mouse to look around.
 - **Chance casinos**: walking past one draws a Chance card that reshapes the street ahead.
   - *Market boom*: buildings in the distance grow taller.
@@ -64,7 +61,7 @@ The first time you buy, you name your place; your name goes on a gold-edged sign
 ## Files
 - index.html and vendor/p5.min.js: run locally with `python3 -m http.server` in this folder, then open http://localhost:8000/.
 - sketch.js: the street, the camera, the districts, Chance and the overlays.
-- board.js: the Monopoly layer: cash, GO salary, plots for sale and title deeds, colour sets, houses and hotels, rent, and turning corners.
+- board.js: The Landlord's Walk: age and savings, years at GO, listings and rising prices, investors, generated billboards, open-home queues, zones and commute, buying a home, the intro and ending cards.
 - sketch-all.js: street-sound.js, sketch.js and board.js combined into one file, for pasting into the p5.js Web Editor. Tested with p5.js 1.11 and 2.3. Don't load it together with the separate scripts.
 - street-sound.js: the soundscape.
 

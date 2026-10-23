@@ -12,12 +12,12 @@
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
  *
- * Play the board (board.js): start with $1500, collect $200 at GO, buy plots that are for
- * sale, complete a colour set and build houses and hotels on it, and collect rent from your
- * tenants as you walk past. Turn left or right at a crossing.
+ * The Landlord's Walk (board.js): you are 24, renting, saving for a deposit. Every lap past
+ * GO is a year. Generated billboards, rising prices, investors and open-home queues line the
+ * street. Turn left to move further out, right to move back in. Buy a home before 30.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to buy the plot beside you or build on it, Left / Right (or A / D) to turn at a crossing,
+ *   E or Space to buy the plot beside you, Left (further out) / Right (toward the city) to turn,
  *   Enter to stroll on its own, move the mouse to look around,
  *   M sound, P pause, R new town.
  */
@@ -163,7 +163,7 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || nameBox) { target = 0; }
+  else if (turnAnim || nameBox || intro || ending) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
@@ -238,7 +238,7 @@ function showCard(kind) {
     crash: ['CHANCE', 'Market crash!', 'The street ahead shrinks and fades.'],
     night: ['CHANCE', 'Night on the town', 'The lights come on early.'],
     jail: ['JAIL', 'Just visiting', 'Wave to the guard and keep walking.'],
-    go: ['GO', 'You passed GO', 'A new lap, a new town.']
+    go: ['GO', 'Another year', 'Pay day. Rent day. Birthday.']
   }[kind];
   card = { kind, text: cardText, t: clockT };
 }
@@ -378,7 +378,7 @@ function drawWorld(z) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);}
     ctx.restore();
   }
 }
@@ -626,7 +626,7 @@ function drawOverlays() {
   image(grain, 0, 0, width, height);
   if (districtCard) {
     const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Lap ${districtCard.lap}`); }
+    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Age ${lifeAge}`); }
   }
   if (card) {
     const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
@@ -650,7 +650,7 @@ function deedCard(cx, y, a, col, title, tag, foot) {
 }
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
-function mousePressed(e) { if (e.target !== canvasNode) {return;} canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
+function mousePressed(e) { if (e.target !== canvasNode) {return;} if (intro) { intro = false; } canvasNode.focus({ preventScroll: true }); pointerHeld = true; beginSound(); return false; }
 function mouseReleased() { pointerHeld = false; }
 function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
