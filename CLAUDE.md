@@ -16,6 +16,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
 
 - `3d/` — WEBGL version: `3d/sketch.js` (street in 48 m chunks, static parts baked per chunk with `buildGeometry`, lots drawn live, `POST_FRAG` post shader on a framebuffer — framebuffer rows are flipped, sample with `1 - vUv.y`), HTML HUD, `3d/sketch-all.js` = street-sound.js + 3d/sketch.js. Headless test: chromium with `--use-angle=swiftshader`, `noLoop()` + manual `stepWorld`/`redraw` (swiftshader runs ~1 fps).
 
+- `spray/` — "Talk Back", the newest direction: same 3D engine; ad lots carry tilted billboards (`makeAdLot`, `L.ad` with C/N/U/V), mouse ray picking (`pickBillboard`), painting into `paintG` with a 16×8 coverage grid (`sprayAt`, tag at 42%), `composeAd` layers ad + paint + rewrite (Permanent Marker), `tagWall` warms the block (`ch.warm`, `warmN`), spawns people/flowers. `textureWrap(REPEAT)` is called once in setup (calling it later iterates every texture and crashes on removed graphics).
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.

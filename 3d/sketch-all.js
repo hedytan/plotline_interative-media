@@ -187,6 +187,7 @@ function hexN(h) { const c = color(h); return [red(c), green(c), blue(c)].map(v 
 function setup() {
   const c = createCanvas(windowWidth, windowHeight, WEBGL); pixelDensity(Math.min(2, displayDensity()));
   c.elt.setAttribute('aria-label', 'Plotline 3D. Walk down a toy-town street and decide what each empty plot becomes: press 1 homes, 2 tower, 3 shop, 4 park.');
+  textureWrap(REPEAT);   // once, before any texture exists: window decals tile
   fb = createFramebuffer({ antialias: false });
   post = createShader(POST_VERT, POST_FRAG);
   sound = typeof StreetSound !== 'undefined' ? new StreetSound() : null;
@@ -459,13 +460,13 @@ function roofN(x, y0, zc, d, w, rh, col) {
 function facadeN(s, xEdge, za, zb, y0, y1, kind, wall) {
   const tex = windowTex(kind, wall), tile = kind === 'tower' ? 3.2 : kind === 'shop' ? (zb - za) : kind === 'lobby' ? (zb - za) : 3.2;
   const x = s * (xEdge - 0.04), u1 = (zb - za) / tile, v1 = kind === 'shop' || kind === 'lobby' ? 1 : (y1 - y0) / (kind === 'tower' ? 3.4 : 3.2);
-  push(); textureMode(NORMAL); textureWrap(REPEAT); texture(tex);
+  push(); textureMode(NORMAL); texture(tex);
   beginShape(); normal(-s, 0, 0);
   vertex(x, -y0, za, 0, v1); vertex(x, -y0, zb, u1, v1); vertex(x, -y1, zb, u1, 0); vertex(x, -y1, za, 0, 0);
   endShape(CLOSE); pop();
 }
 function awningN(s, xEdge, za, zb, y, col) {
-  push(); textureMode(NORMAL); textureWrap(REPEAT); texture(stripeTex(col));
+  push(); textureMode(NORMAL); texture(stripeTex(col));
   const x0 = s * (xEdge - 0.05), x1 = s * (xEdge - 1.8), u = (zb - za) / 1.2;
   beginShape(); normal(-s * 0.5, -0.86, 0);
   vertex(x0, -y - 0.9, za, 0, 0); vertex(x0, -y - 0.9, zb, u, 0); vertex(x1, -y, zb, u, 1); vertex(x1, -y, za, 0, 1);

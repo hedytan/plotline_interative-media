@@ -4,6 +4,15 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
+## Talk Back: the spray-paint version (newest)
+**▶ https://hedytan.github.io/plotline_interative-media/spray/**
+
+The street grows in front of you as you walk, and the developers got there first: every new block goes up with a billboard telling you what to want (*Luxury living from $2.4M*, *Invest in your future*, *Sold out to investors*). You carry a spray can. Aim with the mouse and hold to spray. Cover enough of a billboard and your rewrite goes up in your paint (*Homes, not assets*, *We can't even rent*, *Sold out. Still empty.*), and that block answers: its buildings fill with colour, windows light up, a roof garden grows and people come out. Walk past and the ad stays, and the block stays grey and empty. After 14 billboards you see what you rewrote.
+
+**Who it's for:** young renters in a city that sells homes as investments. **What it says:** a city is full of messages; who gets to write them?
+
+Controls: W / ↑ walk, Shift hurry, mouse aim, hold click or Space to spray, 1–4 paint colour, ← → or the screen edges to look around, Enter stroll, M sound, R restart. Files: `spray/index.html`, `spray/sketch.js`, `spray/sketch-all.js` (paste into the p5 Web Editor).
+
 ## 3D version (work in progress)
 **▶ https://hedytan.github.io/plotline_interative-media/3d/**: the same game in p5.js WEBGL. Low-poly toy-town buildings, trees and people, all generated in code, with a painterly post-process shader (ink outlines from the depth buffer, soft haze, a painted sky with watercolour clouds, paper grain) and satirical signs in front of what you build. Files: `3d/index.html`, `3d/sketch.js`, and `3d/sketch-all.js` to paste into the p5 Web Editor.
 
