@@ -22,6 +22,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
 
 - `afford/` — "The House at the End of the Street" (idea A + B, newest): `afford/sketch.js` = root sketch.js + hooks `introCam()` (crane shot), `drawDreamHouse(z)` (after drawGround), `afterLot(L)` (inside riseK scope: facade slogans via `imageTri`, records `L.hit` for clicks), `landmarkScale()`. `afford/game.js`: time = walked metres (1 block = half a year), savings vs deposit by zone, turning (left = further out), `pickBuilding`/`whoLivesHere` (occupancy per lot), sleepers (`drawOpenHome`), HTML HUD/opening/endings. Rebuild `afford/sketch-all.js` = street-sound.js + afford/sketch.js + afford/game.js.
 
+- `lived/` — "The Landlord's Game, lived" (Jack's suggestion, newest): `lived/sketch.js` = afford/sketch.js + `boardSlot(c)` (board grows 2 estate blocks per lap; inner tiers +1 per lap) and `streetLabel(ch)`; GO card removed from sketch (game shows its own). `lived/game.js`: GO/Chance HTML cards (`showMonoCard` — not `showCard`, which the sketch owns), `makeOffer` (city = always outbid, estate = buy if deposit), investor top-hat tokens (`spawnToken`, drawn in `drawDreamHouse`), `sellToInvestor` (tower + hotel in `afterLot`), mini-board SVG. Check for duplicate top-level names between sketch and game files.
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.

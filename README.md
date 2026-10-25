@@ -4,7 +4,20 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
-## The House at the End of the Street (newest)
+## The Landlord's Game, lived (newest — Jack's suggestion)
+**▶ https://hedytan.github.io/plotline_interative-media/lived/**
+
+An artwork that turns Monopoly back into what it started as: Lizzie Magie's *The Landlord's Game* (1904), a warning about landlords. You walk onto the board as a 24-year-old renter.
+
+- **The street is the board.** Every lap past GO is a year: a Monopoly-style GO card collects your salary and takes your rent and living costs, then a Chance or Community Chest card (*Bank error in your landlord's favour*).
+- **Satirical signs**, written from the live numbers around you: billboards (*Penthouse $4.8M. That's 243 years of your rent.*), slogans painted on walls (*Negatively geared, positively great*), FREE PARKING · $40/hr, Jail: just visiting (evicted).
+- **Make an offer (E)** at any FOR SALE plot. In the city, an investor's token (a giant top hat) hops down the road and outbids you in cash; the plot becomes an empty tower with a red hotel on top. Investors also buy plots ahead of you on their own.
+- **The board grows (urban sprawl).** Every year two new estates are added past the most expensive district and the inner streets go up a grade. The mini-board in the corner shows the loop getting longer. The only homes you can afford are on the newest, furthest estates.
+- **Endings:** you buy *the last square on the board*, or you turn 30 still renting.
+
+Files: `lived/index.html`, `lived/sketch.js` (2D engine with hooks `boardSlot`, `streetLabel`, `introCam`, `drawDreamHouse`, `afterLot`), `lived/game.js`, `lived/sketch-all.js` (paste into the p5 Web Editor).
+
+## The House at the End of the Street
 **▶ https://hedytan.github.io/plotline_interative-media/afford/**
 
 **Who it's for:** young renters in Sydney. **What it says:** homes aren't missing, they're out of reach, and many of them are empty.
