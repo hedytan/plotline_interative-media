@@ -4,7 +4,20 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
-## The Landlord's Game, lived (newest — Jack's suggestion)
+## Monopoly, lived (newest)
+**▶ https://hedytan.github.io/plotline_interative-media/landlord/**
+
+Jack's suggestion, taken literally: Monopoly as a lived experience. You play to win as the investor (the top hat), with $3M. The goal is Monopoly's goal: **own the street** (8 properties).
+
+- Walk the board (8 blocks, Rusty Row to Pinnacle Heights, then GO). Follow the pink arrow to a FOR SALE sign; it says how many households live there. Press **E** to buy.
+- When you buy, the people who lived there pick up their boxes and walk away, the building turns grey, a red Monopoly hotel goes up on the roof and the wall says OWNED BY YOU · VACANT. The board keeps the same layout every lap, so what you own is still there next time round.
+- Every lap past GO your properties gain value and the bank lends you more. Billboards stop selling to you and start congratulating you (*Landlord of the Year: YOU*, *Fewer neighbours. More equity.*).
+- The HUD counts two things side by side: your net worth, and households moved out.
+- You win, and everyone left on the street is priced out too: *Nobody lives on your street now. Monopoly began in 1904 as The Landlord's Game, made to show this ending.*
+
+Files: `landlord/index.html`, `landlord/trees.js`, `landlord/sketch.js`, `landlord/game.js`, `landlord/sketch-all.js` (paste into the p5 Web Editor).
+
+## The Landlord's Game, lived (renter version)
 **▶ https://hedytan.github.io/plotline_interative-media/lived/**
 
 An artwork that turns Monopoly back into what it started as: Lizzie Magie's *The Landlord's Game* (1904), a warning about landlords. You walk onto the board as a 24-year-old renter.
