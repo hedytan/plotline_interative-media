@@ -100,8 +100,6 @@ function plotsForChunk(ch, r) {
     }
     // Once enough of the street has talked back, a community land trust sells homes at cost.
     if (rewrites.length >= TRUST_AT && r() < 0.8) { const cand = ch.lots.filter(L => !L.special && !L.forSale); if (cand.length) { makeTrust(pickN(r, cand)); } }
-    // Jail sits in the block after GO: just visiting.
-    if (ch.slot === 1) { const i = ch.lots.findIndex(L => L.side === 1); if (i >= 0) { const o = ch.lots[i]; ch.lots[i] = makeLot('jail', ch.tier, 1, o.z0, Math.min(20, ch.z0 + CHUNK_LEN - 1 - o.z0), r); } }
   }
   for (const L of ch.lots) { if (!L.special && !L.forSale && r() < 0.45) { L.wall = pickN(r, walls); L.band = pickN(r, BANDS); } }
   for (let i = 0; i < 2; i++) {

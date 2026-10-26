@@ -590,11 +590,25 @@ function drawLamp(q, p) {
   if (glow || night > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(lx, ly - 0.2 * k, 0, lx, ly - 0.2 * k, 1.4 * k); g.addColorStop(0, `rgba(255,210,130,${0.35 * lit})`); g.addColorStop(1, 'rgba(255,210,130,0)'); ctx.fillStyle = g; ctx.fillRect(lx - 1.4 * k, ly - 1.6 * k, 2.8 * k, 2.8 * k); ctx.restore(); }
 }
 function drawBanner(q, p) { const k = q.k; ctx.fillStyle = toneN(p.color, p.z); ctx.fillRect(q.x + (p.x > 0 ? -0.75 : 0.07) * k, q.y - 3.6 * k, 0.68 * k, 1.3 * k); ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(q.x + (p.x > 0 ? -0.6 : 0.2) * k, q.y - 3.2 * k, 0.4 * k, 0.08 * k); }
+// A haze-coloured silhouette of a tree sprite, laid over it in the distance.
+const hazeCache = new Map();
+function hazeSprite(img) {
+  if (hazeCache.has(img)) { return hazeCache.get(img); }
+  const src = img.canvas || img.elt, cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+  const c = cv.getContext('2d'); c.drawImage(src, 0, 0); c.globalCompositeOperation = 'source-in'; c.fillStyle = '#e8f1ff'; c.fillRect(0, 0, cv.width, cv.height);
+  hazeCache.set(img, cv); return cv;
+}
 function drawTree(q, p) {
   // Hand-painted p5.brush trees when available (painted once at start-up, see brushtrees.js).
   if (typeof brushTrees !== 'undefined' && brushTrees && brushTrees.length) {
-    const img = brushTrees[Math.floor(p.tone * 997) % brushTrees.length], hpx = p.h * 1.25 * q.k, wpx = hpx * BT_W / BT_H;
-    ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.75; ctx.drawImage(img.canvas || img.elt, q.x - wpx / 2, q.y - hpx * 0.98, wpx, hpx); ctx.restore();
+    const img = brushTrees[Math.floor(p.tone * 997) % brushTrees.length], hpx = p.h * 1.35 * q.k, wpx = hpx * BT_W / BT_H, fog = fogFor(p.z);
+    ctx.save();
+    // Soft shadow on the pavement, cast away from the sun at the end of the street.
+    ctx.fillStyle = `rgba(40,40,70,${0.12 * (1 - fog)})`; ctx.beginPath(); ctx.ellipse(q.x, q.y + 0.2 * q.k, wpx * 0.2, 0.35 * q.k, 0, 0, TWO_PI); ctx.fill();
+    ctx.globalAlpha = 1; ctx.drawImage(img.canvas || img.elt, q.x - wpx / 2, q.y - hpx, wpx, hpx);
+    // The same haze as the buildings, so trees sit in the scene instead of on top of it.
+    ctx.restore();
+    if (fog > 0.02) { ctx.save(); ctx.globalAlpha = fog * 0.85; ctx.drawImage(hazeSprite(img), q.x - wpx / 2, q.y - hpx, wpx, hpx); ctx.restore(); }
     return;
   }
   const k = q.k, h = p.h;

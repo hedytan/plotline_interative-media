@@ -17,7 +17,7 @@ An artwork that turns Monopoly back into what it started as: Lizzie Magie's *The
 - **First-time hints** explain each rule the first time you meet it, and the first time you're outbid the walk stops so you can watch the token take it. A lap is about 40 seconds.
 - **Endings:** a land-trust home in the city (*You changed the rules*), *the last square on the board* (a far estate), or 30 and still renting. The ending lists every sign you rewrote.
 
-- **Hand-painted trees** with [p5.brush](https://github.com/acamposuribe/p5.brush) (v1.1.4, in `vendor/`): six watercolour trees are painted at start-up into a WEBGL buffer (watercolour canopy with bleed, charcoal trunk, pencil leaves), the white paper is lifted off into transparency, and the 2D street draws them as sprites. Without p5.brush (or on p5 2.x) it falls back to the plain trees.
+- **Painted trees** (`lived/brushtrees.js`): each tree is grown once from a seed (a trunk that splits into tapering, slightly crooked branches) and covered in hundreds of small leaf dabs shaded by where they sit in the crown (lit on the sun side, cool in the shade, sky gaps). They are kept as sprites, cast a soft shadow, and fade into the same haze as the buildings. Six kinds, including a pink jacaranda.
 
 Files: `lived/index.html`, `lived/sketch.js` (+ `lived/brushtrees.js`) (2D engine with hooks `boardSlot`, `streetLabel`, `introCam`, `drawDreamHouse`, `afterLot`), `lived/game.js`, `lived/sketch-all.js` (paste into the p5 Web Editor).
 
