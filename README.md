@@ -17,7 +17,9 @@ An artwork that turns Monopoly back into what it started as: Lizzie Magie's *The
 - **First-time hints** explain each rule the first time you meet it, and the first time you're outbid the walk stops so you can watch the token take it. A lap is about 40 seconds.
 - **Endings:** a land-trust home in the city (*You changed the rules*), *the last square on the board* (a far estate), or 30 and still renting. The ending lists every sign you rewrote.
 
-Files: `lived/index.html`, `lived/sketch.js` (2D engine with hooks `boardSlot`, `streetLabel`, `introCam`, `drawDreamHouse`, `afterLot`), `lived/game.js`, `lived/sketch-all.js` (paste into the p5 Web Editor).
+- **Hand-painted trees** with [p5.brush](https://github.com/acamposuribe/p5.brush) (v1.1.4, in `vendor/`): six watercolour trees are painted at start-up into a WEBGL buffer (watercolour canopy with bleed, charcoal trunk, pencil leaves), the white paper is lifted off into transparency, and the 2D street draws them as sprites. Without p5.brush (or on p5 2.x) it falls back to the plain trees.
+
+Files: `lived/index.html`, `lived/sketch.js` (+ `lived/brushtrees.js`) (2D engine with hooks `boardSlot`, `streetLabel`, `introCam`, `drawDreamHouse`, `afterLot`), `lived/game.js`, `lived/sketch-all.js` (paste into the p5 Web Editor).
 
 ## The House at the End of the Street
 **▶ https://hedytan.github.io/plotline_interative-media/afford/**

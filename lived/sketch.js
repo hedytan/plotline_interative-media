@@ -57,6 +57,7 @@ function setup() {
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
   grain.updatePixels(); buildSkyline();
+  if (typeof makeBrushTrees === 'function') { makeBrushTrees(); }
 }
 function buildSkyline() {
   const r = rngN(seed + 99); skyline = [];
@@ -590,6 +591,12 @@ function drawLamp(q, p) {
 }
 function drawBanner(q, p) { const k = q.k; ctx.fillStyle = toneN(p.color, p.z); ctx.fillRect(q.x + (p.x > 0 ? -0.75 : 0.07) * k, q.y - 3.6 * k, 0.68 * k, 1.3 * k); ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(q.x + (p.x > 0 ? -0.6 : 0.2) * k, q.y - 3.2 * k, 0.4 * k, 0.08 * k); }
 function drawTree(q, p) {
+  // Hand-painted p5.brush trees when available (painted once at start-up, see brushtrees.js).
+  if (typeof brushTrees !== 'undefined' && brushTrees && brushTrees.length) {
+    const img = brushTrees[Math.floor(p.tone * 997) % brushTrees.length], hpx = p.h * 1.25 * q.k, wpx = hpx * BT_W / BT_H;
+    ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.75; ctx.drawImage(img.canvas || img.elt, q.x - wpx / 2, q.y - hpx * 0.98, wpx, hpx); ctx.restore();
+    return;
+  }
   const k = q.k, h = p.h;
   ctx.fillStyle = toneN('#6a4a32', p.z); ctx.fillRect(q.x - 0.12 * k, q.y - h * 0.5 * k, 0.24 * k, h * 0.5 * k);
   const r = rngN(Math.floor(p.z * 10));
