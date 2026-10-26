@@ -143,8 +143,8 @@ window.StreetSound = StreetSound;
  * tokens on the road, afterLot() paints slogans and hotels on buildings.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
-const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
-const STROLL_SPD = 3, WALK_SPD = 4.5, RUN_SPD = 9, DASH_SPD = 11;   // metres per second
+const CHUNK_LEN = 38, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
+const STROLL_SPD = 4, WALK_SPD = 6.5, RUN_SPD = 11, DASH_SPD = 13;   // metres per second
 const TIER_OF = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
 const BOARD_COL = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '#f28c28', red: '#e23b3b', yellow: '#f2d13a', green: '#1fa35b', navy: '#1f4fa8' };
 const DISTRICTS = [
@@ -295,7 +295,8 @@ function draw() {
   if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
   bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
-  lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
+  // The mouse aims the spray can; looking around is done by lived/game.js (arrow keys or screen edges).
+  lookYaw = lerp(lookYaw, lookAim + mx * 0, 0.08);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
@@ -800,6 +801,9 @@ function windowResized() { resizeCanvas(windowWidth, windowHeight); }
  *    you, and the plot becomes an empty tower with a hotel on top.
  *  - Every lap the board grows: investors upgrade the inner streets and two new estates are added
  *    at the far end. The only homes you can afford are on the newest, furthest streets.
+ *  - You can't outbid them, but you can talk back: hold the mouse on a sign to spray your own words
+ *    over it. Every sign you rewrite slows rent rises and brings people out; enough of them and the
+ *    rules change: a community land trust starts selling homes at cost, in the city.
  * The walk ends when you buy, or at 30.
  */
 const START_AGE = 24, END_AGE = 30, START_SAVINGS = 22000, WAGES = 52000, LIVING = 24000, RENT_START = 380;
@@ -832,7 +836,7 @@ const BANDS = [['#c0392b', '#ffffff'], ['#1f2a44', '#f4d58d'], ['#f4d58d', '#2a2
 let plotTarget = null, turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, nameBox = null, ending = false, intro = true, ownedFromC = Infinity;
 const HIDE_DISTRICT_CARD = true;
 // The game.
-let lap = 0, savings = START_SAVINGS, rentWeek = RENT_START, rentPaid = 0, market = 1, outbid = 0, soldAhead = 0, home = null, tokens = [], offer = null;
+let lap = 0, rentRise = 0.06, rewrites = [], paint = 0, spraying = false, aimSign = null, lookAim = 0, mouseXY = [0, 0], hiss = null, hinted = {}, holdUntil = 0, savings = START_SAVINGS, rentWeek = RENT_START, rentPaid = 0, market = 1, outbid = 0, soldAhead = 0, home = null, tokens = [], offer = null;
 let opening = { t0: null, built: false, sparkle: false, done: false }, ui = {};
 const texCache = new Map();
 
@@ -842,13 +846,13 @@ const ageNow = () => START_AGE + lap;
 const commuteText = m => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}`);
 
 /* ---------- the board grows every lap ---------- */
-const lapLen = L => 6 + 2 * (L + 1);   // 6 city blocks, then the estates, two more each year
+const lapLen = L => 6 + 2 * L;   // 6 city blocks, then the estates: two more every year
 function boardSlot(c) {
-  if (c < 0) { return { lap: 0, slot: 7, tier: 1, estate: true, estateLap: 0 }; }
+  if (c < 0) { return { lap: 0, slot: 5, tier: 4, estate: false, estateLap: -1 }; }
   let L = 0, s = c; while (s >= lapLen(L)) { s -= lapLen(L); L++; }
   if (s < 6) { return { lap: L, slot: s, tier: Math.min(4, BASE_TIER[s] + L), estate: false, estateLap: -1 }; }
-  const p = Math.floor((s - 6) / 2);   // which year this estate was added
-  return { lap: L, slot: s, tier: Math.min(3, 1 + Math.max(0, L - p - 1)), estate: true, estateLap: p };
+  const p = Math.floor((s - 6) / 2) + 1;   // the year this estate was added
+  return { lap: L, slot: s, tier: Math.min(3, 1 + Math.max(0, L - p)), estate: true, estateLap: p };
 }
 function chunkTier(slot) { return 0; }
 function streetLabel(ch) {
@@ -856,8 +860,9 @@ function streetLabel(ch) {
   if (ch.estate) { return ch.estateLap === ch.lap ? 'NEW ESTATE' : 'OLD ESTATE'; }
   return DISTRICTS[ch.tier].name.toUpperCase();
 }
-function estateCommute(p) { return 55 + 25 * p; }
+function estateCommute(p) { return 55 + 25 * Math.max(0, p - 1); }
 function priceOf(L) {
+  if (L.trust) { return 480000 * Math.pow(1.03, lap) * L.priceK; }
   if (L.estateLap !== undefined && L.estateLap >= 0) { return EST_PRICE * Math.pow(0.88, L.estateLap) * market * L.priceK; }
   return BASE_PRICE[L.tier] * market * L.priceK;
 }
@@ -887,6 +892,8 @@ function plotsForChunk(ch, r) {
       const cand = ch.lots.filter(L => !L.special && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
       if (cand.length) { const L = cand[Math.floor(r() * cand.length)]; Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: r() < 0.45 ? mixN(24, 45, r()) : -1 }); }
     }
+    // Once enough of the street has talked back, a community land trust sells homes at cost.
+    if (rewrites.length >= TRUST_AT && r() < 0.8) { const cand = ch.lots.filter(L => !L.special && !L.forSale); if (cand.length) { makeTrust(pickN(r, cand)); } }
     // Jail sits in the block after GO: just visiting.
     if (ch.slot === 1) { const i = ch.lots.findIndex(L => L.side === 1); if (i >= 0) { const o = ch.lots[i]; ch.lots[i] = makeLot('jail', ch.tier, 1, o.z0, Math.min(20, ch.z0 + CHUNK_LEN - 1 - o.z0), r); } }
   }
@@ -894,9 +901,9 @@ function plotsForChunk(ch, r) {
   for (let i = 0; i < 2; i++) {
     if (r() < 0.2) { continue; }
     const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
-    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, text: fillSign(pickN(r, pool), ch), col: ch.estate ? '#b9a27a' : DISTRICTS[ch.tier].stripe[0] });
+    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, text: fillSign(pickN(r, pool), ch), col: ch.estate ? '#b9a27a' : DISTRICTS[ch.tier].stripe[0], splats: [], cells: new Set() });
   }
-  if (ch.slot > 0 && r() < 0.35) { ch.props.push({ kind: 'billboard', x: (r() < 0.5 ? -1 : 1) * (ROAD_W + 1.4), z: ch.z0 + CROSS_W - 1, side: 1, text: 'FREE PARKING · $40/hr', col: '#e23b3b' }); }
+  if (ch.slot > 0 && r() < 0.35) { ch.props.push({ kind: 'billboard', x: (r() < 0.5 ? -1 : 1) * (ROAD_W + 1.4), z: ch.z0 + CROSS_W - 1, side: 1, text: 'FREE PARKING · $40/hr', col: '#e23b3b', splats: [], cells: new Set() }); }
   if (!ch.estate && ch.tier <= 2 && r() < 0.5) {
     const L = ch.lots.find(l => !l.special && !l.forSale);
     if (L) { const n = 8 + Math.floor(r() * 10), zz = L.z0 + 1; ch.props.push({ kind: 'openhome', x: L.side * (EDGE_X - 0.4), z: zz, side: L.side, n }); for (let k = 0; k < n; k++) { ch.props.push({ kind: 'person', x: L.side * (EDGE_X - 1.2 - (k % 2) * 0.5), z: zz - 1.2 - k * 0.75, tone: r(), h: mixN(1.55, 1.85, r()), ph: r() * 6 }); } }
@@ -933,6 +940,25 @@ function boardUpdate(z) {
     if (T.L && !T.done && u >= 1) { T.done = true; sellToInvestor(T.L, T.name); }
     if (u > 2.2) { tokens.splice(i, 1); }
   }
+  // Looking around: arrow keys or the screen edges (the mouse is busy aiming the can).
+  if (!intro && !ending) {
+    const dt = Math.min(deltaTime / 1000, 0.05), ex = mouseXY[0] / Math.max(1, width);
+    if (held('ArrowLeft') || held('KeyA') || ex < 0.04) { lookAim -= dt * 0.9; }
+    if (held('ArrowRight') || held('KeyD') || ex > 0.96) { lookAim += dt * 0.9; }
+    lookAim = constrain(lookAim, -0.85, 0.85);
+  }
+  // Talking back: spray the sign under the mouse.
+  aimSign = intro || ending ? null : pickSign(mouseXY[0], mouseXY[1]);
+  if (spraying && aimSign && !aimSign.p.rewrite) { sprayOn(aimSign); }
+  sprayHiss(spraying && !intro && !ending);
+  for (const ch of chunks.values()) { for (const p of ch.props) { if (p.kind === 'person' && p.v) { p.z += p.v * Math.min(deltaTime / 1000, 0.05); if (p.z > p.z1 || p.z < p.z0) { p.v = -p.v; } } } }
+  moveCan();
+  // First-time hints, so the rules explain themselves.
+  if (!intro && !ending) {
+    if (!hinted.sign) { for (const ch of chunks.values()) { for (const p of ch.props) { if (p.kind === 'billboard' && p.z - z > 8 && p.z - z < 22 && !hinted.sign) { hinted.sign = true; hint('Signs talk at you. Hold the mouse on one to spray your own words over it.'); } } } }
+    if (!hinted.offer && hinted.sign && plotHere(z)) { hinted.offer = true; hint('A plot for sale. Press E to make an offer.'); }
+  }
+  if (holdUntil && clockT > holdUntil) { holdUntil = 0; nameBox = null; }
   // The plot beside you, and the title deed for it.
   plotTarget = plotHere(z);
   if (frameCount % 6 === 0) { updateHud(); }
@@ -955,7 +981,14 @@ function sellToInvestor(L, name) {
 // E: make an offer on the plot beside you.
 function makeOffer() {
   const L = plotHere(distanceWalked); if (!L) { toast('Nothing for sale here. Walk on.'); return; }
-  const price = priceOf(L), dep = price * DEPOSIT, estate = L.estateLap !== undefined && L.estateLap >= 0;
+  const price = priceOf(L), dep = price * (L.trust ? 0.05 : DEPOSIT), estate = L.estateLap !== undefined && L.estateLap >= 0;
+  if (L.trust) {
+    if (savings < dep) { toast(`The trust asks a 5% deposit: ${moneyK(dep)}. You have ${moneyK(savings)}. One more year.`); return; }
+    savings -= dep; home = { price, t: clockT, lap, commute: 15 + L.tier * 3, trust: true };
+    Object.assign(L, { forSale: false, mine: true }); sound.cash(true); setTimeout(() => sound.go(), 300);
+    showMonoCard('SOLD — AT COST', `A community land trust home in ${DISTRICTS[L.tier].name}, ${moneyK(price)}.`, 'Nobody can flip it. It stays affordable for whoever comes next.', '#2f9a5a');
+    return;
+  }
   if (estate && savings >= dep) {
     savings -= dep; home = { price, t: clockT, lap, commute: estateCommute(L.estateLap), estateLap: L.estateLap };
     Object.assign(L, { forSale: false, mine: true }); sound.cash(true); setTimeout(() => sound.go(), 300);
@@ -966,6 +999,7 @@ function makeOffer() {
   // In the city, the bid is always beaten.
   const name = pickN(Math.random, INVESTORS), beat = Math.round(price * mixN(1.08, 1.25, Math.random()));
   toast(`You offer ${moneyK(price)}…`); outbid++;
+  if (outbid === 1) { nameBox = {}; holdUntil = clockT + 2.6; }   // the first time, stop and watch it happen
   L.investorAt = -1; L.forSale = false; L.pending = true;
   spawnToken((L.z0 + L.z1) / 2 + 4, null);
   setTimeout(() => { sellToInvestor(L, name); showMonoCard('OUTBID', `${name} paid ${moneyK(beat)} in cash.`, 'It will sit empty, waiting for the price to go up.', '#c0392b'); }, 1200);
@@ -975,8 +1009,9 @@ function makeOffer() {
 function onPassGo() {
   if (ending || intro) { return; }
   lap++; const rentYear = rentWeek * 52; rentPaid += rentYear; savings += WAGES - rentYear - LIVING; market *= 1 + GROWTH;
-  showMonoCard('GO', `Collect ${money(WAGES)} salary. Pay ${money(rentYear)} rent. Pay ${money(LIVING)} to live.`, `You’re ${ageNow()}. The board grew: two new estates past ${DISTRICTS[4].name}, and the inner streets went up a grade.`, '#e23b3b');
-  rentWeek = Math.round(rentWeek * 1.06);
+  showMonoCard('GO', `Collect ${money(WAGES)} salary. Pay ${money(rentYear)} rent. Pay ${money(LIVING)} to live.`, `You’re ${ageNow()}. The board grew: +2 new estates past ${DISTRICTS[4].name}, and the inner streets went up a grade. Rent +${Math.round(rentRise * 100)}%.`, '#e23b3b');
+  rentWeek = Math.round(rentWeek * (1 + rentRise));
+  if (ui.board) { ui.board.classList.remove('flash'); void ui.board.offsetWidth; ui.board.classList.add('flash'); }
   setTimeout(() => { if (ending) { return; } const c = pickN(Math.random, CHANCE); c[3](); showMonoCard(c[0], c[1], c[2], c[0] === 'CHANCE' ? '#f28c28' : '#3f8fd6'); updateHud(); }, 4200);
   if (ageNow() >= END_AGE && !home) { setTimeout(() => showEnding(false), 2600); }
   updateHud();
@@ -993,12 +1028,12 @@ function drawForSale(L) {
   ctx.fillStyle = '#5a4030'; ctx.fillRect(base.x - 0.07 * k, top, 0.14 * k, 3 * k);
   ctx.fillStyle = '#fffaee'; ctx.strokeStyle = near ? '#ff4f9a' : '#2a1e18'; ctx.lineWidth = Math.max(1, (near ? 0.14 : 0.06) * k);
   ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
-  ctx.fillStyle = '#c8322a'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.34);
+  ctx.fillStyle = L.trust ? '#2f9a5a' : '#c8322a'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.34);
   if (w > 26) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('FOR SALE', base.x, top - h * 0.2 + h * 0.17);
+    ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText(L.trust ? 'LAND TRUST · AT COST' : 'FOR SALE', base.x, top - h * 0.2 + h * 0.17);
     ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
-    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(`deposit ${moneyK(priceOf(L) * DEPOSIT)}`, base.x, top - h * 0.2 + h * 0.8);
+    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(`deposit ${moneyK(priceOf(L) * (L.trust ? 0.05 : DEPOSIT))}`, base.x, top - h * 0.2 + h * 0.8);
   }
   ctx.restore();
 }
@@ -1052,6 +1087,28 @@ function drawBillboard(q, p) {
   ctx.fillStyle = '#fffaf0'; ctx.fillRect(x - w / 2, top - h, w, h);
   ctx.fillStyle = p.col; ctx.fillRect(x - w / 2, top - h, w, h * 0.12); ctx.fillRect(x - w / 2, top - h * 0.12, w, h * 0.12);
   ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x - w / 2, top - h, w, h);
+  p.hit = { x0: x - w / 2, y0: top - h, x1: x + w / 2, y1: top, rz: q.rz, f: frameCount };
+  // Paint you have sprayed on it so far.
+  if (p.splats && p.splats.length) {
+    ctx.save(); ctx.beginPath(); ctx.rect(x - w / 2, top - h, w, h); ctx.clip();
+    for (const sp of p.splats) { ctx.fillStyle = sp.col; ctx.globalAlpha = (1 - fogFor(p.z) * 0.85) * sp.a; ctx.beginPath(); ctx.arc(x - w / 2 + sp.u * w, top - h + sp.v * h, Math.max(0.6, sp.r * w), 0, TWO_PI); ctx.fill(); }
+    ctx.restore();
+  }
+  if (p.rewrite) {
+    const k2 = constrain((clockT - p.rewrite.t) / 0.9, 0, 1);
+    ctx.save(); ctx.globalAlpha = (1 - fogFor(p.z) * 0.85) * 0.7 * k2; ctx.fillStyle = '#1d1830'; ctx.fillRect(x - w / 2, top - h, w, h); ctx.restore();
+    if (w > 40) {
+      ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85; ctx.beginPath(); ctx.rect(x - w / 2, top - h - h, w * k2, h * 3); ctx.clip();
+      ctx.translate(x, top - h / 2); ctx.rotate(-0.06); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      let size = h * 0.32; ctx.font = `${size}px "Permanent Marker", Impact, sans-serif`;
+      const words = p.rewrite.text.split(' '), lines = []; let line = '';
+      for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.9 && line) { lines.push(line); line = wd; } else { line = t; } }
+      lines.push(line);
+      lines.forEach((ln, i) => { const yy = (i - (lines.length - 1) / 2) * size * 1.05; ctx.lineWidth = size * 0.14; ctx.strokeStyle = '#1d1830'; ctx.strokeText(ln, 0, yy); ctx.fillStyle = p.rewrite.col; ctx.fillText(ln, 0, yy); });
+      ctx.restore();
+    }
+    ctx.restore(); return;
+  }
   if (w > 50) {
     ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const size = Math.max(7, h * 0.16); ctx.font = `bold ${size}px Fraunces, Georgia, serif`;
@@ -1110,13 +1167,85 @@ function drawDreamHouse(z) {
   }
 }
 
+/* ---------- talking back: spray over the signs ---------- */
+const TRUST_AT = 4;
+const PAINTS = ['#ff4f9a', '#ffd23f', '#2fd3a0', '#3d8bff'];
+const REPLIES = ['HOMES, NOT ASSETS', 'WHO IS THIS CITY FOR?', 'WE’RE NOT LEAVING', 'HOUSING IS A RIGHT', 'TAX EMPTY HOMES', 'PUBLIC HOUSING NOT PENTHOUSES', 'THE BOARD IS RIGGED', 'RENT IS NOT A YIELD'];
+function pickSign(x, y) {
+  let best = null;
+  for (const ch of chunks.values()) {
+    for (const p of ch.props) {
+      if (p.kind !== 'billboard' || !p.hit || p.hit.f < frameCount - 2 || !p.splats) { continue; }
+      const h = p.hit; if (x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1 && h.rz < 45 && (!best || h.rz < best.rz)) { best = { p, ch, u: (x - h.x0) / (h.x1 - h.x0), v: (y - h.y0) / (h.y1 - h.y0), rz: h.rz }; }
+    }
+  }
+  return best;
+}
+function sprayOn(hit) {
+  const p = hit.p, col = PAINTS[paint];
+  for (let i = 0; i < 6; i++) { const a = Math.random() * TWO_PI, d = Math.pow(Math.random(), 0.7) * 0.09; p.splats.push({ u: hit.u + Math.cos(a) * d, v: hit.v + Math.sin(a) * d * 2, r: 0.004 + Math.random() * 0.012, col, a: 0.75 + Math.random() * 0.25 }); }
+  if (p.splats.length > 900) { p.splats.splice(0, 6); }
+  for (let gx = Math.floor((hit.u - 0.09) * 8); gx <= Math.floor((hit.u + 0.09) * 8); gx++) { for (let gy = Math.floor((hit.v - 0.18) * 4); gy <= Math.floor((hit.v + 0.18) * 4); gy++) { if (gx >= 0 && gx < 8 && gy >= 0 && gy < 4) { p.cells.add(gx + gy * 8); } } }
+  p.progress = p.cells.size / 32;
+  if (p.progress >= 0.55) { rewriteSign(hit); }
+}
+function rewriteSign(hit) {
+  const p = hit.p, ch = hit.ch, r = rngN(Math.floor(p.z * 13));
+  p.rewrite = { text: REPLIES[rewrites.length % REPLIES.length], col: PAINTS[paint], t: clockT };
+  rewrites.push({ was: p.text, now: p.rewrite.text, col: p.rewrite.col });
+  rentRise = Math.max(0.01, 0.06 - rewrites.length * 0.01);
+  // Investors on this block back off, and people come out onto the street.
+  for (const L of ch.lots) { if (L.investorAt > 0) { L.investorAt = -1; } }
+  for (let i = 0; i < 7; i++) { ch.props.push({ kind: 'person', x: (r() < 0.5 ? -1 : 1) * mixN(ROAD_W + 1, EDGE_X - 0.8, r()), z: mixN(ch.z0 + CROSS_W, ch.z0 + CHUNK_LEN, r()), z0: ch.z0 + CROSS_W, z1: ch.z0 + CHUNK_LEN, v: (r() < 0.5 ? -1 : 1) * mixN(0.5, 1.2, r()), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, born: clockT + 0.3 + r() }); }
+  sound.cash(true); setTimeout(() => sound.go(), 200);
+  if (rewrites.length === TRUST_AT) {
+    showMonoCard('THE RULES CHANGE', 'Enough of the street talked back.', 'A community land trust now sells homes at cost, in the city. Look for the green signs.', '#2f9a5a');
+    for (const c2 of chunks.values()) { if (c2.estate || c2.z0 < distanceWalked + 20) { continue; } const cand = c2.lots.filter(L => !L.special && !L.forSale && !L.born); if (cand.length) { makeTrust(cand[0]); break; } }
+  } else {
+    toast(`You talked back. Rent rises slow to ${Math.round(rentRise * 100)}% a year. ${rewrites.length < TRUST_AT ? `${TRUST_AT - rewrites.length} more and the rules change.` : ''}`);
+  }
+  updateHud();
+}
+function makeTrust(L) { Object.assign(L, { forSale: true, trust: true, priceK: mixN(0.95, 1.05, Math.random()), setback: 0, investorAt: -1 }); }
+function sprayHiss(on) {
+  if (!sound || !sound.context || !sound.master) { return; }
+  if (!hiss) {
+    const ac = sound.context, buf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) { d[i] = Math.random() * 2 - 1; }
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; src.loop = true; f.type = 'bandpass'; f.frequency.value = 5200; f.Q.value = 0.7; g.gain.value = 0;
+    src.connect(f); f.connect(g); g.connect(sound.master); src.start(); hiss = { g, ac };
+  }
+  hiss.g.gain.setTargetAtTime(on ? 0.14 : 0, hiss.ac.currentTime, on ? 0.02 : 0.05);
+}
+function moveCan() {
+  if (!ui.x) { return; }
+  const r = canvasNode.getBoundingClientRect(), x = mouseXY[0] + r.left, y = mouseXY[1] + r.top, show = !intro && !ending, hot = aimSign && !aimSign.p.rewrite, col = PAINTS[paint];
+  ui.x.style.display = ui.can.style.display = show ? 'block' : 'none';
+  ui.x.style.left = x + 'px'; ui.x.style.top = y + 'px'; ui.x.classList.toggle('hot', !!hot); ui.x.style.borderColor = hot ? col : '#2a1e18';
+  ui.x.querySelector('i').style.cssText = `--c:${col};--p:${hot ? Math.min(100, (aimSign.p.progress || 0) / 0.55 * 100) : 0}`;
+  ui.mist.style.left = x + 'px'; ui.mist.style.top = y + 'px'; ui.mist.style.background = `radial-gradient(circle, ${col}cc 0%, ${col}55 35%, transparent 70%)`;
+  ui.mist.style.opacity = spraying && show ? 0.5 + Math.random() * 0.3 : 0;
+  ui.can.style.setProperty('--paint', col);
+  ui.can.style.transform = `translate(${(x - window.innerWidth * 0.8) * 0.06 + (spraying ? (Math.random() - 0.5) * 3 : 0)}px, ${spraying ? -8 : 0}px) rotate(${constrain(Math.atan2(y - window.innerHeight, x - window.innerWidth * 0.9) + HALF_PI, -0.9, 0.5)}rad)`;
+}
+function hint(text) { toast(text); }
+
 /* ---------- HUD (HTML) ---------- */
 function drawBoardHud() { if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,248,240,${fadeA})`; ctx.fillRect(0, 0, width, height); } }
 function buildUI() {
   const css = document.createElement('style');
-  css.textContent = `@import url('https://fonts.googleapis.com/css2?family=Anton&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Nunito:wght@500;700;800&display=swap');
+  css.textContent = `@import url('https://fonts.googleapis.com/css2?family=Anton&family=Permanent+Marker&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Nunito:wght@500;700;800&display=swap');
   .pl{position:fixed;font-family:Nunito,system-ui,sans-serif;color:#2a1e18;z-index:5;user-select:none}
   .pl-hide{opacity:0;pointer-events:none}
+  canvas{cursor:none}
+  .pl-x{width:44px;height:44px;margin:-22px 0 0 -22px;pointer-events:none;border-radius:50%;border:2.5px dashed #2a1e18;transition:border-color .15s,transform .15s;z-index:8}
+  .pl-x.hot{border-style:solid;transform:scale(1.15)}.pl-x b{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#2a1e18}
+  .pl-x i{position:absolute;inset:-9px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),transparent 0);-webkit-mask:radial-gradient(circle,transparent 27px,#000 28px);mask:radial-gradient(circle,transparent 27px,#000 28px)}
+  .pl-mist{width:110px;height:110px;margin:-55px 0 0 -55px;pointer-events:none;border-radius:50%;opacity:0;transition:opacity .08s;filter:blur(6px);z-index:7}
+  .pl-can{right:3vw;bottom:-50px;width:120px;pointer-events:none;transform-origin:50% 100%;transition:transform .08s;z-index:6}
+  .pl-board.flash{animation:plFlash 1.4s ease-out 2}@keyframes plFlash{0%{transform:scale(1)}30%{transform:scale(1.12);box-shadow:0 0 0 6px #ffd23f}100%{transform:scale(1)}}
+  .pl-sw{display:flex;gap:6px;margin-top:8px}.pl-sw span{width:20px;height:20px;border-radius:50%;border:2px solid #2a1e18;cursor:pointer}.pl-sw span.on{box-shadow:0 0 0 2px #fffaee,0 0 0 4px #2a1e18}
   .pl-panel{top:16px;left:16px;background:#fffaee;border-radius:10px;padding:12px 16px;box-shadow:0 5px 0 rgba(42,30,24,.25);width:240px;border:2px solid #2a1e18;transition:opacity .6s}
   .pl-panel h4{margin:0 0 4px;font:800 11px Nunito;letter-spacing:.14em;color:#8a6a5a}
   .pl-row{display:flex;justify-content:space-between;font-weight:700;font-size:14px;margin:3px 0}
@@ -1144,17 +1273,23 @@ function buildUI() {
   .pl-sheet .band{margin:-22px -28px 14px;background:#c8322a;color:#fff;font:400 22px Anton,Impact,sans-serif;letter-spacing:.08em;padding:10px;border-radius:10px 10px 0 0}
   .pl-sheet h1{font:800 30px Fraunces,Georgia,serif;margin:0 0 6px}
   .pl-sheet p{font-size:16px;line-height:1.5;margin:6px 0}.pl-sheet button{margin-top:12px;font:800 16px Nunito;background:#c8322a;color:#fff;border:2px solid #2a1e18;border-radius:30px;padding:10px 22px;box-shadow:0 4px 0 #2a1e18;cursor:pointer}
-  .pl-sheet .tip{font-style:italic;color:#5d4a40}.pl-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}.pl-stats div{background:#f3ece0;border-radius:8px;padding:8px;font-size:12px}.pl-stats b{display:block;font:800 20px Fraunces,Georgia,serif}`;
+  .pl-sheet .tip{font-style:italic;color:#5d4a40}.pl-wall{display:flex;flex-direction:column;gap:5px;margin:8px 0;max-height:24vh;overflow:auto}.pl-wall div{font-size:12px;text-align:left;background:#1f2a44;color:#f4d58d;border-radius:6px;padding:5px 9px}.pl-wall b{display:block;font:400 17px 'Permanent Marker',Impact,sans-serif}.pl-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}.pl-stats div{background:#f3ece0;border-radius:8px;padding:8px;font-size:12px}.pl-stats b{display:block;font:800 20px Fraunces,Georgia,serif}`;
   document.head.appendChild(css);
   const el = (cls, html) => { const d = document.createElement('div'); d.className = 'pl ' + cls; d.innerHTML = html; document.body.appendChild(d); return d; };
   ui.panel = el('pl-panel pl-hide', ''); ui.board = el('pl-board pl-hide', ''); ui.deed = el('pl-deed pl-hide', '');
-  ui.help = el('pl-help pl-hide', 'W / ↑ walk · Shift hurry · E make an offer on a FOR SALE plot · every lap past GO is a year');
+  ui.help = el('pl-help pl-hide', 'W / ↑ walk · Shift hurry · E make an offer · hold the mouse on a sign to spray over it · 1–4 paint · ← → look');
   ui.toast = el('pl-toast', ''); ui.card = el('pl-card', '');
+  ui.mist = el('pl-mist', ''); ui.x = el('pl-x', '<i></i><b></b>'); ui.x.style.display = 'none';
+  ui.can = el('pl-can', `<svg viewBox="0 0 120 220" width="120"><g stroke="#2a1e18" stroke-width="4" stroke-linejoin="round"><rect x="50" y="8" width="20" height="16" rx="3" fill="#fffaee"/><rect x="44" y="22" width="32" height="18" rx="6" fill="#b9b4c8"/><rect x="22" y="38" width="76" height="176" rx="22" fill="var(--paint,#ff4f9a)"/><rect x="22" y="92" width="76" height="62" fill="#fffaee"/></g><rect x="30" y="50" width="10" height="150" rx="5" fill="#fff" opacity=".35"/></svg>`); ui.can.style.display = 'none';
+  document.addEventListener('pointermove', e => { const r = canvasNode.getBoundingClientRect(); mouseXY = [e.clientX - r.left, e.clientY - r.top]; });
+  document.addEventListener('pointerup', () => { spraying = false; });
+  window.addEventListener('keyup', e => { if (e.code === 'Space') { spraying = false; } });
+  window.addEventListener('blur', () => { spraying = false; });
   ui.black = el('pl-black', '<h1>PLOTLINE</h1><p>a walk through the Landlord’s Game</p>');
   ui.intro = el('pl-over', `<div class="pl-sheet"><div class="band">THE LANDLORD’S GAME · 1904</div>
     <h1>Monopoly started as a warning.</h1>
     <p>Lizzie Magie made it to show how landlords get richer while tenants pay. You’re 24, renting a room for $${RENT_START} a week, with $22,000 saved. Now you’re on the board.</p>
-    <p><b>Walk</b>: every lap past GO is a year. <b>Read the signs.</b> At a <b>FOR SALE</b> plot, press <b>E</b> to make an offer.</p>
+    <p><b>Walk</b>: every lap past GO is a year. At a <b>FOR SALE</b> plot, press <b>E</b> to make an offer.</p><p>You can’t outbid them. But you can <b>talk back</b>: hold the mouse on a sign to spray over it.</p>
     <button>Start walking</button></div>`);
   ui.intro.querySelector('button').addEventListener('click', e => { e.stopPropagation(); startWalk(); });
   ui.end = el('pl-over mid', '');
@@ -1189,14 +1324,17 @@ function updateHud() {
   ui.panel.innerHTML = `<h4>YOU · RENTING</h4><div class="pl-big">${ageNow()} <span class="pl-small">years old</span></div>
     <div class="pl-row"><span>Savings</span><span>${money(savings)}</span></div>
     <div class="pl-row"><span>Rent</span><span>${money(rentWeek)}/wk</span></div>
-    <div class="pl-small">Rent paid so far ${moneyK(rentPaid)} · outbid ${outbid}×</div>`;
+    <div class="pl-small">Rent paid so far ${moneyK(rentPaid)} · outbid ${outbid}×</div>
+    <div class="pl-row"><span>Signs rewritten</span><span>${rewrites.length}${rewrites.length < TRUST_AT ? ' / ' + TRUST_AT : ' ✓'}</span></div>
+    <div class="pl-sw">${PAINTS.map((c, i) => `<span data-i="${i}" class="${i === paint ? 'on' : ''}" style="background:${c}"></span>`).join('')}</div>`;
+  ui.panel.querySelectorAll('.pl-sw span').forEach(d => d.addEventListener('pointerdown', e => { e.stopPropagation(); paint = +d.dataset.i; updateHud(); }));
   ui.board.innerHTML = boardSvg();
   const L = plotTarget;
   if (L && !ending) {
-    const price = priceOf(L), dep = price * DEPOSIT, estate = L.estateLap !== undefined && L.estateLap >= 0, col = estate ? '#b9a27a' : DISTRICTS[L.tier].stripe[0];
-    const name = estate ? (L.estateLap === lap ? 'New Estate' : 'Old Estate') : DISTRICTS[L.tier].name, commute = estate ? estateCommute(L.estateLap) : 15 + L.tier * 3;
+    const price = priceOf(L), dep = price * (L.trust ? 0.05 : DEPOSIT), estate = L.estateLap !== undefined && L.estateLap >= 0, col = L.trust ? '#2f9a5a' : estate ? '#b9a27a' : DISTRICTS[L.tier].stripe[0];
+    const name = L.trust ? 'Community Land Trust' : estate ? (L.estateLap === lap ? 'New Estate' : 'Old Estate') : DISTRICTS[L.tier].name, commute = estate ? estateCommute(L.estateLap) : 15 + L.tier * 3;
     ui.deed.innerHTML = `<div class="hd" style="background:${col}">TITLE DEED · FOR SALE<b>${name}</b></div>
-      <div class="r"><span>Price</span><span>${moneyK(price)}</span></div><div class="r"><span>Deposit (10%)</span><span>${moneyK(dep)}</span></div>
+      <div class="r"><span>Price</span><span>${moneyK(price)}</span></div><div class="r"><span>Deposit (${L.trust ? 5 : 10}%)</span><span>${moneyK(dep)}</span></div>
       <div class="r"><span>Commute</span><span>${commuteText(commute)}</span></div><div class="r ${savings < dep ? 'bad' : ''}"><span>Your savings</span><span>${moneyK(savings)}</span></div>
       <div class="act">E · make an offer</div>`;
     ui.deed.classList.remove('pl-hide');
@@ -1211,8 +1349,13 @@ function showMonoCard(title, line, small, col) {
 function showEnding(bought) {
   if (ending) { return; }
   ending = true; plotTarget = null; updateHud(); sound.go();
-  const stats = `<div class="pl-stats"><div><b>${moneyK(rentPaid)}</b>rent paid</div><div><b>${outbid}</b>times outbid</div><div><b>${2 * lap}</b>new streets added to the board</div></div>`;
-  ui.end.innerHTML = bought
+  const stats = `<div class="pl-stats"><div><b>${moneyK(rentPaid)}</b>rent paid</div><div><b>${outbid}</b>times outbid</div><div><b>${rewrites.length}</b>signs you rewrote</div></div>`
+    + (rewrites.length ? `<div class="pl-wall">${rewrites.map(w => `<div><s>${w.was}</s><b style="color:${w.col}">${w.now}</b></div>`).join('')}</div>` : '');
+  ui.end.innerHTML = bought && home.trust
+    ? `<div class="pl-sheet"><div class="band" style="background:#2f9a5a">YOU CHANGED THE RULES</div><h1>A home in the city, at cost.</h1>
+       <p>You’re ${START_AGE + home.lap}. You couldn’t outbid them alone. But the street talked back, and a community land trust put a home where the investors wanted a tower.</p>${stats}
+       <p class="tip">Monopoly has one rule: the richest player wins. Cities can choose other rules.</p><button>Walk again</button></div>`
+    : bought
     ? `<div class="pl-sheet"><div class="band">YOU OWN A PROPERTY</div><h1>The last square on the board.</h1>
        <p>You’re ${START_AGE + home.lap}. It cost ${moneyK(home.price)}, on ${home.estateLap === lap ? 'the newest estate' : 'an older estate'}, ${commuteText(home.commute)} from the city. The city got there first; you got the edge.</p>${stats}
        <p class="tip">In Monopoly, the board never grows. In the city, it does: outward, onto the people who can’t afford the middle.</p><button>Walk again</button></div>`
@@ -1223,7 +1366,7 @@ function showEnding(bought) {
   ui.end.classList.add('show');
 }
 function restartWalk() {
-  lap = 0; savings = START_SAVINGS; rentWeek = RENT_START; rentPaid = 0; market = 1; outbid = 0; home = null; tokens = []; ending = false;
+  lap = 0; savings = START_SAVINGS; rentWeek = RENT_START; rentPaid = 0; market = 1; outbid = 0; home = null; tokens = []; ending = false; rewrites = []; rentRise = 0.06; lookAim = 0; hinted = {}; spraying = false;
   seed += 97; chunks.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
   if (ui.end) { ui.end.classList.remove('show'); }
   startWalk();
@@ -1233,8 +1376,11 @@ function restartWalk() {
 function boardKey(e) {
   if (opening.t0 && !opening.done) { skipOpening(); return true; }
   if (intro && (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW')) { startWalk(); return true; }
-  if (e.code === 'KeyE' || e.code === 'Space') { if (!intro && !ending) { makeOffer(); } return true; }
+  const pi = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 }[e.code]; if (pi !== undefined) { paint = pi; updateHud(); return true; }
+  if (e.code === 'KeyE') { if (!intro && !ending) { makeOffer(); } return true; }
+  if (e.code === 'Space') { if (!intro && !ending) { spraying = true; } return true; }
+  if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(e.code)) { return true; }
   if (e.code === 'KeyR') { restartWalk(); return true; }
   return false;
 }
-function boardClick() { if (opening.t0 && !opening.done) { skipOpening(); return true; } return intro || ending; }
+function boardClick() { if (opening.t0 && !opening.done) { skipOpening(); return true; } if (intro || ending) { return true; } spraying = true; return true; }

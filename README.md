@@ -13,7 +13,9 @@ An artwork that turns Monopoly back into what it started as: Lizzie Magie's *The
 - **Satirical signs**, written from the live numbers around you: billboards (*Penthouse $4.8M. That's 243 years of your rent.*), slogans painted on walls (*Negatively geared, positively great*), FREE PARKING · $40/hr, Jail: just visiting (evicted).
 - **Make an offer (E)** at any FOR SALE plot. In the city, an investor's token (a giant top hat) hops down the road and outbids you in cash; the plot becomes an empty tower with a red hotel on top. Investors also buy plots ahead of you on their own.
 - **The board grows (urban sprawl).** Every year two new estates are added past the most expensive district and the inner streets go up a grade. The mini-board in the corner shows the loop getting longer. The only homes you can afford are on the newest, furthest estates.
-- **Endings:** you buy *the last square on the board*, or you turn 30 still renting.
+- **Talk back (hold the mouse on a sign).** You can't outbid them, but you can spray your own words over their signs (*Homes, not assets*, *Who is this city for?*). Every sign you rewrite slows rent rises, makes investors on that block back off, and brings people out onto the street. Rewrite four and **the rules change**: a community land trust starts selling homes at cost, in the city (green signs).
+- **First-time hints** explain each rule the first time you meet it, and the first time you're outbid the walk stops so you can watch the token take it. A lap is about 40 seconds.
+- **Endings:** a land-trust home in the city (*You changed the rules*), *the last square on the board* (a far estate), or 30 and still renting. The ending lists every sign you rewrote.
 
 Files: `lived/index.html`, `lived/sketch.js` (2D engine with hooks `boardSlot`, `streetLabel`, `introCam`, `drawDreamHouse`, `afterLot`), `lived/game.js`, `lived/sketch-all.js` (paste into the p5 Web Editor).
 

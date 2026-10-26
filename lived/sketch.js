@@ -5,8 +5,8 @@
  * tokens on the road, afterLot() paints slogans and hotels on buildings.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
-const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
-const STROLL_SPD = 3, WALK_SPD = 4.5, RUN_SPD = 9, DASH_SPD = 11;   // metres per second
+const CHUNK_LEN = 38, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
+const STROLL_SPD = 4, WALK_SPD = 6.5, RUN_SPD = 11, DASH_SPD = 13;   // metres per second
 const TIER_OF = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
 const BOARD_COL = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '#f28c28', red: '#e23b3b', yellow: '#f2d13a', green: '#1fa35b', navy: '#1f4fa8' };
 const DISTRICTS = [
@@ -157,7 +157,8 @@ function draw() {
   if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
   bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
-  lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
+  // The mouse aims the spray can; looking around is done by lived/game.js (arrow keys or screen edges).
+  lookYaw = lerp(lookYaw, lookAim + mx * 0, 0.08);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
