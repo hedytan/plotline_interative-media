@@ -4,7 +4,17 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
-## Monopoly, lived (newest)
+## The Landlord's Walk, improved (newest — Hedy's pick)
+**▶ https://hedytan.github.io/plotline_interative-media/walk/**
+
+The original Landlord's Walk (renter, 24, every lap past GO is a year, rising FOR SALE prices, investors buying plots out from under you, satirical billboards, open-home queues), made clearer and more meaningful:
+- **One goal, one next step.** A short intro (*You're 24, renting, $22k saved. Buy a home before you turn 30.*), a NEXT line at the top (*Walk to the next FOR SALE sign* / *Press E to buy it* / *Deposit $64k · you have $30k · keep walking to GO*) and a pink arrow over the next FOR SALE sign.
+- **A real choice every year.** At GO your rent goes up and the walk stops for one decision: **1 Stay** (pay the new rent, keep the short commute) or **2 Move further out** (cheaper rent and homes, longer commute). This replaces turning at corners; it is the trade-off renters actually face.
+- No casinos or jail. Painted trees.
+
+Files: `walk/index.html`, `walk/trees.js`, `walk/sketch.js`, `walk/board.js`, `walk/sketch-all.js` (paste into the p5 Web Editor).
+
+## Monopoly, lived
 **▶ https://hedytan.github.io/plotline_interative-media/landlord/**
 
 Jack's suggestion, taken literally: Monopoly as a lived experience. You play to win as the investor (the top hat), with $3M. The goal is Monopoly's goal: **own the street** (8 properties).

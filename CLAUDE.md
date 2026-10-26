@@ -26,6 +26,8 @@ walk. Current concept: "You Plan the Street" — you're the city planner; each e
 
 - `landlord/` — "Monopoly, lived" (Hedy chose this; newest): you are the investor, goal own 8 properties. `landlord/sketch.js` = lived/sketch.js with chunk rng seeded by board slot only (same street every lap), mouse look restored, `coldK = lotCold(L)` greying owned lots in `toneN`. `landlord/game.js`: fixed 8-block `boardSlot`, `owned` Map keyed `slot:side:z`, `buyHere` (residents `p.leaving` with boxes), GO = bank loan, ending empties the street. Helpers (opening, paintOnFacade, imageTri, wallTex, drawBillboard) copied from lived/game.js. Rebuild `landlord/sketch-all.js` = street-sound + trees + sketch + game.
 
+- `walk/` — The Landlord's Walk restored from commit 5a36bfa and improved (Hedy's current pick): no casinos/jail, district card and GO card off, painted trees (`walk/trees.js` + `drawTree` sprite path), `drawTargetMarker` hook after drawWorld, `boardClick` hook in mousePressed. `walk/board.js` adds `drawNextBar`, `nextForSale`, pink arrow, and the yearly GO choice (`nameBox` = choice state, which also stops walking; keys 1/2 or click `moveCards`; `chooseMove(true)` → rent ×0.8 + turnAnim dir −1 → zone+1). Left/right turning keys removed. Rebuild `walk/sketch-all.js` = street-sound + walk/trees + walk/sketch + walk/board.
+
 ## Rules that keep it working in the p5 Web Editor (p5 1.x and 2.x)
 - Every loop body in braces (the editor's loop-protect breaks brace-less loops).
 - Don't name globals after p5 functions/constants (`day`, `pop`, `CROSS`, `key`… ), and not `target` (a local in `draw`). Helpers use an `N` suffix.
