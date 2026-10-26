@@ -161,8 +161,8 @@ function boardUpdate(z) {
   moveCan();
   // First-time hints, so the rules explain themselves.
   if (!intro && !ending) {
-    if (!hinted.sign && outbid > 0) { for (const ch of chunks.values()) { for (const p of ch.props) { if (p.kind === 'billboard' && p.z - z > 8 && p.z - z < 22 && !hinted.sign) { hinted.sign = true; hint('Signs talk at you. Hold the mouse on one to spray your own words over it.'); } } } }
-    if (!hinted.offer && plotHere(z)) { hinted.offer = true; hint('A plot for sale. Press E to make an offer.'); }
+    if (!hinted.sign && outbid > 0) { for (const ch of chunks.values()) { for (const p of ch.props) { if (p.kind === 'billboard' && p.z - z > 8 && p.z - z < 22 && !hinted.sign) { hinted.sign = true; hint('Hold the mouse on a sign to spray it'); } } } }
+    if (!hinted.offer && plotHere(z)) { hinted.offer = true; hint('Press E'); }
   }
   if (holdUntil && clockT > holdUntil) { holdUntil = 0; nameBox = null; }
   // The plot beside you, and the title deed for it.
@@ -204,18 +204,18 @@ function makeOffer() {
   if (estate) { toast(`Deposit ${moneyK(dep)}. You have ${moneyK(savings)}. Keep walking: another year might do it.`); sound.cash(false); return; }
   // In the city, the bid is always beaten.
   const name = pickN(Math.random, INVESTORS), beat = Math.round(price * mixN(1.08, 1.25, Math.random()));
-  toast(`You offer ${moneyK(price)}…`); outbid++;
+  toast(`Offer ${moneyK(price)}…`); outbid++;
   if (outbid === 1) { nameBox = {}; holdUntil = clockT + 2.6; }   // the first time, stop and watch it happen
   L.investorAt = -1; L.forSale = false; L.pending = true;
   spawnToken((L.z0 + L.z1) / 2 + 4, null);
-  setTimeout(() => { sellToInvestor(L, name); showMonoCard('OUTBID', `${name} paid ${moneyK(beat)} in cash.`, 'It will sit empty, waiting for the price to go up.', '#c0392b'); }, 1200);
+  setTimeout(() => { sellToInvestor(L, name); showMonoCard('OUTBID', `${name} paid ${moneyK(beat)} cash.`, 'It will sit empty.', '#c0392b'); }, 1200);
 }
 
 /* ---------- GO: a year passes, and the board grows ---------- */
 function onPassGo() {
   if (ending || intro) { return; }
   lap++; const rentYear = rentWeek * 52; rentPaid += rentYear; savings += WAGES - rentYear - LIVING; market *= 1 + GROWTH;
-  showMonoCard('GO', `Collect ${money(WAGES)} salary. Pay ${money(rentYear)} rent. Pay ${money(LIVING)} to live.`, `You’re ${ageNow()}. The board grew: +2 new estates past ${DISTRICTS[4].name}, and the inner streets went up a grade. Rent +${Math.round(rentRise * 100)}%.`, '#e23b3b');
+  showMonoCard('GO · AGE ' + ageNow(), `+${moneyK(WAGES)} pay · −${moneyK(rentYear + LIVING)} rent & living`, `Rent +${Math.round(rentRise * 100)}% · board +2 streets`, '#e23b3b');
   rentWeek = Math.round(rentWeek * (1 + rentRise));
   if (ui.board) { ui.board.classList.remove('flash'); void ui.board.offsetWidth; ui.board.classList.add('flash'); }
   setTimeout(() => { if (ending) { return; } const c = pickN(Math.random, CHANCE); c[3](); showMonoCard(c[0], c[1], c[2], c[0] === 'CHANCE' ? '#f28c28' : '#3f8fd6'); updateHud(); }, 4200);
@@ -241,10 +241,10 @@ function nextStep() {
   const z = distanceWalked, ahead = (ok) => { let best = null; for (const ch of chunks.values()) { for (const it of [...ch.lots, ...ch.props]) { const r = ok(it, ch); if (r && r.z - z > 4 && r.z - z < 80 && (!best || r.z < best.z)) { best = r; } } } return best; };
   const plotT = (L, ch) => ({ x: L.side * (EDGE_X + 1.4), y: 3, z: (L.z0 + L.z1) / 2 });
   const trust = rewrites.length >= TRUST_AT, trustDep = 480000 * Math.pow(1.03, lap) * 0.05;
-  if (outbid === 0) { return { text: 'Find a FOR SALE sign and press E to make an offer on a home.', target: ahead((L, ch) => L.forSale && !L.trust && !ch.estate && L.z0 !== undefined && plotT(L)) }; }
-  if (!trust) { return { text: `You can’t outbid investors alone. Talk back: hold the mouse on ${TRUST_AT - rewrites.length} more sign${TRUST_AT - rewrites.length > 1 ? 's' : ''} to change the rules.`, target: ahead(p => p.kind === 'billboard' && p.splats && !p.rewrite && { x: p.x, y: 6, z: p.z }) }; }
-  if (savings < trustDep) { return { text: `The rules changed! Land-trust homes need a ${moneyK(trustDep)} deposit. Keep walking: next payday is at GO.`, target: null }; }
-  return { text: 'The rules changed! Find a green LAND TRUST sign and press E.', target: ahead(L => L.trust && L.forSale && plotT(L)) };
+  if (outbid === 0) { return { text: 'Walk to a FOR SALE sign · press E', target: ahead((L, ch) => L.forSale && !L.trust && !ch.estate && L.z0 !== undefined && plotT(L)) }; }
+  if (!trust) { return { text: `Outbid. Spray ${TRUST_AT - rewrites.length} sign${TRUST_AT - rewrites.length > 1 ? 's' : ''} (hold mouse) to change the rules`, target: ahead(p => p.kind === 'billboard' && p.splats && !p.rewrite && { x: p.x, y: 6, z: p.z }) }; }
+  if (savings < trustDep) { return { text: `Rules changed! Walk to GO for payday (need ${moneyK(trustDep)})`, target: null }; }
+  return { text: 'Rules changed! Green sign · press E', target: ahead(L => L.trust && L.forSale && plotT(L)) };
 }
 function drawForSale(L) {
   const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
@@ -425,10 +425,10 @@ function rewriteSign(hit) {
   for (let i = 0; i < 7; i++) { ch.props.push({ kind: 'person', x: (r() < 0.5 ? -1 : 1) * mixN(ROAD_W + 1, EDGE_X - 0.8, r()), z: mixN(ch.z0 + CROSS_W, ch.z0 + CHUNK_LEN, r()), z0: ch.z0 + CROSS_W, z1: ch.z0 + CHUNK_LEN, v: (r() < 0.5 ? -1 : 1) * mixN(0.5, 1.2, r()), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, born: clockT + 0.3 + r() }); }
   sound.cash(true); setTimeout(() => sound.go(), 200);
   if (rewrites.length === TRUST_AT) {
-    showMonoCard('THE RULES CHANGE', 'Enough of the street talked back.', 'A community land trust now sells homes at cost, in the city. Look for the green signs.', '#2f9a5a');
+    showMonoCard('RULES CHANGED', 'Homes at cost, in the city.', 'Look for green signs.', '#2f9a5a');
     for (const c2 of chunks.values()) { if (c2.estate || c2.z0 < distanceWalked + 20) { continue; } const cand = c2.lots.filter(L => !L.special && !L.forSale && !L.born); if (cand.length) { makeTrust(cand[0]); break; } }
   } else {
-    toast(`You talked back. Rent rises slow to ${Math.round(rentRise * 100)}% a year. ${rewrites.length < TRUST_AT ? `${TRUST_AT - rewrites.length} more and the rules change.` : ''}`);
+    toast(`Rent rise ↓ ${Math.round(rentRise * 100)}% · ${TRUST_AT - rewrites.length} to go`);
   }
   updateHud();
 }
@@ -467,8 +467,9 @@ function buildUI() {
   canvas{cursor:none}
   .pl-goal{left:50%;top:14px;transform:translateX(-50%);background:#2a1e18;color:#fffaee;border-radius:14px;padding:10px 16px;max-width:min(620px,56vw);box-shadow:0 5px 0 rgba(42,30,24,.25);font-weight:800;font-size:15px;transition:opacity .6s;text-align:left}
   .pl-goal .k{display:inline-block;background:#ff4f9a;color:#fff;border-radius:6px;font:800 10px Nunito;letter-spacing:.12em;padding:2px 6px;margin-right:8px;vertical-align:2px}
-  .pl-goal .nx{margin-top:6px;font-weight:700;font-size:14px;color:#ffe7b0}.pl-goal .nx .k{background:#ffd23f;color:#2a1e18}
-  .pl-goal .yrs{font-size:11px;color:#c9b8a8;margin-left:6px}
+  .pl-goal .nx{font-weight:800;font-size:18px;color:#ffe7b0}.pl-goal .nx .k{background:#ffd23f;color:#2a1e18}
+  .pl-goal .yrs{font-size:11px;color:#c9b8a8;margin-top:3px;text-align:center}
+  .pl-sheet.short{max-width:420px;padding:26px}.pl-sheet.short h1{font-size:38px;margin:4px 0 2px}.pl-sheet.short button{font-size:20px;padding:12px 40px}
   .pl-sheet h2.goal{font:800 12px Nunito;color:#e0457a;letter-spacing:.16em;margin:0 0 4px}
   .pl-x{width:44px;height:44px;margin:-22px 0 0 -22px;pointer-events:none;border-radius:50%;border:2.5px dashed #2a1e18;transition:border-color .15s,transform .15s;z-index:8}
   .pl-x.hot{border-style:solid;transform:scale(1.15)}.pl-x b{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#2a1e18}
@@ -508,7 +509,7 @@ function buildUI() {
   document.head.appendChild(css);
   const el = (cls, html) => { const d = document.createElement('div'); d.className = 'pl ' + cls; d.innerHTML = html; document.body.appendChild(d); return d; };
   ui.panel = el('pl-panel pl-hide', ''); ui.board = el('pl-board pl-hide', ''); ui.deed = el('pl-deed pl-hide', '');
-  ui.help = el('pl-help pl-hide', 'W / ↑ walk · E make an offer · hold mouse on a sign = spray · ← → look');
+  ui.help = el('pl-help pl-hide', '↑ walk · E offer · hold mouse = spray');
   ui.toast = el('pl-toast', ''); ui.card = el('pl-card', '');
   ui.mist = el('pl-mist', ''); ui.x = el('pl-x', '<i></i><b></b>'); ui.x.style.display = 'none';
   ui.can = el('pl-can', `<svg viewBox="0 0 120 220" width="120"><g stroke="#2a1e18" stroke-width="4" stroke-linejoin="round"><rect x="50" y="8" width="20" height="16" rx="3" fill="#fffaee"/><rect x="44" y="22" width="32" height="18" rx="6" fill="#b9b4c8"/><rect x="22" y="38" width="76" height="176" rx="22" fill="var(--paint,#ff4f9a)"/><rect x="22" y="92" width="76" height="62" fill="#fffaee"/></g><rect x="30" y="50" width="10" height="150" rx="5" fill="#fff" opacity=".35"/></svg>`); ui.can.style.display = 'none';
@@ -517,11 +518,7 @@ function buildUI() {
   window.addEventListener('keyup', e => { if (e.code === 'Space') { spraying = false; } });
   window.addEventListener('blur', () => { spraying = false; });
   ui.black = el('pl-black', '<h1>PLOTLINE</h1><p>a walk through the Landlord’s Game</p>');
-  ui.intro = el('pl-over', `<div class="pl-sheet"><div class="band">THE LANDLORD’S GAME · 1904</div>
-    <h2 class="goal">YOUR GOAL</h2><h1>Buy a home before you turn 30.</h1>
-    <p>You’re 24, renting for $${RENT_START} a week, with $22,000 saved. The street is a Monopoly board, and every lap past GO is a year.</p>
-    <p class="tip">Just follow the <b style="color:#e0457a">pink arrow</b> and the <b>NEXT</b> line at the top. It will show you what to do.</p>
-    <button>Start walking</button></div>`);
+  ui.intro = el('pl-over', `<div class="pl-sheet short"><h2 class="goal">YOU’RE 24 · $22k SAVED</h2><h1>Buy a home before 30.</h1><button>Start</button></div>`);
   ui.intro.querySelector('button').addEventListener('click', e => { e.stopPropagation(); startWalk(); });
   ui.end = el('pl-over mid', '');
   ui.goal = el('pl-goal pl-hide', '');
@@ -553,7 +550,7 @@ function boardSvg() {
 function sumLaps(L) { let s = 0; for (let i = 0; i < L; i++) { s += lapLen(i); } return s; }
 function updateHud() {
   if (!ui.panel) { return; }
-  if (ui.goal) { const st = nextStep(); ui.goal.innerHTML = `<div><span class="k">GOAL</span>Buy a home before you turn 30 <span class="yrs">${Math.max(0, END_AGE - ageNow())} years left</span></div><div class="nx"><span class="k">NEXT</span>${st.text}</div>`; }
+  if (ui.goal) { const st = nextStep(); ui.goal.innerHTML = `<div class="nx"><span class="k">NEXT</span>${st.text}</div><div class="yrs">${Math.max(0, END_AGE - ageNow())} years left to buy a home</div>`; }
   ui.panel.innerHTML = `<h4>YOU · RENTING</h4><div class="pl-big">${ageNow()} <span class="pl-small">years old</span></div>
     <div class="pl-row"><span>Savings</span><span>${money(savings)}</span></div>
     <div class="pl-row"><span>Rent</span><span>${money(rentWeek)}/wk</span></div>
