@@ -21,6 +21,7 @@ let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid 
 let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
 let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
 const toasts = [], moneyPops = [];
+const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
@@ -92,12 +93,14 @@ function boardUpdate(z) {
   if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
   updateTurn();
   if (!paused && !intro && !ending) { market *= 1 + GROWTH * Math.min(deltaTime / 1000, 0.05) / 100; }   // ~7% for every 100 s walked
+  for(const ch of chunks.values()){evolveStreet(ch);}
   // Investors buy plots out from under you.
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
-        Object.assign(L, { forSale: false, investorAt: -1, sold: true, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        Object.assign(L, { forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        preserveLot(L);
         ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
         sound.jail(); sayToast('Sold, to an investor. Before you even got there.');
       }
@@ -155,12 +158,13 @@ function useHere() {
   addMoney(-dep, 'deposit');
   home = { price, t: clockT, commute: commuteText(), zone, lifeAge };
   Object.assign(L, { forSale: false, owned: true, born: clockT + 0.2, rentDue: false });
+  preserveLot(L);
   landlordMode = true;
   sayToast(`You bought a home! ${commuteText()} from the city.`);
 }
 function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = 0.6; nightTarget = 0.6; }
 function restartWalk() {
-  nameBox = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  streetMemory.clear(); nameBox = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true;
   seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -192,7 +196,7 @@ function updateTurn() {
 }
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
-  seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
+  chunks.clear(); firedCasinos.clear(); visitedJails.clear();
   distanceWalked = c * CHUNK_LEN + 3; lastChunk = c; lastTier = -1; ownedFromC = c + 1;
   stepSpeed = 0; dashTarget = null; streetT = clockT; buildSkyline();
 }
@@ -426,4 +430,37 @@ function boardClick(mx, my) {
   if (nameBox) { for (const b of moveCards()) { if (mx > b.x && mx < b.x + b.w && my > b.y && my < b.y + b.h) { chooseMove(b.move); return true; } } return true; }
   if (intro) { intro = false; return true; }
   return false;
+}
+
+
+// Persistent plot identities are independent of the lap and absolute camera distance.
+function preserveLot(L){
+ if(!L.memoryKey){return;}
+ streetMemory.set(L.memoryKey,{H:L.H,tier:L.tier,color:L.color,depth:L.depth,crown:L.crown,spire:L.spire,glass:L.glass,name:L.name,sign:L.sign,forSale:L.forSale,investorAt:L.investorAt,sold:L.sold,owned:L.owned,vacant:L.vacant,formerName:L.formerName,changedYear:L.changedYear});
+}
+function rememberStreet(ch){
+ ch.zoneId=zone;
+ ch.lots.forEach((L,i)=>{
+  L.memoryKey=zone+':'+ch.slot+':'+i;
+  L.formerName=L.name||'NEIGHBOURHOOD HOMES';
+  L.redevelopYear=L.seed%3===0?Infinity:START_AGE+1+(Math.abs(L.seed)%5);
+  const saved=streetMemory.get(L.memoryKey);
+  if(saved){Object.assign(L,saved);}
+ });
+ // Ordinary residents, rather than only open-home queues, make the loss visible.
+ const rr=rngN(seed+ch.slot*83+zone*761);
+ for(let i=0;i<12;i++){ch.props.push({kind:'person',x:(i%2?1:-1)*(EDGE_X-.8),z:ch.z0+CROSS_W+2+rr()*(CHUNK_LEN-CROSS_W-4),tone:rr(),h:1.55+rr()*.3,ph:rr()*6,residentRank:(i+1)/13});}
+ ch.props.filter(p=>p.kind==='person').forEach((p,i)=>{if(p.residentRank===undefined){p.residentRank=(i%12+1)/13;}});
+ evolveStreet(ch);
+}
+function evolveStreet(ch){
+ for(const L of ch.lots){
+  if(L.owned||L.vacant||lifeAge<L.redevelopYear){continue;}
+  L.formerName=L.formerName||L.name||'LOCAL HOMES';
+  L.H=Math.max(L.H*1.65,20+(L.seed%19));L.tier=3;L.glass=true;L.color='#88999f';
+  L.vacant=true;L.forSale=false;L.investorAt=-1;L.sign=true;L.name='PRIVATE INVESTMENT';L.changedYear=lifeAge;
+  L.born=clockT;preserveLot(L);
+ }
+ const share=ch.lots.filter(l=>l.vacant).length/Math.max(1,ch.lots.length);
+ ch.residentShare=Math.max(.1,1-share*.9);
 }

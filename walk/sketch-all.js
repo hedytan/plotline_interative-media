@@ -1,7 +1,4 @@
 // noprotect
-// Plotline: The Landlord’s Walk — combined file for the p5.js Web Editor (p5.js 1.x and 2.x).
-// Paste this whole file into sketch.js. It is street-sound.js, walk/trees.js, walk/sketch.js and walk/board.js in one.
-
 /* StreetSound — procedural soundscape for Plotline. Native Web Audio, no files.
  * Each district has its own small band: a pad chord and an arpeggio whose timbre
  * gets richer as property value rises (honky square -> warm triangle -> harp ->
@@ -208,7 +205,7 @@ function makeBrushTrees() {
  * The street is a loop of ten blocks. Property value rises the further you walk:
  *   Rusty Row (shacks) -> Maple Terrace (townhouses) -> Gilded Gardens (mansions)
  *   -> Brick & Glass Quarter -> Pinnacle Heights (skyscrapers) -> pass GO -> Rusty Row
- * Each lap is re-seeded, so the street never repeats exactly.
+ * Each district keeps its layout; redevelopment leaves persistent traces.
  * Chance casinos reshape the street ahead when you walk past them (boom, crash or
  * nightfall). A stone jail sits in Rusty Row: just visiting.
  * The street is not built until you walk toward it: beyond about 55 m each lot is only an
@@ -322,7 +319,7 @@ function clipZ(z) { return Math.max(z, cam.z + NEAR_Z); }
 function chunkAt(c) {
   if (chunks.has(c)) {return chunks.get(c);}
   const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(slot), z0 = c * CHUNK_LEN;
-  const r = rngN(seed + c * 7919 + lap * 104729);
+  const r = rngN(seed + slot * 7919 + zone * 104729);
   const ch = { c, slot, tier, z0, lots: [], props: [], back: [] };
   for (const side of [-1, 1]) {
     let z = z0 + CROSS_W + 0.5;
@@ -342,6 +339,7 @@ function chunkAt(c) {
   if (tier === 0) {for (let i = 0; i < 5; i++) { const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'bin', x: side * (EDGE_X - 0.6), z: z0 + CROSS_W + r() * (CHUNK_LEN - CROSS_W), tone: r() }); }}
   if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, DISTRICTS[tier].stripe) });}}}
   plotsForChunk(ch, r);
+  rememberStreet(ch);
   chunks.set(c, ch); return ch;
 }
 function lotLength(tier, r) { return [mixN(5, 7.5, r()), mixN(6, 8.5, r()), mixN(14, 18, r()), mixN(10, 15, r()), mixN(16, 24, r())][tier]; }
@@ -354,7 +352,7 @@ function makeLot(special, tier, side, z, len, r) {
   else if (tier === 1) {Object.assign(L, { H: mixN(6.8, 9.2, r()), depth: mixN(8, 11, r()), color: pickN(r, ['#e8a0a8', '#f2c28a', '#a8d0c8', '#c8b8e0', '#f0d890', '#9cc0e0', '#e6b8a2']), accent: '#fbf6ee', awning: pickN(r, [BOARD_COL.pink, BOARD_COL.orange, '#3f8fd6', '#5fb36b']), name: pickN(r, SHOP_NAMES[1]), sign: r() < 0.6 });}
   else if (tier === 2) {Object.assign(L, { H: mixN(9, 12, r()), depth: mixN(12, 15, r()), setback: mixN(5, 7, r()), color: pickN(r, ['#f2ead8', '#e8dcc0', '#f0e4d0', '#efe2c4']), accent: '#5a6b7e', fountain: r() < 0.45 });}
   else if (tier === 3) {Object.assign(L, { H: mixN(15, 34, r()), depth: mixN(12, 16, r()), color: r() < 0.65 ? pickN(r, ['#a8483a', '#b85a40', '#8c3e34', '#9a5038']) : pickN(r, ['#5e8fa8', '#6aa0b8', '#4f7f98']), glass: false, name: pickN(r, SHOP_NAMES[3]), sign: r() < 0.7 });}
-  else {Object.assign(L, { H: mixN(45, 120, r()) * (1 + lap * 0.05), depth: mixN(16, 22, r()), color: pickN(r, ['#7fa8c8', '#8fb6d0', '#a7bcd0', '#6f98bc']), crown: r() < 0.7, spire: r() < 0.5 });}
+  else {Object.assign(L, { H: mixN(45, 120, r()), depth: mixN(16, 22, r()), color: pickN(r, ['#7fa8c8', '#8fb6d0', '#a7bcd0', '#6f98bc']), crown: r() < 0.7, spire: r() < 0.5 });}
   if (tier === 3) {L.glass = L.color.startsWith('#5') || L.color.startsWith('#6') || L.color.startsWith('#4');}
   return L;
 }
@@ -388,6 +386,7 @@ function draw() {
   for (let c = c0; c <= c1; c++) {chunkAt(c);}
   for (const [c] of chunks) {if (c < c0 - 1 || c > c1 + 1) {chunks.delete(c);}}
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
+  canvasNode.dataset.year=lifeAge;canvasNode.dataset.vacant=here.lots.filter(l=>l.vacant).length;
   if (here.c !== lastChunk) { if (here.slot === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); onPassGo(); } lastChunk = here.c; }
   if (tier !== lastTier) { districtCard = { tier, t: clockT, lap: Math.floor(here.c / LAP_LEN) + 1 }; lastTier = tier; }
   updateLandmarks(z); boardUpdate(z);
@@ -573,7 +572,7 @@ function drawWorld(z) {
   }
   const items = [];
   for (const ch of all) {
-    for (const p of ch.props) { const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
+    for (const p of ch.props) { if(p.kind === "person" && p.residentRank > ch.residentShare){continue;} const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
     for (const L of ch.lots) {if (L.tier === 2 && !L.special) { const g = riseOf(L.born); if (g <= 0.01) {continue;} const q = P(L.side * (EDGE_X + 0.3), 0, (L.z0 + L.z1) / 2); if (q.rz > 0.8) {items.push({ q, p: L, kind: 'yard', g });} }}
   }
   items.sort((a, b) => b.q.rz - a.q.rz);
@@ -638,13 +637,14 @@ function drawLot(L) {
   if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
   if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
   [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H);
+  if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
 function facadeWindows(L, x, z0, z1, rows, cols, opt) {
   const len = L.z1 - L.z0, r = rngN(L.seed);
   for (let i = 0; i < cols; i++) {for (let j = 0; j < rows.length; j++) {
     const za = L.z0 + len * (i + opt.padU) / cols, zb = L.z0 + len * (i + 1 - opt.padU) / cols, [ya, yb] = rows[j];
-    const lit = r() < opt.lit + night * 0.6;
+    const lit = r() < (L.vacant ? 0 : opt.lit + night * 0.6);
     if (zb < z0) {continue;}
     const q = wallQuad(x, Math.max(za, z0), x, zb, ya, yb); if (Math.abs(q[2].y - q[1].y) < 1.2) {continue;}
     const glass = lit ? mixHex('#ffd98a', '#ffe9b0', r()) : opt.glass;
@@ -740,7 +740,7 @@ function drawTower(L, x, z0, z1, H) {
   const floors = Math.floor(H / 3.6), floorStep = Math.max(1, Math.floor(floors / Math.max(4, Math.abs(fq[1].y - fq[2].y) / 6)));
   for (let f = 1; f < floors; f += floorStep) { const a = P(x, f * 3.6, z0), b = P(x, f * 3.6, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   for (let zz = Math.ceil(L.z0 / 2) * 2; zz < z1; zz += 2) { if (zz < z0) {continue;} const a = P(x, 0, zz), b = P(x, H, zz); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-  if (night > 0.2) { const r = rngN(L.seed); ctx.fillStyle = `rgba(255,220,140,${night * 0.8})`; for (let i = 0; i < 40; i++) { const zz = L.z0 + r() * len, y = r() * H; if (zz > z0) { const p = P(x - L.side * 0.05, y, zz); ctx.fillRect(p.x - 1, p.y - 1, Math.max(2, p.k * 1.2), Math.max(1.5, p.k * 0.8)); } } }
+  if (night > 0.2 && !L.vacant) { const r = rngN(L.seed); ctx.fillStyle = `rgba(255,220,140,${night * 0.8})`; for (let i = 0; i < 40; i++) { const zz = L.z0 + r() * len, y = r() * H; if (zz > z0) { const p = P(x - L.side * 0.05, y, zz); ctx.fillRect(p.x - 1, p.y - 1, Math.max(2, p.k * 1.2), Math.max(1.5, p.k * 0.8)); } } }
   polyN(wallQuad(x, z0, x, z1, 0, 4), toneN('#2a3440', midN(z0, z1)));
   facadeWindows(L, x, z0, z1, [[0.3, 3.6]], Math.max(2, Math.round(len / 4)), { padU: 0.05, lit: 0.9, glass: '#ffd98a' });
   // Set-back crown and spire.
@@ -911,6 +911,7 @@ let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid 
 let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
 let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
 const toasts = [], moneyPops = [];
+const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
@@ -982,12 +983,14 @@ function boardUpdate(z) {
   if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
   updateTurn();
   if (!paused && !intro && !ending) { market *= 1 + GROWTH * Math.min(deltaTime / 1000, 0.05) / 100; }   // ~7% for every 100 s walked
+  for(const ch of chunks.values()){evolveStreet(ch);}
   // Investors buy plots out from under you.
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
-        Object.assign(L, { forSale: false, investorAt: -1, sold: true, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        Object.assign(L, { forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        preserveLot(L);
         ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
         sound.jail(); sayToast('Sold, to an investor. Before you even got there.');
       }
@@ -1045,12 +1048,13 @@ function useHere() {
   addMoney(-dep, 'deposit');
   home = { price, t: clockT, commute: commuteText(), zone, lifeAge };
   Object.assign(L, { forSale: false, owned: true, born: clockT + 0.2, rentDue: false });
+  preserveLot(L);
   landlordMode = true;
   sayToast(`You bought a home! ${commuteText()} from the city.`);
 }
 function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = 0.6; nightTarget = 0.6; }
 function restartWalk() {
-  nameBox = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  streetMemory.clear(); nameBox = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true;
   seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -1082,7 +1086,7 @@ function updateTurn() {
 }
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
-  seed += 131; chunks.clear(); firedCasinos.clear(); visitedJails.clear();
+  chunks.clear(); firedCasinos.clear(); visitedJails.clear();
   distanceWalked = c * CHUNK_LEN + 3; lastChunk = c; lastTier = -1; ownedFromC = c + 1;
   stepSpeed = 0; dashTarget = null; streetT = clockT; buildSkyline();
 }
@@ -1316,4 +1320,37 @@ function boardClick(mx, my) {
   if (nameBox) { for (const b of moveCards()) { if (mx > b.x && mx < b.x + b.w && my > b.y && my < b.y + b.h) { chooseMove(b.move); return true; } } return true; }
   if (intro) { intro = false; return true; }
   return false;
+}
+
+
+// Persistent plot identities are independent of the lap and absolute camera distance.
+function preserveLot(L){
+ if(!L.memoryKey){return;}
+ streetMemory.set(L.memoryKey,{H:L.H,tier:L.tier,color:L.color,depth:L.depth,crown:L.crown,spire:L.spire,glass:L.glass,name:L.name,sign:L.sign,forSale:L.forSale,investorAt:L.investorAt,sold:L.sold,owned:L.owned,vacant:L.vacant,formerName:L.formerName,changedYear:L.changedYear});
+}
+function rememberStreet(ch){
+ ch.zoneId=zone;
+ ch.lots.forEach((L,i)=>{
+  L.memoryKey=zone+':'+ch.slot+':'+i;
+  L.formerName=L.name||'NEIGHBOURHOOD HOMES';
+  L.redevelopYear=L.seed%3===0?Infinity:START_AGE+1+(Math.abs(L.seed)%5);
+  const saved=streetMemory.get(L.memoryKey);
+  if(saved){Object.assign(L,saved);}
+ });
+ // Ordinary residents, rather than only open-home queues, make the loss visible.
+ const rr=rngN(seed+ch.slot*83+zone*761);
+ for(let i=0;i<12;i++){ch.props.push({kind:'person',x:(i%2?1:-1)*(EDGE_X-.8),z:ch.z0+CROSS_W+2+rr()*(CHUNK_LEN-CROSS_W-4),tone:rr(),h:1.55+rr()*.3,ph:rr()*6,residentRank:(i+1)/13});}
+ ch.props.filter(p=>p.kind==='person').forEach((p,i)=>{if(p.residentRank===undefined){p.residentRank=(i%12+1)/13;}});
+ evolveStreet(ch);
+}
+function evolveStreet(ch){
+ for(const L of ch.lots){
+  if(L.owned||L.vacant||lifeAge<L.redevelopYear){continue;}
+  L.formerName=L.formerName||L.name||'LOCAL HOMES';
+  L.H=Math.max(L.H*1.65,20+(L.seed%19));L.tier=3;L.glass=true;L.color='#88999f';
+  L.vacant=true;L.forSale=false;L.investorAt=-1;L.sign=true;L.name='PRIVATE INVESTMENT';L.changedYear=lifeAge;
+  L.born=clockT;preserveLot(L);
+ }
+ const share=ch.lots.filter(l=>l.vacant).length/Math.max(1,ch.lots.length);
+ ch.residentShare=Math.max(.1,1-share*.9);
 }
