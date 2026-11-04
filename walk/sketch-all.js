@@ -1335,7 +1335,7 @@ function windowResized() { resizeCanvas(windowWidth, windowHeight); }
  * streets and tells what happened in 1935.
  * At every crossing you can turn: left to a cheaper town further out, right to a richer one.
  */
-const START_AGE = 24, END_AGE = 30, START_SAVINGS = 60000, OWN_GOAL = 5;
+const START_AGE = 24, END_AGES = [30, 26], START_SAVINGS = 60000, OWN_GOAL = 3;
 const WAGES = 60000, LIVING = 22000, RENT_WEEK = 380;     // take-home pay, living costs, rent
 const BASE_PRICE = [520000, 780000, 1600000, 2400000, 4800000];  // by district tier, inner city
 const ZONE_PRICE = 0.8, DEPOSIT = 0.1;                     // prices fall 20% per town out
@@ -1399,7 +1399,7 @@ function rentFor(zn) { return Math.round(TOWNS[zn].rent * rentBase / RENT_WEEK);
 // What a home you own is worth now, and what the bank will still lend you against them all.
 function valueOf(o) { return o.price * (market / o.mBuy) * o.lift; }
 function totalValue() { return owned.reduce((s, o) => s + valueOf(o), 0); }
-function usableEquity() { return Math.max(0, owned.reduce((s, o) => s + valueOf(o) - o.price, 0) * 0.6 - equityUsed); }
+function usableEquity() { return Math.max(0, owned.reduce((s, o) => s + valueOf(o) - o.price, 0) * 0.8 - equityUsed); }
 function buyingPower() { return wallet + usableEquity(); }
 function rentOf(o) { return valueOf(o) * RENT_YIELD[rules - 1]; }
 function paydayIn() { const half = CHUNK_LEN * LAP_LEN / 2; return Math.round(half - modN(distanceWalked, half)); }
@@ -1453,6 +1453,14 @@ function plotsForChunk(ch, r) {
       // The family who live there, out the front of their home.
       const mid = (L.z0 + L.z1) / 2;
       for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'person', x: side * (EDGE_X - 0.7 - k * 0.4), z: mid + (k ? 1.4 : -0.6), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, lotRef: L }); }
+    }
+  }
+  // The very first block: one home you can just afford, close ahead, so the story starts at once.
+  if (ch.c === 0 && !owned.length && rules === 1) {
+    const L = ch.lots.filter(l => !l.special && l.z0 > ch.z0 + CROSS_W + 4).sort((a, b) => a.z0 - b.z0)[0];
+    if (L) {
+      if (!L.forSale) { Object.assign(L, { forSale: true, priceK: 1 }); const mid = (L.z0 + L.z1) / 2; for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'person', x: L.side * (EDGE_X - 0.7 - k * 0.4), z: mid + (k ? 1.4 : -0.6), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, lotRef: L }); } }
+      L.investorAt = -1; L.priceK = 1; L.priceK = START_SAVINGS * 0.93 / DEPOSIT / priceOf(L);
     }
   }
   // Front-yard trees in the suburbs, palms at the villas, bins and a fire drum at the caravan park.
@@ -1544,7 +1552,7 @@ function onPassGo() {
   if (owned.length || rules === 2) { setTimeout(() => addMoney(homes, rules === 1 ? (tenants.length ? 'your tenants' : 'the bank') : 'tax shared out'), 600); }
   rentBase = Math.round(rentBase * (rules === 1 ? 1.07 : 1.02)); rentWeek = rentFor(zone);
   sayToast(`A year passes. You’re ${lifeAge}.`);
-  if (lifeAge >= END_AGE) { setTimeout(() => endWalk(rules === 1 ? 'rule1' : 'rule2'), 2600); }
+  if (lifeAge >= endAge()) { setTimeout(() => endWalk(rules === 1 ? 'rule1' : 'rule2'), 2600); }
 }
 function onChance(kind) {
   if (kind === 'boom') { market *= 1.08; sayToast('Interest rates cut! Everything for sale just went up 8%.'); }
@@ -1596,7 +1604,8 @@ function buyLot(L) {
       for (let k = 0; k < n + 1; k++) { ch.props.push({ kind: 'person', mover: true, box: k % 3 !== 2, x: L.side * (EDGE_X - 0.9 - (k % 2) * 0.45), z: mid - 1.5 + k * 0.9, tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, born: clockT - 5, until: clockT + 25, say: k === 0 ? say : null, sayT: clockT + 0.6 }); }
       // Everything else for sale on this block jumps in price, and the homes you own here are worth more.
       for (const M of ch.lots) { if (M.forSale) { M.priceK *= 1.15; } }
-      for (const q of owned) { if (q !== o && q.key && q.key.split(':')[1] === String(ch.slot) && q.zone === zone) { q.lift *= 1.05; } }
+      // ...including the homes you own here, the one you just bought too: the bank will lend you more against them.
+      for (const q of owned) { if (q.key && q.key.split(':')[1] === String(ch.slot) && q.zone === zone) { q.lift *= 1.15; } }
     }
     landlordMode = owned.length >= 2;
     soldBeat = { t: clockT, who: familyOf(L), n, ok: true };
@@ -1941,7 +1950,7 @@ function drawBoardHud() {
     noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
     fill(rules === 1 ? '#c8322a' : SHARE_COL); rect(x, y, 6, h, 8, 0, 0, 8);
     fill(40, 30, 24); textStyle(BOLD); textSize(16); textAlign(LEFT, TOP); text(ZONE_NAMES[zone], x + 16, y + 10);
-    textStyle(NORMAL); textSize(11); fill(150, 120, 100); textAlign(RIGHT, TOP); text(`AGE ${lifeAge} / ${END_AGE}`, x + w - 12, y + 13); text(commuteShort(zone), x + w - 12, y + 27); textAlign(LEFT, TOP);
+    textStyle(NORMAL); textSize(11); fill(150, 120, 100); textAlign(RIGHT, TOP); text(`AGE ${lifeAge} / ${endAge()}`, x + w - 12, y + 13); text(commuteShort(zone), x + w - 12, y + 27); textAlign(LEFT, TOP);
     for (let i = 0; i < Math.max(OWN_GOAL, owned.length); i++) { houseIcon(x + 16 + i * 22, y + 38, 17, i < owned.length ? color(OWNER_COL) : color(190, 175, 160), i < owned.length); }
     const pc = rules === 1 ? color(200, 50, 40) : color(SHARE_COL), np = rules === 1 ? movedOut : newNeighbours;
     if (np) { iconRow(x + 16, y + 68, np, Math.floor((w - 50) / 15), 12, (ix, iy) => personIcon(ix, iy, 12, pc, rules === 1)); }
@@ -1978,7 +1987,7 @@ function drawBoardHud() {
   if (!intro && !ending) { drawSoldBeat(); }
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'rule1') {
-    const lines = [`You own ${owned.length} homes, worth ${moneyK(totalValue())}.`, `Your tenants paid you ${money(rentIn)}.`, `${movedOut} families moved further out so you could buy.`, '', 'This game was invented in 1904 by Lizzie Magie.', 'She called it The Landlord’s Game. It was a warning:', 'under these rules one player wins, and the street empties.', 'She wrote a second set of rules too.'];
+    const lines = [`You own ${owned.length} homes, worth ${moneyK(totalValue())}.`, `Your homes made you ${moneyK(totalValue() - owned.reduce((t, o) => t + o.price, 0) + rentIn)}. You didn’t work for it.`, `${movedOut} families moved further out so you could buy.`, '', 'This game was invented in 1904 by Lizzie Magie.', 'She called it The Landlord’s Game. It was a warning:', 'under these rules one player wins, and the street empties.', 'She wrote a second set of rules too.'];
     storyCard(owned.length >= OWN_GOAL ? 'YOU WIN' : 'TIME’S UP', lines, clockT - ending.t > 3.5 ? 'Press E or click to play her other rules' : '', easeN((clockT - ending.t - 2.5) / 1.2));
   }
   if (ending && ending.kind === 'rule2') {
@@ -2000,7 +2009,7 @@ function drawOpening() {
   // Row 1: the goal.
   const rx = x + 34, tw = w - 68;
   for (let i = 0; i < OWN_GOAL; i++) { houseIcon(rx + i * 30, y + 112, 24, color(OWNER_COL), true); }
-  fill(40, 30, 24); textAlign(LEFT, CENTER); textSize(19); text(r1 ? `Buy ${OWN_GOAL} homes before you turn ${END_AGE}.` : `Buy homes again, until ${END_AGE}.`, rx + OWN_GOAL * 30 + 12, y + 124, tw - OWN_GOAL * 30 - 12);
+  fill(40, 30, 24); textAlign(LEFT, CENTER); textSize(19); text(r1 ? `Buy ${OWN_GOAL} homes before you turn ${endAge()}.` : `Buy homes again, until ${endAge()}.`, rx + OWN_GOAL * 30 + 12, y + 124, tw - OWN_GOAL * 30 - 12);
   // Row 2: the cost.
   const ry = y + 166;
   for (let i = 0; i < 4; i++) { personIcon(rx + i * 26, ry, 22, r1 ? color(200, 50, 40) : color(SHARE_COL), r1); }
@@ -2016,6 +2025,7 @@ function drawOpening() {
 // Your homes go up in value every second, so the bank will lend you more: coins fly from each
 // home you own to your money, and the number ticks up while you stand there.
 const coins = []; let coinT = 0, coinHitT = -9;
+function endAge() { return END_AGES[rules - 1]; }   // Round 2 is shorter: two years is enough to see the difference
 const YEAR_M = 240; let lastWalkZ = 0;   // half a lap (48 m x 10 / 2) is a year
 function homesPerYear() { return owned.length ? totalValue() * GROWTH[rules - 1] / 100 : 0; }
 function drawCoins(tx, ty) {

@@ -39,7 +39,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Week | Dates | Work | Done when |
 |---|---|---|---|
 | 1 | 4–10 Nov | Lock the concept: artwork, audience, message (this page). Satirical signs that react to the player. Commute on signposts. | The tutor can say what it means after one walk |
-| 2 | 11–17 Nov | A one-minute first experience: the first home is affordable and right ahead; the goal is 3 homes; the money and the emptying show quickly. | A new player understands it within a minute |
+| 2 | 11–17 Nov | A one-minute first experience: the first home is affordable and right ahead; the goal is 3 homes; the money and the emptying show quickly. **Done early:** a test player buys at 7 s, 16 s and 28 s and reaches the reveal at about 31 s; Round 2 lasts two years. | A new player understands it within a minute |
 | 3 | 18–24 Nov | Play-test with 3–5 people. Note what they think it means; cut or change anything that does not carry the meaning. | Every interaction in the table above is understood |
 | 4 | 25 Nov – 1 Dec | Polish (sound, ending, readability on a projector); record a walkthrough video; write the presentation. | Final presentation ready |
 | 5 | 2–8 Dec | Reflection: what changed after feedback and why. | Reflection submitted |
