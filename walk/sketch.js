@@ -197,7 +197,7 @@ function draw() {
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
   // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
-  try { drawSky(); drawSkyline(); drawGround(z); drawWorld(z); } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
+  try { drawSky(); drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
   pop();
   drawOverlays();
 }
@@ -318,13 +318,15 @@ function drawSkyline() {
 }
 
 /* ---------- Ground: road, pavements, crossings ---------- */
-function drawGround(z) {
+// side: drawing the side street you are turning into, which starts at its crossing (fromZ).
+function drawGround(z, side) {
   const hy = cam.hy;
-  ctx.fillStyle = mixHex('#b89a78', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80);
+  if (!side) { ctx.fillStyle = mixHex('#b89a78', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80); }
   const steps = 90;
   for (let i = steps; i > 0; i--) {
     const d0 = NEAR_Z + Math.pow((i - 1) / steps, 2.2) * FAR_Z, d1 = NEAR_Z + Math.pow(i / steps, 2.2) * FAR_Z;
-    const za = z + d0, zb = z + d1, ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = za - ch.z0, crossing = local < CROSS_W;
+    const za = z + d0, zb = z + d1; if (side && za < side.fromZ) { continue; }
+    const ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = za - ch.z0, crossing = local < CROSS_W;
     const fog = easeN(d0 / FAR_Z), fogC = mixHex('#ffd79a', '#5a4a70', night);
     const f = (hex) => mixHex(mixHex(hex, '#2a2440', night * 0.55), fogC, fog * 0.8);
     // Road.
@@ -347,6 +349,7 @@ function drawGround(z) {
   }
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
+    if (side && ch.z0 < side.fromZ) { continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
@@ -358,21 +361,21 @@ function paintText(label, x, zz, size, col) {
 }
 
 /* ---------- Buildings and everything on the street ---------- */
-function drawWorld(z) {
-  const all = [...chunks.values()];
+function drawWorld(z, side) {
+  const all = [...chunks.values()], minZ = side ? side.fromZ : -Infinity, minLot = side ? side.minLot : -Infinity;
   // Back row first, then buildings far to near, then pavement life far to near.
-  const backs = all.flatMap(ch => ch.back).filter(b => b.z1 > z + NEAR_Z).sort((a, b) => b.z0 - a.z0);
-  for (const b of backs) { const g = riseOf(b.born); if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; } }
-  const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z).sort((a, b) => b.z0 - a.z0);
+  const backs = all.flatMap(ch => ch.back).filter(b => b.z1 > z + NEAR_Z && b.z0 >= minLot).sort((a, b) => b.z0 - a.z0);
+  for (const b of backs) { const g = riseOf(b.born) * (b.sinkK === undefined ? 1 : b.sinkK); if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; } }
+  const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const g = riseOf(L.born);
+    const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK);
     if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
     riseK = g; drawLot(L); riseK = 1;
     const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
   }
   const items = [];
   for (const ch of all) {
-    for (const p of ch.props) { if(p.kind === "person" && p.residentRank > ch.residentShare){continue;} const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
+    for (const p of ch.props) { if (p.z < minZ) {continue;} if(p.kind === "person" && p.residentRank > ch.residentShare){continue;} const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
     for (const L of ch.lots) {if (L.tier === 2 && !L.special) { const g = riseOf(L.born); if (g <= 0.01) {continue;} const q = P(L.side * (EDGE_X + 0.3), 0, (L.z0 + L.z1) / 2); if (q.rz > 0.8) {items.push({ q, p: L, kind: 'yard', g });} }}
   }
   items.sort((a, b) => b.q.rz - a.q.rz);
@@ -384,7 +387,7 @@ function drawWorld(z) {
     else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'hiring') {drawHiring(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);}
     ctx.restore();
   }
-  drawTargetMarker();
+  if (!side) {drawTargetMarker();}
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {

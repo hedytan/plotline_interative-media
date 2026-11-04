@@ -109,7 +109,6 @@ function plotsForChunk(ch, r) {
 
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
-  if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
   updateTurn(); updateShift();
   if (!paused && !intro && !ending) { market *= 1 + GROWTH * Math.min(deltaTime / 1000, 0.05) / 100; }   // ~7% for every 100 s walked
   for(const ch of chunks.values()){evolveStreet(ch);}
@@ -186,7 +185,7 @@ function updateShift() {
 }
 function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = 0.6; nightTarget = 0.6; }
 function restartWalk() {
-  streetMemory.clear(); nameBox = null; shift = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; rentBase = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  streetMemory.clear(); nameBox = null; shift = null; sideSt = null; queuedTurn = 0; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; rentBase = RENT_WEEK; home = null; ending = null; landlordMode = false;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true;
   seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -194,33 +193,104 @@ function restartWalk() {
 /* ---------- Turning: left to a cheaper town further out, right to a richer one closer in ---------- */
 function nextCrossing(z) { const local = modN(z, CHUNK_LEN); return local < CROSS_W - 1 ? 0 : CHUNK_LEN - local + 2; }
 function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
+// Pressing ← or → picks the next corner. From then on the town you are turning into is
+// already there down the cross street. At the corner you turn on the spot, with no cut: the
+// old town's corner buildings sink away while the new town's rise, and you walk on.
+let sideSt = null;   // the side street: { chunks, zone, dir, zc (its crossing in this street), s0 (that crossing in its own street), c }
 function tryTurn(dir) {
   if (turnAnim || intro || ending || nameBox) { return; }
   if (dir > 0 && zone === 0) { sayToast('This is the inner city. There is no richer town than this.'); return; }
   if (dir < 0 && zone === ZONE_NAMES.length - 1) { sayToast('This is as far out as the city goes.'); return; }
-  if (!atCrossing(distanceWalked)) {
-    const ahead = nextCrossing(distanceWalked);
-    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left, to a cheaper town' : 'right, to a richer town'} at the crossing ahead.`); }
-    else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
-    return;
+  const c = Math.floor(distanceWalked / CHUNK_LEN) + (modN(distanceWalked, CHUNK_LEN) < CROSS_W / 2 + 1 ? 0 : 1);
+  queuedTurn = dir; makeSide(dir, c);
+  const ahead = Math.max(0, c * CHUNK_LEN + CROSS_W / 2 - distanceWalked);
+  sayToast(`${dir < 0 ? '← Turning left to a cheaper town' : '→ Turning right to a richer town'}, ${ZONE_NAMES[zone - dir]}${ahead > 4 ? `, at the corner ${Math.round(ahead)} m ahead` : ''}.`);
+}
+function makeSide(dir, c) {
+  const zc = c * CHUNK_LEN + CROSS_W / 2;
+  if (sideSt && sideSt.dir === dir && sideSt.c === c) { return; }
+  sideSt = { chunks: new Map(), zone: zone - dir, dir, zc, s0: zc, c, t: clockT, turning: false, fromZ: zc + CROSS_W / 2 - 0.5, minLot: zc + 34 };
+}
+// The camera, seen from inside the side street's own coordinates.
+function camInSide(w) {
+  const dz = cam.z - w.zc;
+  return { x: -dz * w.dir, z: w.s0 + cam.x * w.dir, yaw: cam.yaw - w.dir * HALF_PI };
+}
+// Draw (or update) the side street by swapping it in as the street for a moment.
+function withSide(w, fn) {
+  const keepChunks = [...chunks.entries()], keepZone = zone, keepCam = { x: cam.x, z: cam.z, yaw: cam.yaw };
+  chunks.clear(); for (const [k, v] of w.chunks) { chunks.set(k, v); } zone = w.zone;
+  const v = camInSide(w); cam.x = v.x; cam.z = v.z; cam.yaw = v.yaw;
+  try { fn(v.z); }
+  finally {
+    w.chunks.clear(); for (const [k, ch] of chunks) { w.chunks.set(k, ch); }
+    chunks.clear(); for (const [k, ch] of keepChunks) { chunks.set(k, ch); } zone = keepZone; Object.assign(cam, keepCam);
   }
-  queuedTurn = 0; turnAnim = { dir, t: clockT }; sound.turn(dir);
+}
+function drawSideStreet() {
+  if (!sideSt) { return; }
+  withSide(sideSt, z2 => {
+    for (let c = sideSt.c; c <= sideSt.c + 5; c++) {
+      const fresh = !chunks.has(c), ch = chunkAt(c);
+      // Most of the new town stands already; its first block waits for the turn and then rises.
+      if (fresh) {
+        for (const L of ch.lots) { if (L.z0 >= sideSt.minLot && !L.forSale) { L.born = clockT - 10; L.thud = true; } }
+        for (const b of ch.back) { if (b.z0 >= sideSt.minLot) { b.born = clockT - 10; } }
+        for (const p of ch.props) { if (p.z >= sideSt.minLot) { p.born = clockT - 10; } }
+      }
+    }
+    drawGround(z2, sideSt); drawWorld(z2, sideSt);
+  });
+}
+// Corner buildings of this street on the turning side make way for the side street.
+function sinkCorner(k) {
+  if (!sideSt) { return; }
+  for (const ch of chunks.values()) {
+    for (const L of ch.lots) { if (L.side === sideSt.dir && Math.abs((L.z0 + L.z1) / 2 - sideSt.zc) < 34) { L.sinkK = Math.min(L.sinkK === undefined ? 1 : L.sinkK, k); } }
+    for (const b of ch.back) { if (b.side === sideSt.dir && b.z0 < sideSt.zc + 40 && b.z1 > sideSt.zc - 40) { b.sinkK = Math.min(b.sinkK === undefined ? 1 : b.sinkK, Math.max(0, 1 - (clockT - sideSt.t) / 1.2)); } }
+  }
 }
 function updateTurn() {
-  if (!turnAnim) { turnYaw = 0; fadeA = Math.max(0, fadeA - 0.05); return; }
-  const u = (clockT - turnAnim.t) / 0.85;
-  turnYaw = turnAnim.dir * HALF_PI * easeN(Math.min(1, u));
-  fadeA = easeN((u - 0.45) / 0.55);
-  if (u >= 1) {
-    const dir = turnAnim.dir; turnAnim = null; turnYaw = 0; fadeA = 1;
-    zone = constrain(zone - dir, 0, ZONE_NAMES.length - 1); rentWeek = rentFor(zone);
-    newStreet();
-    sayToast(dir < 0 ? `Cheaper: ${ZONE_NAMES[zone]}. Homes −20%, rent ${money(rentWeek)}/wk, but jobs pay less.` : `Richer: ${ZONE_NAMES[zone]}. Homes +25%, rent ${money(rentWeek)}/wk, jobs pay more.`);
+  if (!turnAnim) {
+    turnYaw = 0; fadeA = 0;
+    if (sideSt) {
+      sinkCorner(1);
+      // Walk past the corner without turning, or back away from it, and the turn is called off.
+      if (distanceWalked > sideSt.zc + CROSS_W || distanceWalked < sideSt.zc - 120) { cancelSide(); }
+      else if (queuedTurn && Math.abs(distanceWalked - sideSt.zc) < 3.5) { turnAnim = { dir: sideSt.dir, t: clockT, z0: distanceWalked }; queuedTurn = 0; sound.turn(sideSt.dir); startCornerRise(); }
+    }
+    return;
   }
+  // Turning on the spot: step to the middle of the crossing and swing round 90 degrees.
+  const u = Math.min(1, (clockT - turnAnim.t) / 1.4), e = easeN(u);
+  turnYaw = turnAnim.dir * HALF_PI * e; fadeA = 0;
+  distanceWalked = mixN(turnAnim.z0, sideSt.zc, easeN(u * 1.6));
+  sinkCorner(1 - easeN(u * 1.3));
+  if (u >= 1) { finishTurn(); }
+}
+function startCornerRise() {
+  sideSt.turning = true;
+  withSide(sideSt, () => { for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.z0 < sideSt.minLot && !L.forSale) { L.born = clockT + 0.15 + (L.z0 - sideSt.zc) / 60; L.thud = false; } } for (const p of ch.props) { if (p.z < sideSt.minLot) { p.born = clockT + 0.4 + (p.z - sideSt.zc) / 60; } } for (const b of ch.back) { if (b.z0 < sideSt.minLot) { b.born = clockT + 0.5; } } } });
+}
+function cancelSide() {
+  for (const ch of chunks.values()) { for (const L of ch.lots) { delete L.sinkK; } for (const b of ch.back) { delete b.sinkK; } }
+  sideSt = null; queuedTurn = 0;
+}
+// The side street becomes the street: same view, new coordinates.
+function finishTurn() {
+  const w = sideSt, v = camInSide(w), dir = w.dir;
+  turnAnim = null; turnYaw = 0; sideSt = null; queuedTurn = 0;
+  chunks.clear(); for (const [k, ch] of w.chunks) { chunks.set(k, ch); }
+  zone = w.zone; rentWeek = rentFor(zone);
+  distanceWalked = v.z; cam.x = v.x;
+  firedCasinos.clear(); visitedJails.clear();
+  lastChunk = Math.floor(distanceWalked / CHUNK_LEN); lastTier = -1; ownedFromC = lastChunk + 1;
+  stepSpeed = 0; dashTarget = null; streetT = clockT - 5; buildSkyline();
+  sayToast(dir < 0 ? `Cheaper: ${ZONE_NAMES[zone]}. Homes −20%, rent ${money(rentWeek)}/wk, but jobs pay less.` : `Richer: ${ZONE_NAMES[zone]}. Homes +25%, rent ${money(rentWeek)}/wk, jobs pay more.`);
 }
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
-  chunks.clear(); firedCasinos.clear(); visitedJails.clear();
+  chunks.clear(); firedCasinos.clear(); visitedJails.clear(); sideSt = null;
   distanceWalked = c * CHUNK_LEN + 3; lastChunk = c; lastTier = -1; ownedFromC = c + 1;
   stepSpeed = 0; dashTarget = null; streetT = clockT; buildSkyline();
 }
