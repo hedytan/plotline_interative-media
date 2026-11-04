@@ -381,10 +381,13 @@ function drawWorld(z, side) {
   for (const b of backs) { const g = riseOf(b.born) * (b.sinkK === undefined ? 1 : b.sinkK); if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; } }
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK);
-    if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); } else if (L.forSale) { drawForSale(L); }
-    const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
+    const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
+    if (L.piece) { drawBoardSquare(L); }
+    if (g <= 0.01 && !L.piece) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
+    if (L.piece) { drawToyPiece(L); }
+    if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
+    const age = clockT - L.born; if (age < RISE_T + 0.8 && !L.piece) {drawDust(L, age);}
   }
   const items = [];
   for (const ch of all) {

@@ -215,7 +215,7 @@ function boardUpdate(z) {
       }
     }
   }
-  if (!ending && rules === 1 && owned.length >= OWN_GOAL && clockT - owned[owned.length - 1].t > 3) { endWalk('rule1'); }
+  if (!ending && rules === 1 && owned.length >= OWN_GOAL && clockT - owned[owned.length - 1].t > 4) { endWalk('rule1'); }
 }
 // Pay day: twice a lap, a year each time.
 function onPassGo() {
@@ -275,7 +275,11 @@ function buyLot(L) {
   const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
   owned.push(o);
   if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
-  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false }); L.born = clockT + 0.3;   // it rises again, as yours
+  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false });
+  // Your own home stays a real house and rises again as yours. Under Rule 1 every other home you buy
+  // stops being a home: it sinks, and a plastic board-game piece drops onto the lot.
+  if (rules === 1 && !first) { L.piece = { t0: clockT + 0.5, t: clockT + 1.25, kind: owned.length >= OWN_GOAL ? 'hotel' : 'house', loud: true }; }
+  else { L.born = clockT + 0.3; }
   if (ch && rules === 1) { ch.props = ch.props.filter(p => p.lotRef !== L); }
   if (rules === 1) {
     if (!first) { L.color = mixHex(L.color, OWNER_COL, 0.5); }
@@ -301,7 +305,16 @@ function buyLot(L) {
   }
   preserveLot(L);
 }
-function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = kind === 'rule1' ? 0.6 : 0.15; nightTarget = baseNight; }
+function endWalk(kind) {
+  if (ending) { return; }
+  if (kind === 'rule1') {
+    // The whole street turns into the board: every house ahead sinks and a grey plastic piece drops in its place.
+    const ahead = [...chunks.values()].flatMap(ch => ch.lots).filter(L => !L.piece && !L.home && L.z1 > distanceWalked && L.z0 < distanceWalked + 140).sort((a, b) => a.z0 - b.z0);
+    ahead.forEach((L, i) => { const t0 = clockT + 0.2 + i * 0.09; L.piece = { t0, t: t0 + 0.7, kind: 'grey', loud: i % 4 === 0 && i < 16 }; });
+  }
+  endWalkNow(kind);
+}
+function endWalkNow(kind) { ending = { kind, t: clockT }; sound.go(); baseNight = kind === 'rule1' ? 0.6 : 0.15; nightTarget = baseNight; }
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   wallet = START_SAVINGS; lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
@@ -492,6 +505,36 @@ function drawPiece(L, za, zb, d, h, col) {
   const len = zb - za;
   for (const u of [0.18, 0.62]) { const wa = za + len * u, wb = wa + len * 0.2; if (wb > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(wa, z0), x - L.side * 0.05, wb, h * 0.45, h * 0.75), toneN('#fff2c0', wa)); } }
   const da = za + len * 0.42; if (da + len * 0.16 > z0) { polyN(wallQuad(x - L.side * 0.05, Math.max(da, z0), x - L.side * 0.05, da + len * 0.16, 0, h * 0.42), toneN('#3a2a20', da)); }
+}
+// Monopoly's view of a home: a plastic piece on a coloured square. The real house sinks first.
+const PIECE_COL = { house: '#1fb04a', hotel: '#e0302a', grey: '#a29d94' };
+function toyTone(col, z, k) { return mixHex(toneN(col, z, k), shadeN(col, k), 0.6); }   // plastic keeps its colour through the haze
+function pieceSink(L) { const pc = L.piece; return pc ? 1 - easeN((clockT - pc.t0) / 0.7) : 1; }
+function drawBoardSquare(L) {
+  const pc = L.piece, a = easeN((clockT - pc.t0) / 0.5); if (a <= 0) { return; }
+  const z0 = clipZ(L.z0 + 0.3), z1 = L.z1 - 0.3; if (z1 <= z0) { return; }
+  const xa = L.side * (EDGE_X + 0.2), xb = L.side * (EDGE_X + Math.max(6, L.setback + L.depth * 0.95)), xs = L.side * (EDGE_X + 1.6), mz = midN(z0, z1);
+  polyN([P(xa, 0.06, z0), P(xb, 0.06, z0), P(xb, 0.06, z1), P(xa, 0.06, z1)], rgbaN(mixHex('#e9efe0', '#3a3448', night * 0.5), a * (1 - fogFor(mz) * 0.7)), rgbaN('#2a2420', 0.6 * a), 1.5);
+  polyN([P(xa, 0.07, z0), P(xs, 0.07, z0), P(xs, 0.07, z1), P(xa, 0.07, z1)], rgbaN(pc.kind === 'grey' ? '#8a857e' : deedCol(L), a * (1 - fogFor(mz) * 0.7)), rgbaN('#2a2420', 0.6 * a), 1.5);
+}
+function drawToyPiece(L) {
+  const pc = L.piece; if (clockT < pc.t - 0.55 || (L.sinkK !== undefined && L.sinkK < 0.5)) { return; }
+  const u = constrain((clockT - pc.t + 0.55) / 0.55, 0, 1), land = clockT - pc.t;
+  if (land >= 0 && !pc.hit) { pc.hit = true; if (pc.loud && sound.clack) { sound.clack(pc.kind); } }
+  const squash = land > 0 && land < 0.3 ? 1 - Math.sin(land / 0.3 * PI) * 0.16 : 1, y0 = (1 - u * u) * 24;
+  const hotel = pc.kind === 'hotel', len = L.z1 - L.z0;
+  const pl = Math.min(len * 0.85, hotel ? 18 : 10), d = hotel ? 9 : 8.5, mid = (L.z0 + L.z1) / 2, za = mid - pl / 2, zb = mid + pl / 2;
+  const x = L.side * (EDGE_X + 2.4), xo = x + L.side * d, xm = (x + xo) / 2;
+  const hb = (hotel ? 9 : 7) * squash, apex = hb + (hotel ? 3 : 5) * squash, z0 = clipZ(za); if (zb <= z0) { return; }
+  const col = PIECE_COL[pc.kind], edge = 'rgba(20,14,10,0.45)', mz = midN(z0, zb);
+  if (u > 0.2) { const sh = 0.4 * u; polyN([P(x, 0.08, z0), P(xo + L.side * 1.2, 0.08, z0), P(xo + L.side * 1.2, 0.08, zb + 1), P(x, 0.08, zb + 1)], `rgba(20,14,10,${sh * (1 - fogFor(mz))})`); }
+  polyN(wallQuad(x, z0, x, zb, y0, y0 + hb), toyTone(col, mz, 0.95), edge, 1.2);
+  polyN(wallQuad(x - L.side * 0.03, z0, x - L.side * 0.03, zb, y0, y0 + hb * 0.12), 'rgba(0,0,0,0.18)');
+  polyN(wallQuad(x - L.side * 0.03, z0, x - L.side * 0.03, zb, y0 + hb * 0.74, y0 + hb * 0.84), 'rgba(255,255,255,0.3)');
+  if (za > cam.z + NEAR_Z) { polyN([P(x, y0, za), P(xo, y0, za), P(xo, y0 + hb, za), P(xm, y0 + apex, za), P(x, y0 + hb, za)], toyTone(col, za, 0.62), edge, 1.2); }
+  polyN([P(x, y0 + hb, z0), P(x, y0 + hb, zb), P(xm, y0 + apex, zb), P(xm, y0 + apex, z0)], toyTone(col, mz, 1.2), edge, 1.2);
+  const ra = 0.5, rb = 0.68, hx = (t) => mixN(x, xm, t), hy = (t) => y0 + mixN(hb, apex, t);
+  polyN([P(hx(ra), hy(ra), z0), P(hx(ra), hy(ra), zb), P(hx(rb), hy(rb), zb), P(hx(rb), hy(rb), z0)], 'rgba(255,255,255,0.32)');
 }
 function drawOwnedLot(L) {
   const len = L.z1 - L.z0, z0 = clipZ(L.z0); if (L.z1 <= z0) { return; }
@@ -686,20 +729,21 @@ function drawBoardHud() {
 function drawOpening() {
   const r1 = rules === 1, col = r1 ? '#c8322a' : SHARE_COL, pulse = 0.5 + 0.5 * Math.sin(clockT * 4);
   push(); noStroke(); fill(20, 14, 10, 150); rect(0, 0, width, height);
-  const w = Math.min(600, width - 32), h = 320, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
+  const w = Math.min(600, width - 32), h = 350, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
   fill(0, 60); rect(x + 4, y + 6, w, h, 12); fill(255, 250, 238); rect(x, y, w, h, 12); fill(col); rect(x, y, w, 34, 12, 12, 0, 0);
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text(r1 ? 'AN ARTWORK · MONOPOLY’S RULES, LIVED ON A REAL STREET' : 'ROUND 2 · THE SAME STREET, HER OTHER RULES', cx, y + 17);
   fill(40, 30, 24); textSize(Math.min(34, w / 14)); text(r1 ? 'THE LANDLORD’S WALK' : 'NOBODY HAS TO LEAVE', cx, y + 70);
+  textStyle(ITALIC); textSize(16); fill(110, 90, 80); const tag = r1 ? 'What if Monopoly were real, and the houses had people in them?' : 'Lizzie Magie’s other rules, from 1904.'; textSize(Math.min(16, 16 * (w - 40) / textWidth(tag))); text(tag, cx, y + 102); textStyle(BOLD);
   // Row 1: the goal.
   const rx = x + 34, tw = w - 68;
-  for (let i = 0; i < OWN_GOAL; i++) { houseIcon(rx + i * 30, y + 112, 24, color(OWNER_COL), true); }
-  fill(40, 30, 24); textAlign(LEFT, CENTER); textSize(19); text(r1 ? `Buy ${OWN_GOAL} homes before you turn ${endAge()}.` : `Buy homes again, until ${endAge()}.`, rx + OWN_GOAL * 30 + 12, y + 124, tw - OWN_GOAL * 30 - 12);
+  for (let i = 0; i < OWN_GOAL; i++) { houseIcon(rx + i * 30, y + 136, 24, color(OWNER_COL), true); }
+  fill(40, 30, 24); textAlign(LEFT, CENTER); textSize(19); text(r1 ? `Buy ${OWN_GOAL} homes before you turn ${endAge()}.` : `Buy homes again, until ${endAge()}.`, rx + OWN_GOAL * 30 + 12, y + 148, tw - OWN_GOAL * 30 - 12);
   // Row 2: the cost.
-  const ry = y + 166;
+  const ry = y + 190;
   for (let i = 0; i < 4; i++) { personIcon(rx + i * 26, ry, 22, r1 ? color(200, 50, 40) : color(SHARE_COL), r1); }
   textStyle(BOLD); textSize(17); fill(r1 ? color(200, 50, 40) : color(SHARE_COL)); text(r1 ? 'Every home you buy, a family has to leave.' : 'Same street. Land tax is shared. Nobody is pushed out.', rx + 4 * 26 + 12, ry + 11, tw - 4 * 26 - 12);
   // Row 3: the keys.
-  const ky = y + 232; textStyle(BOLD); textSize(13);
+  const ky = y + 256; textStyle(BOLD); textSize(13);
   const keys = [['↑', 'walk'], ['E', 'buy'], ['← →', 'poorer / richer town']];
   let kx = rx; for (const [k, label] of keys) { const kw = textWidth(k) + 20; fill(255); stroke(90, 70, 60); strokeWeight(1.5); rect(kx, ky, kw, 28, 6); noStroke(); fill(40, 30, 24); textAlign(CENTER, CENTER); text(k, kx + kw / 2, ky + 14); textStyle(NORMAL); fill(90, 70, 60); textAlign(LEFT, CENTER); text(label, kx + kw + 8, ky + 14); kx += kw + textWidth(label) + 28; textStyle(BOLD); }
   textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 34); drawingContext.globalAlpha = 1;
@@ -817,7 +861,7 @@ function boardClick(mx, my) {
 // Persistent plot identities are independent of the lap and absolute camera distance.
 function preserveLot(L) {
   if (!L.memoryKey) { return; }
-  streetMemory.set(L.memoryKey, { H: L.H, tier: L.tier, color: L.color, depth: L.depth, crown: L.crown, spire: L.spire, glass: L.glass, name: L.name, sign: L.sign, forSale: L.forSale, investorAt: L.investorAt, sold: L.sold, owned: L.owned, home: L.home, vacant: L.vacant, formerName: L.formerName, changedYear: L.changedYear });
+  streetMemory.set(L.memoryKey, { H: L.H, tier: L.tier, color: L.color, depth: L.depth, crown: L.crown, spire: L.spire, glass: L.glass, name: L.name, sign: L.sign, forSale: L.forSale, investorAt: L.investorAt, sold: L.sold, owned: L.owned, home: L.home, piece: L.piece, vacant: L.vacant, formerName: L.formerName, changedYear: L.changedYear });
 }
 function rememberStreet(ch) {
   ch.zoneId = zone;

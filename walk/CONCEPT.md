@@ -20,13 +20,14 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Walking (↑) | Homes rise out of the ground ahead of you; a year passes every half lap | The landscape is generated as you move; time passes only when you take part |
 | Stopping beside a home for sale | The camera turns to face it; the family out the front speaks to you | A listing is someone's home |
 | Buying (E) | A SOLD stamp and the family's name; they carry boxes away; the music stops for a moment | Your win is their loss |
+| Buying a second or third home | The real house sinks into the ground; a giant plastic Monopoly house (then a red hotel) drops onto the lot with a click | To the winner, a home is only a game piece |
 | Owning | Gold coins fly from your homes to your money: "▲ $59,493 a year, you didn't work for this" | Wealth comes from owning, not working |
 | Buying more | The street loses its colour, the music goes muffled, neighbours fold their arms ("Landlord.") | Displacement and isolation build up |
 | Investors | A plot is bought before you get there and becomes an empty tower: "SOLD to an investor. Will sit empty." | Homes built as investments, not to live in |
 | Satirical billboards | The same billboard changes as you change: "Light-filled! (One window.)" becomes "Landlord of the Year: YOU", then "Nobody lives here now. Great investment." | The city's advertising flatters whoever has the money |
 | Turning at a corner (← / →) | Six towns from a caravan park to a castle; signposts give the commute ("The Fringe · 1h 35m to work") | Urban sprawl: the cheaper the home, the further from work |
 | Music | Jazz on rich streets, pop in the middle, an out-of-tune tape on poor streets | You can hear the class of a street |
-| Ending, then Round 2 | The street empties; the 1904 / 1935 story; then the same street under the shared land tax, where nobody has to leave | There was another set of rules |
+| Ending, then Round 2 | Every house ahead becomes a grey plastic piece and the street empties; the 1904 / 1935 story; then the same street under the shared land tax, where nobody has to leave | There was another set of rules |
 
 ## Research and influences
 - Lizzie Magie, *The Landlord's Game* (patented 1904), and its two rule sets (monopolist and anti-monopolist, "Prosperity").

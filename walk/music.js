@@ -83,6 +83,21 @@ class WalkSound extends StreetSound {
     this._kick(t + 0.05, 0.35); this._hit(t + 0.05, 0.25, 400, 0.15, 'lowpass');
     [64, 60, 57, 52].forEach((n, i) => { this._m(MIDI(n), t + 0.4 + i * 0.42, 1.4, 'triangle', 0.05, 1600); this._m(MIDI(n) * 1.006, t + 0.4 + i * 0.42, 1.4, 'triangle', 0.025, 1200); });
   }
+  // A plastic piece lands on the board: a hollow click and a little rattle, straight to the speakers
+  // (the band may be silent just then).
+  clack(kind) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, out = this.master || ctx.destination, lo = kind === 'grey' ? 0.7 : kind === 'hotel' ? 0.85 : 1;
+    [0, 0.07, 0.11].forEach((dt, i) => {
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), gain = [0.22, 0.08, 0.04][i];
+      s.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 2400 * lo; f.Q.value = 4;
+      g.gain.setValueAtTime(gain, t + dt); g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.05);
+      s.connect(f); f.connect(g); g.connect(out); s.start(t + dt, Math.random()); s.stop(t + dt + 0.07);
+    });
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(900 * lo, t); o.frequency.exponentialRampToValueAtTime(320 * lo, t + 0.08);
+    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.14);
+  }
   // New neighbours arrive (Rule 2): a rising major phrase and a ring of a bike bell.
   welcome() {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
