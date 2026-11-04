@@ -11,9 +11,10 @@ The original Landlord's Walk (renter, 24, every lap past GO is a year, rising FO
 - **One goal, one next step.** A short intro (*You're 24, renting, $22k saved. Buy a home before you turn 30.*), a NEXT line at the top (*Walk to the next FOR SALE sign* / *Press E to buy it* / *Deposit $64k · you have $30k · keep walking to GO*) and a pink arrow over the next FOR SALE sign.
 - **Turn at the corners to a different town.** Press **←** or **→** any time and you turn at the next corner: the new town is already there down the cross street, and at the crossing you turn on the spot and walk on (no cut; the old town's corner sinks away as the new one rises). A signpost at every crossing shows the way: **←** to a cheaper town further out (homes −20%, lower rent, but jobs pay less), **→** to a richer one closer in (dearer homes, higher rent, better pay). Each town has its own houses, from shacks and terraces out on the estates to mansions and towers in the inner city, and keeps its own layout when you come back. Your rent is set by the town you're in when you pass GO.
 - **The homes are too expensive, so you work.** NOW HIRING signs outside shops offer a shift (*Pour coffee*, *Walk the dogs*, *Temp at reception*): press **E** and you earn $600–$3,200 depending on the district and town, but prices rise 1.2% while you work. When you can't afford the next home, the NEXT line and the pink arrow point you to the next job instead.
+- **Music that sounds like the street's money.** Rich streets (the inner city's dear blocks) play a lounge-jazz trio: electric piano on maj9 chords, walking upright bass, brushed swing drums and a clink of glasses. The middle plays bright pop. Out on the cheap estates it turns into a slow minor tune on an out-of-tune piano, warped like an old cassette, with record crackle and a cheap drum machine. The band changes style at the next bar when you turn into another town or walk into another district.
 - No casinos or jail. Painted trees.
 
-Files: `walk/index.html`, `walk/trees.js`, `walk/sketch.js`, `walk/board.js`, `walk/sketch-all.js` (paste into the p5 Web Editor).
+Files: `walk/index.html`, `walk/music.js`, `walk/trees.js`, `walk/sketch.js`, `walk/board.js`, `walk/sketch-all.js` (paste into the p5 Web Editor).
 
 ## Monopoly, lived
 **▶ https://hedytan.github.io/plotline_interative-media/landlord/**

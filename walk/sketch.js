@@ -70,7 +70,7 @@ function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
   canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to buy or build, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
-  sound = new StreetSound(); textFont('Georgia');
+  sound = new (window.WalkSound || StreetSound)(); textFont('Georgia');   // walk/music.js: music that sounds like the street's money
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
   grain.updatePixels(); buildSkyline();
