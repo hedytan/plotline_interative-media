@@ -458,7 +458,7 @@ function drawBack(b) {
   if (b.z0 > cam.z + NEAR_Z) {polyN(wallQuad(x, b.z0, x + b.side * 20, b.z0, 0, b.h), toneN(b.color, b.z0, 0.6));}
 }
 function drawLot(L) {
-  if (L.owned && L.home) { drawOwnedLot(L); return; }
+  // Your own home stays the real house it was; a YOUR HOME sign (drawYours) marks it.
   const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}

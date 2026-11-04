@@ -71,7 +71,8 @@ function commuteText() { const m = commuteMin(); return m < 60 ? `${m} min` : `$
 function sayToast(text) { toasts.push({ text, t: clockT }); }
 function popMoney(v, label) { moneyPops.push({ text: (v < 0 ? '−' : '+') + money(Math.abs(v)) + (label ? '  ' + label : ''), t: clockT + moneyPops.length * 0.35, up: v > 0 }); }
 function addMoney(v, label) { if (Math.abs(v) < 1) { return; } wallet += v; popMoney(v, label); sound.cash(v > 0); }
-function priceOf(L) { return TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * L.priceK; }
+// Under her rules the land tax keeps land prices down (Henry George), so homes cost less.
+function priceOf(L) { return (rules === 2 ? 0.7 : 1) * TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * L.priceK; }
 function chunkTier(slot) { const v = townSlot(slot); return typeof v === 'string' ? STYLES_LOT[v].tier : v; }
 function rentFor(zn) { return Math.round(TOWNS[zn].rent * rentBase / RENT_WEEK); }
 // What a home you own is worth now, and what the bank will still lend you against them all.
@@ -134,9 +135,10 @@ function plotsForChunk(ch, r) {
     }
   }
   // The very first block: one home you can just afford, close ahead, so the story starts at once.
-  if (ch.c === 0 && !owned.length && rules === 1) {
+  if (ch.c === 0 && !owned.length) {
     const L = ch.lots.filter(l => !l.special && l.z0 > ch.z0 + CROSS_W + 4).sort((a, b) => a.z0 - b.z0)[0];
     if (L) {
+      for (const M of ch.lots) { if (M !== L) { M.forSale = false; } }   // nothing dearer beside it to confuse you
       if (!L.forSale) { Object.assign(L, { forSale: true, priceK: 1 }); const mid = (L.z0 + L.z1) / 2; for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'person', x: L.side * (EDGE_X - 0.7 - k * 0.4), z: mid + (k ? 1.4 : -0.6), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, lotRef: L }); } }
       L.investorAt = -1; L.priceK = 1; L.priceK = START_SAVINGS * 0.93 / DEPOSIT / priceOf(L);
     }
@@ -219,15 +221,18 @@ function boardUpdate(z) {
 function onPassGo() {
   if (ending || intro) { return; }
   lifeAge++;
-  // Two lines only: what your job left you, and what your homes earned you.
+  // Two lines only: what your job left you (after rent, or the mortgage on your own home),
+  // and what your other homes earned you (rent, less their interest, and in Round 2 the land tax).
   let job = WAGES - LIVING;
   if (!home) { rentWeek = rentFor(zone); const rentYear = rentWeek * 52; rentPaid += rentYear; job -= rentYear; }
-  const tenants = owned.filter(o => !o.home);
-  let homes = -loans * INTEREST;
+  const mine = owned.find(o => o.home), tenants = owned.filter(o => !o.home);
+  const homeLoan = mine ? Math.min(loans, mine.price * (1 - DEPOSIT)) : 0;
+  job -= homeLoan * INTEREST;
+  let homes = -(loans - homeLoan) * INTEREST;
   if (tenants.length) { const r = tenants.reduce((s, o) => s + rentOf(o), 0); rentIn += r; homes += r; tenants.forEach(o => { o.lift *= rules === 1 ? 1.03 : 1; }); }
-  if (rules === 2) { homes -= totalValue() * LAND_TAX; homes += STREET_SHARE; taxShared += STREET_SHARE; }
-  addMoney(job, 'your job');
-  if (owned.length || rules === 2) { setTimeout(() => addMoney(homes, rules === 1 ? (tenants.length ? 'your tenants' : 'the bank') : 'tax shared out'), 600); }
+  if (rules === 2) { homes -= tenants.reduce((s, o) => s + valueOf(o), 0) * LAND_TAX; homes += STREET_SHARE; taxShared += STREET_SHARE; }
+  addMoney(job, home ? 'your job, after the mortgage' : 'your job, after rent');
+  if (owned.length || rules === 2) { setTimeout(() => addMoney(homes, rules === 1 ? (tenants.length ? 'your tenants' : 'the bank') : (tenants.length ? 'tenants, less land tax, plus your share' : 'your share of the land tax')), 600); }
   rentBase = Math.round(rentBase * (rules === 1 ? 1.07 : 1.02)); rentWeek = rentFor(zone);
   sayToast(`A year passes. You’re ${lifeAge}.`);
   if (lifeAge >= endAge()) { setTimeout(() => endWalk(rules === 1 ? 'rule1' : 'rule2'), 2600); }
@@ -283,7 +288,7 @@ function buyLot(L) {
       // Everything else for sale on this block jumps in price, and the homes you own here are worth more.
       for (const M of ch.lots) { if (M.forSale) { M.priceK *= 1.15; } }
       // ...including the homes you own here, the one you just bought too: the bank will lend you more against them.
-      for (const q of owned) { if (q.key && q.key.split(':')[1] === String(ch.slot) && q.zone === zone) { q.lift *= 1.15; } }
+      for (const q of owned) { if (q.key && q.key.split(':')[1] === String(ch.slot) && q.zone === zone) { q.lift *= 1.07; } }
     }
     landlordMode = owned.length >= 2;
     soldBeat = { t: clockT, who: familyOf(L), n, ok: true };
@@ -471,7 +476,7 @@ function drawBillboard(q, p) {
 }
 // People queueing for an open home.
 function drawOpenHome(q, p) {
-  const k = q.k; if (k < 2) { return; }
+  const k = q.k; if (k < 2 || emptyK < 0.7 || (rules === 1 && movedOut >= 6)) { return; }
   ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
   ctx.fillStyle = '#2a2a30'; ctx.fillRect(q.x - 0.05 * k, q.y - 2.6 * k, 0.1 * k, 2.6 * k);
   ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - 1 * k, q.y - 2.6 * k, 2 * k, 0.8 * k);
@@ -602,7 +607,7 @@ function drawFlowers(q, p) {
 }
 // The sign outside a home you own and rent out.
 function drawYours(L) {
-  if (L.home || !L.owned) { return; }
+  if (!L.owned) { return; }
   const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
   if (base.rz < 1.5 || base.rz > FAR_Z * 0.8) { return; }
   const k = base.k, w = 3.4 * k, h = 1.6 * k, top = base.y - 3 * k, o = owned.find(q => q.key === L.memoryKey);
@@ -612,8 +617,8 @@ function drawYours(L) {
   ctx.strokeStyle = rules === 1 ? OWNER_COL : SHARE_COL; ctx.lineWidth = Math.max(1, 0.08 * k); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
   if (w > 26) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${h * 0.26}px Georgia, serif`; ctx.fillStyle = rules === 1 ? '#ffe9a8' : '#c8f0d0'; ctx.fillText(rules === 1 ? 'YOURS · LET' : 'YOURS', base.x, top - h * 0.2 + h * 0.3);
-    if (o) { ctx.font = `${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#e8dcc8'; ctx.fillText(`tenant pays ${money(rentOf(o) / 52)}/wk`, base.x, top - h * 0.2 + h * 0.66, w * 0.9); }
+    ctx.font = `bold ${h * 0.26}px Georgia, serif`; ctx.fillStyle = rules === 1 ? '#ffe9a8' : '#c8f0d0'; ctx.fillText(L.home ? 'YOUR HOME' : rules === 1 ? 'YOURS · LET' : 'YOURS', base.x, top - h * 0.2 + h * 0.3);
+    if (o && !L.home) { ctx.font = `${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#e8dcc8'; ctx.fillText(`tenant pays ${money(rentOf(o) / 52)}/wk`, base.x, top - h * 0.2 + h * 0.66, w * 0.9); }
   }
   ctx.restore();
 }
@@ -647,14 +652,15 @@ function drawBoardHud() {
     }
     // The plot beside you.
     const L = plotHere(z), act = actionFor(L);
-    if (L) { const nw = (textStyle(BOLD), textSize(17), textWidth(nextText()) + 90), low = width / 2 - nw / 2 < 16 + w + 8 || width / 2 + nw / 2 > wx - 8; textStyle(NORMAL); drawListing(L, width - 16 - 200, low ? 184 : y + wh + 20); }
+    const beat = soldBeat && clockT - soldBeat.t < 2.4;
+    if (L && !beat) { const nw = (textStyle(BOLD), textSize(17), textWidth(nextText()) + 90), low = width / 2 - nw / 2 < 16 + w + 8 || width / 2 + nw / 2 > wx - 8; textStyle(NORMAL); drawListing(L, width - 16 - 200, low ? 184 : y + wh + 20); }
     for (let i = toasts.length - 1; i >= 0; i--) {
       const t = toasts[i], a2 = clockT - t.t; if (a2 > 4.2) { toasts.splice(i, 1); continue; }
       drawingContext.globalAlpha = easeN(a2 / 0.3) * (1 - easeN((a2 - 3.6) / 0.6));
       textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 146 - (toasts.length - 1 - i) * 26);
       noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
     }
-    drawNextBar();
+    if (!beat) { drawNextBar(); }
     // What the street sounds like, bottom left.
     if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
       const on = sound.enabled && sound.context && sound.context.state === 'running', label = on ? `♪  ${MUSIC_NAME[sound.style]}` : '♪  Click for sound';
