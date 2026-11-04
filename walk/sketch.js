@@ -262,9 +262,9 @@ function drawSky() {
   // Sun behind the landmark tower and soft volumetric rays.
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55);
-  sg.addColorStop(0, `rgba(255,236,170,${0.75 * (1 - night)})`); sg.addColorStop(0.25, `rgba(255,190,110,${0.3 * (1 - night)})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
+  sg.addColorStop(0, `rgba(255,240,200,${0.5 * (1 - night)})`); sg.addColorStop(0.25, `rgba(255,200,140,${0.16 * (1 - night)})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
   ctx.fillStyle = sg; ctx.fillRect(-80, -height * 0.3, width + 160, height * 1.3);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 0; i++) {   // the stylised sun rays are off: a softer, more real sky
     const a = -Math.PI / 2 + (i - 4) * 0.28 + Math.sin(clockT * 0.05 + i) * 0.04, len = height * 1.4, w = 0.05 + (i % 3) * 0.02;
     const rg = ctx.createLinearGradient(sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len);
     rg.addColorStop(0, `rgba(255,220,150,${0.1 * (1 - night)})`); rg.addColorStop(1, 'rgba(255,220,150,0)');
@@ -300,17 +300,17 @@ function drawSkyline() {
     for (let y = hy - h + 4; y < hy - 3; y += 5) {if ((y * 7 + b.a * 1000) % 3 < 1.2) {ctx.fillRect(x - w * 0.35, y, w * 0.7, 1);}}
   }
   // The landmark: a stepped art-deco tower with a glowing crown.
-  const x = cam.cx - Math.tan(cam.yaw) * cam.f, s = H / 800;
+  const x = cam.cx - Math.tan(cam.yaw) * cam.f, s = H / 800 * 0.55;
   const tiers = [[60, 120], [46, 200], [34, 270], [22, 320], [12, 350]];
   ctx.save();
   for (const [w, h] of tiers) {
     const g = ctx.createLinearGradient(x - w * s, 0, x + w * s, 0);
-    g.addColorStop(0, mixHex('#c88a50', '#3a3366', night)); g.addColorStop(0.5, mixHex('#fff0c0', '#8a7ac8', night)); g.addColorStop(1, mixHex('#b07a48', '#2e2a55', night));
+    g.addColorStop(0, mixHex(mixHex('#c88a50', '#3a3366', night), haze, 0.45)); g.addColorStop(0.5, mixHex(mixHex('#f0dcb0', '#8a7ac8', night), haze, 0.45)); g.addColorStop(1, mixHex(mixHex('#b07a48', '#2e2a55', night), haze, 0.45));
     ctx.fillStyle = g; ctx.fillRect(x - w * s, hy - h * s, w * 2 * s, h * s - (tiers[0] === undefined ? 0 : 0) + 2);
   }
   ctx.fillStyle = mixHex('#fff4c8', '#c8b8ff', night); ctx.beginPath(); ctx.moveTo(x - 5 * s, hy - 350 * s); ctx.lineTo(x, hy - 440 * s); ctx.lineTo(x + 5 * s, hy - 350 * s); ctx.fill();
   ctx.globalCompositeOperation = 'lighter';
-  const cg = ctx.createRadialGradient(x, hy - 330 * s, 0, x, hy - 330 * s, 90 * s); cg.addColorStop(0, 'rgba(255,240,180,0.6)'); cg.addColorStop(1, 'rgba(255,240,180,0)');
+  const cg = ctx.createRadialGradient(x, hy - 330 * s, 0, x, hy - 330 * s, 90 * s); cg.addColorStop(0, 'rgba(255,240,180,0.15)'); cg.addColorStop(1, 'rgba(255,240,180,0)');
   ctx.fillStyle = cg; ctx.fillRect(x - 90 * s, hy - 420 * s, 180 * s, 180 * s);
   ctx.restore();
   // Golden haze over the horizon.
@@ -339,9 +339,10 @@ function drawGround(z, side) {
         polyN([P(side * ROAD_W, 0, za), P(side * 90, 0, za), P(side * 90, 0, zb), P(side * ROAD_W, 0, zb)], f('#55555d'));
       } else {
         const tile = Math.floor(za / 1.6) % 2, stripe = DISTRICTS[ch.tier].stripe;
-        polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#e8dcc4' : '#d8cab0'));
+        polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#d6d0c4' : '#cdc6b8'));
         // Board-colour band along the kerb.
-        polyN([P(side * (ROAD_W + 0.15), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, zb), P(side * (ROAD_W + 0.15), 0.13, zb)], f(stripe[tile]));
+        polyN([P(side * ROAD_W, 0.13, za), P(side * (ROAD_W + 0.3), 0.13, za), P(side * (ROAD_W + 0.3), 0.13, zb), P(side * ROAD_W, 0.13, zb)], f('#b4ada2'));
+        polyN([P(side * (ROAD_W + 0.3), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, zb), P(side * (ROAD_W + 0.3), 0.13, zb)], f(mixHex(stripe[0], '#b4ada2', 0.35)));
         polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park || ch.green ? '#6f9a52' : ch.style === 'caravan' ? '#b8a27a' : '#a89478'));
       }
     }
@@ -352,6 +353,7 @@ function drawGround(z, side) {
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
+    if (ch.slot !== 0) { continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }

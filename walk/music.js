@@ -10,7 +10,7 @@
  */
 // The band's volume, well above the street hum so it is clearly heard.
 const MUSIC_VOL = 6;
-const MUSIC_NAME = { rich: 'Lounge jazz · a rich street', mid: 'Bright pop · a middling street', poor: 'Old tape, out-of-tune piano · a poor street' };
+const MUSIC_NAME = { rich: 'Jazz · a rich street', mid: 'Pop · a middle street', poor: 'Old tape · a poor street' };
 const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 const STYLES = {
   // chords as MIDI notes, one bar each; bass walks through the chord tones
