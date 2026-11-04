@@ -12,9 +12,9 @@
  * outlined plot on the ground. As you approach, its building springs up out of the ground
  * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
  *
- * The Landlord's Walk (board.js): you are 24, renting, saving for a deposit. Every lap past
- * GO is a year. Generated billboards, rising prices, investors and open-home queues line the
- * street. Turn left to move further out, right to move back in. Buy a home before 30.
+ * The Landlord's Walk (board.js): Lizzie Magie's two rule sets on one street. Rule 1: buy homes
+ * anywhere, own 5 to win, and watch the residents leave. Rule 2: the same street with a shared
+ * land tax. Pay day comes twice a lap. Turn left to move further out, right to move back in.
  *
  * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
  *   E or Space to buy the plot beside you, Left (further out) / Right (toward the city) to turn,
@@ -187,7 +187,7 @@ function draw() {
   for (const [c] of chunks) {if (c < c0 - 1 || c > c1 + 1) {chunks.delete(c);}}
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
   canvasNode.dataset.year=lifeAge;canvasNode.dataset.vacant=here.lots.filter(l=>l.vacant).length;
-  if (here.c !== lastChunk) { if (here.slot === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); onPassGo(); } lastChunk = here.c; }
+  if (here.c !== lastChunk) { if (here.slot % 5 === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); onPassGo(); } lastChunk = here.c; }
   if (tier !== lastTier) { districtCard = { tier, t: clockT, lap: Math.floor(here.c / LAP_LEN) + 1 }; lastTier = tier; }
   updateLandmarks(z); boardUpdate(z);
   if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
@@ -370,7 +370,7 @@ function drawWorld(z, side) {
   for (const L of lots) {
     const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK);
     if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    riseK = g; drawLot(L); riseK = 1;
+    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); }
     const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
   }
   const items = [];
@@ -384,7 +384,7 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'hiring') {drawHiring(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);}
     ctx.restore();
   }
   if (!side) {drawTargetMarker();}
@@ -422,7 +422,7 @@ function drawBack(b) {
   if (b.z0 > cam.z + NEAR_Z) {polyN(wallQuad(x, b.z0, x + b.side * 20, b.z0, 0, b.h), toneN(b.color, b.z0, 0.6));}
 }
 function drawLot(L) {
-  if (L.owned) { drawOwnedLot(L); return; }
+  if (L.owned && L.home) { drawOwnedLot(L); return; }
   const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
