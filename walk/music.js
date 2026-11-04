@@ -63,8 +63,8 @@ class WalkSound extends StreetSound {
     this.hum.gain.setTargetAtTime(0.03 + (tier >= 3 ? 0.02 : 0), now, 1);
     // How rich is this street? The town counts most, then the block's district.
     const z = typeof zone === 'number' ? zone : 0;
-    this.wealth = constrain((tier + (5 - z) * 1.2) / (4 + 6), 0, 1);
-    this.nextStyle = this.wealth > 0.66 ? 'rich' : this.wealth < 0.38 ? 'poor' : 'mid';
+    this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
+    this.nextStyle = this.wealth > 0.62 ? 'rich' : this.wealth < 0.3 ? 'poor' : 'mid';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
     // The poor tape crackles all the time it plays.
     if (this.style === 'poor' && Math.random() < 0.5) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }

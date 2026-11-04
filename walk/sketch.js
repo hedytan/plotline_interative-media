@@ -120,15 +120,17 @@ function chunkAt(c) {
   if (chunks.has(c)) {return chunks.get(c);}
   const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(slot), z0 = c * CHUNK_LEN;
   const r = rngN(seed + slot * 7919 + zone * 104729);
-  const ch = { c, slot, tier, z0, lots: [], props: [], back: [] };
+  const style = typeof chunkStyle === 'function' ? chunkStyle(slot) : null, sty = style ? STYLES_LOT[style] : null;
+  const ch = { c, slot, tier, z0, lots: [], props: [], back: [], style, green: typeof TOWNS !== 'undefined' && TOWNS[zone] && TOWNS[zone].green };
   for (const side of [-1, 1]) {
     let z = z0 + CROSS_W + 0.5;
     const special = null;   // no casinos or jail: the walk is about rent, not luck
     let specialAt = special ? z0 + CROSS_W + 6 + r() * 6 : Infinity;
     while (z < z0 + CHUNK_LEN - 3) {
       if (z >= specialAt - 0.5) { const len = special === 'jail' ? 20 : 18; ch.lots.push(makeLot(special, tier, side, z, len, r)); z += len + 0.6; specialAt = Infinity; continue; }
-      const len = lotLength(tier, r); if (z + len > z0 + CHUNK_LEN - 1) {break;}
-      ch.lots.push(makeLot(null, tier, side, z, len, r)); z += len + (tier === 2 ? 2.5 : tier >= 3 ? 1.2 : r() < 0.3 ? 1 : 0.15);
+      const len = sty ? mixN(sty.len[0], sty.len[1], r()) : lotLength(tier, r); if (z + len > z0 + CHUNK_LEN - 1) {break;}
+      const L = makeLot(null, tier, side, z, len, r); if (sty) {styleLot(L, style, r);}
+      ch.lots.push(L); z += len + (style === 'caravan' ? mixN(1, 2.5, r()) : style === 'bungalow' ? 1.6 : tier === 2 ? 2.5 : tier >= 3 ? 1.2 : r() < 0.3 ? 1 : 0.15);
     }
     // A taller back row seen through the cross streets.
     ch.back.push({ side, z0: z0 + CROSS_W - 2, z1: z0 + CHUNK_LEN, x: EDGE_X + 26, h: [9, 14, 20, 40, 80][tier] * mixN(0.8, 1.3, r()), color: pickN(r, ['#c99a7a', '#b78a8a', '#9fa8b8', '#c2b090']) });
@@ -340,7 +342,7 @@ function drawGround(z, side) {
         polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#e8dcc4' : '#d8cab0'));
         // Board-colour band along the kerb.
         polyN([P(side * (ROAD_W + 0.15), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, za), P(side * (ROAD_W + 0.75), 0.13, zb), P(side * (ROAD_W + 0.15), 0.13, zb)], f(stripe[tile]));
-        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park ? '#6f9a52' : '#a89478'));
+        polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park || ch.green ? '#6f9a52' : ch.style === 'caravan' ? '#b8a27a' : '#a89478'));
       }
     }
     // Centre line and zebra crossings.
@@ -439,7 +441,7 @@ function drawLot(L) {
   const near = P(x, 0, z0); if (near.rz > FAR_Z) {return;}
   if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
   if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
-  [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H);
+  if (L.style) { drawStyled(L, x, z0, z1, H); } else { [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H); }
   if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
@@ -550,6 +552,152 @@ function drawTower(L, x, z0, z1, H) {
   if (L.crown) {
     const xc = x + L.side * 3, za = Math.max(L.z0 + 3, z0), zb = L.z1 - 3, Hc = H * 0.18;
     if (zb > za) { polyN(wallQuad(xc, za, xc, zb, H, H + Hc), toneN(L.color, midN(za, zb), 1.1)); if (L.spire) { const s = P(xc + L.side * 4, H + Hc + 26, midN(za, zb)), a = P(xc, H + Hc, midN(za, zb) - 1), b = P(xc, H + Hc, midN(za, zb) + 1); polyN([a, b, s], toneN('#fff0c0', L.z0, 1.1)); } }
+  }
+}
+/* ---------- Building types that only some towns have: castles, villas, bungalows, caravans ---------- */
+function styleLot(L, style, r) {
+  const st = STYLES_LOT[style];
+  Object.assign(L, { style, setback: st.setback, sign: false, name: '', crooked: 0 });
+  if (style === 'castle') { Object.assign(L, { H: mixN(8, 10, r()), depth: 26, color: pickN(r, ['#e8dcc8', '#d8cfc0', '#ecd4dc', '#d4dce8', '#e8e0f0']), roof: pickN(r, ['#3a5aa8', '#c84a6a', '#5a3a8a', '#2f7a6a']), flag: pickN(r, ['#e23b3b', '#f2d13a', '#3f8fd6', '#d94f9a']), fountain: false }); }
+  else if (style === 'villa') { Object.assign(L, { H: mixN(6.6, 7.6, r()), depth: 14, color: pickN(r, ['#f4ead8', '#f8e4c8', '#fff4e0', '#f0e0d8']), roof: pickN(r, ['#c8643a', '#b8583a', '#d07a4a']), fountain: r() < 0.6 }); }
+  else if (style === 'bungalow') { Object.assign(L, { H: mixN(3.2, 3.7, r()), depth: 12, color: pickN(r, ['#f2d8b0', '#d8e8f0', '#f0d0d0', '#e0ecd0', '#fff0c8', '#d8d0e8']), roof: pickN(r, ['#8a5a4a', '#5a6a7a', '#a0583a', '#6a7a5a']), door: pickN(r, ['#c8322a', '#2f6a9a', '#2e7a47', '#f2b23a']), tree: r() < 0.6 }); }
+  else if (style === 'caravan') { Object.assign(L, { H: mixN(2.4, 2.7, r()), depth: 3.2, color: pickN(r, ['#f2eee2', '#e8e4d6', '#dfe6ea', '#efe2c8']), band: pickN(r, ['#4a8ab8', '#c86a3a', '#6a9a5a', '#b84a4a']), rust: r(), awn: r() < 0.6 ? pickN(r, ['#3f8fd6', '#e8a030', '#5fa35b', '#c84a4a']) : null, wash: r() < 0.4 }); }
+}
+function drawStyled(L, x, z0, z1, H) {
+  if (L.style === 'castle') { drawCastle(L, x, z0, z1, H); }
+  else if (L.style === 'villa') { drawVilla(L, x, z0, z1, H); }
+  else if (L.style === 'bungalow') { drawBungalow(L, x, z0, z1, H); }
+  else if (L.style === 'caravan') { drawCaravan(L, x, z0, z1, H); }
+}
+// One window on a facade at x, between za..zb along the street and ya..yb up.
+function winN(L, x, z0, za, zb, ya, yb, glass, frame, lit) {
+  if (zb <= z0) { return; }
+  const q = wallQuad(x - L.side * 0.04, Math.max(za, z0), x - L.side * 0.04, zb, ya, yb);
+  polyN(q, toneN(lit ? '#ffd98a' : glass, za), frame ? toneN(frame, za) : null, 1.5);
+}
+function drawCastle(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, stone = L.color, gz = L.z0 + len / 2, r = rngN(L.seed + 3);
+  // The keep, behind the curtain wall: only its upper part shows above it.
+  const xk = x + s * 7, ka = L.z0 + len * 0.28, kb = L.z1 - len * 0.28, KH = H + 10;
+  if (kb > z0) {
+    polyN(wallQuad(xk, Math.max(ka, z0), xk, kb, H - 0.5, KH), toneN(stone, midN(ka, kb), 0.9));
+    for (let zz = ka; zz < kb - 0.6; zz += 1.4) { if (zz + 0.7 > z0) { polyN(wallQuad(xk, Math.max(zz, z0), xk, zz + 0.7, KH, KH + 0.9), toneN(stone, zz, 0.95)); } }
+    for (let i = 0; i < 4; i++) { const wa = ka + (kb - ka) * (0.12 + i * 0.22); winN(L, xk, z0, wa, wa + 0.7, H + 3.5, H + 5.6, '#3a3048', null, r() < 0.3 + night * 0.6); }
+  }
+  // Stone courses and battlements along the wall.
+  ctx.strokeStyle = toneN(shadeN(stone, 0.82), midN(z0, z1)); ctx.lineWidth = 1;
+  for (let y = 1.1; y < H; y += 1.1) { const a = P(x - s * 0.02, y, z0), b = P(x - s * 0.02, y, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let zz = L.z0; zz < L.z1 - 0.6; zz += 1.4) { if (zz + 0.7 > z0) { polyN(wallQuad(x, Math.max(zz, z0), x, zz + 0.7, H, H + 0.9), toneN(stone, zz, 1.02)); } }
+  // Arrow-slit windows.
+  for (let zz = L.z0 + 3; zz < L.z1 - 2; zz += 3.2) { if (Math.abs(zz - gz) > 4) { winN(L, x, z0, zz, zz + 0.35, H * 0.45, H * 0.72, '#2a2430', null, false); } }
+  // The gate: an arch with a portcullis, and a moat with a drawbridge in front.
+  if (gz + 1.8 > z0) {
+    const pts = []; for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; pts.push(P(x - s * 0.05, 3.2 + Math.sin(a) * 1.8, gz - Math.cos(a) * 1.8)); }
+    if (gz - 1.8 > z0) { polyN([P(x - s * 0.05, 0, gz - 1.8), ...pts, P(x - s * 0.05, 0, gz + 1.8)], toneN('#2a2018', gz)); }
+    ctx.strokeStyle = toneN('#c8a040', gz); ctx.lineWidth = 1.2;
+    for (let zz = gz - 1.5; zz <= gz + 1.5; zz += 0.5) { if (zz > z0) { const a = P(x - s * 0.06, 0.4, zz), b = P(x - s * 0.06, 3.6 + Math.cos((zz - gz) / 1.8 * HALF_PI) * 1.2, zz); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  }
+  const ma = x - s * 0.4, mb = x - s * 2.8;
+  polyN([P(ma, 0.06, z0), P(mb, 0.06, z0), P(mb, 0.06, z1), P(ma, 0.06, z1)], toneN('#5aa0c8', midN(z0, z1)));
+  if (gz + 1.6 > z0) { polyN([P(ma, 0.1, Math.max(gz - 1.6, z0)), P(mb - s * 0.3, 0.1, Math.max(gz - 1.6, z0)), P(mb - s * 0.3, 0.1, gz + 1.6), P(ma, 0.1, gz + 1.6)], toneN('#8a6040', gz)); }
+  // Round towers with pointed roofs and flags, far ones first.
+  const towers = [L.z0 + 1.8, gz - 4, gz + 4, L.z1 - 1.8].sort((a, b) => b - a);
+  for (const zt of towers) {
+    const ta = zt - 1.6, tb = zt + 1.6, xt = x - s * 1.4, TH = H + 5 + (Math.abs(zt - gz) < 5 ? 1.5 : 0);
+    if (tb < z0) { continue; }
+    if (ta > cam.z + NEAR_Z) { polyN(wallQuad(xt, ta, x + s * 1.6, ta, 0, TH), toneN(stone, ta, 0.62)); }
+    const fq = wallQuad(xt, Math.max(ta, z0), xt, tb, 0, TH), g = ctx.createLinearGradient(fq[0].x, 0, fq[1].x, 0);
+    g.addColorStop(0, toneN(stone, zt, 0.8)); g.addColorStop(0.5, toneN(stone, zt, 1.12)); g.addColorStop(1, toneN(stone, zt, 0.86));
+    polyN(fq, g);
+    winN(L, xt, z0, zt - 0.3, zt + 0.3, TH - 3.2, TH - 1.6, '#2a2430', '#f4ead0', r() < night);
+    if (zt > cam.z + NEAR_Z + 1) {
+      const a1 = P(xt - s * 0.5, TH, Math.max(ta - 0.5, cam.z + NEAR_Z)), a2 = P(xt - s * 0.5, TH, tb + 0.5), apex = P(xt + s * 1.4, TH + 5.5, zt);
+      polyN([a1, a2, apex], toneN(L.roof, zt));
+      polyN([a1, P(xt + s * 1.4, TH, zt), apex], toneN(L.roof, zt, 0.75));
+      // A flag on a pole, rippling.
+      const top = P(xt + s * 1.4, TH + 8, zt); ctx.strokeStyle = toneN('#4a4048', zt); ctx.lineWidth = Math.max(1, apex.k * 0.06); ctx.beginPath(); ctx.moveTo(apex.x, apex.y); ctx.lineTo(top.x, top.y); ctx.stroke();
+      const fl = []; for (let i = 0; i <= 6; i++) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 7.9 + wv, zt + u * 2)); }
+      for (let i = 6; i >= 0; i--) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 6.9 + wv, zt + u * 2)); }
+      polyN(fl, toneN(L.flag, zt));
+    }
+  }
+}
+function drawVilla(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, cols = Math.max(4, Math.round(len / 2.6)), r = rngN(L.seed + 4);
+  for (let i = 0; i < cols; i++) {
+    const za = L.z0 + len * (i + 0.3) / cols, zb = L.z0 + len * (i + 0.7) / cols;
+    winN(L, x, z0, za, zb, 0.8, 2.9, '#4f6070', '#ffffff', r() < 0.3 + night * 0.6); winN(L, x, z0, za, zb, 4, 6, '#4f6070', '#ffffff', r() < 0.25 + night * 0.6);
+  }
+  // A long balcony with a white railing.
+  polyN(wallQuad(x - s * 0.9, z0, x - s * 0.9, z1, 3.3, 3.55), toneN('#ffffff', midN(z0, z1)));
+  ctx.strokeStyle = toneN('#ffffff', midN(z0, z1)); ctx.lineWidth = 1;
+  for (let zz = Math.ceil(z0 / 0.4) * 0.4; zz < z1; zz += 0.4) { const a = P(x - s * 0.9, 3.55, zz), b = P(x - s * 0.9, 4.4, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  const ra = P(x - s * 0.9, 4.4, z0), rb = P(x - s * 0.9, 4.4, z1); ctx.beginPath(); ctx.moveTo(ra.x, ra.y); ctx.lineTo(rb.x, rb.y); ctx.stroke();
+  // Columns and a pediment at the front door.
+  const dz = L.z0 + len * 0.5;
+  for (const u of [-1.6, -0.6, 0.6, 1.6]) { const zc = dz + u; if (zc > z0) { polyN(wallQuad(x - s * 1.4, zc - 0.2, x - s * 1.4, zc + 0.2, 0, 6.6), toneN('#fffaf0', zc, 1.05)); } }
+  if (dz - 2.2 > z0) { polyN([P(x - s * 1.5, 6.6, dz - 2.2), P(x - s * 1.5, 6.6, dz + 2.2), P(x - s * 1.5, 8.2, dz)], toneN('#fffaf0', dz)); }
+  // A terracotta hip roof.
+  const ridge = x + s * L.depth * 0.5;
+  polyN([P(x - s * 0.6, H, z0), P(x - s * 0.6, H, z1), P(ridge, H + 3.4, Math.max(L.z1 - 4, z0)), P(ridge, H + 3.4, Math.max(L.z0 + 4, z0))], toneN(L.roof, midN(z0, z1)));
+  if (L.z0 > cam.z + NEAR_Z) { polyN([P(x - s * 0.6, H, L.z0), P(x + s * (L.depth + 0.6), H, L.z0), P(ridge, H + 3.4, L.z0 + 4)], toneN(L.roof, L.z0, 0.72)); }
+}
+function drawBungalow(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, r = rngN(L.seed + 5), mid = midN(z0, z1);
+  // Two windows with shutters, a coloured front door, and a garage at the far end.
+  for (const u of [0.08, 0.5]) {
+    const za = L.z0 + len * u, zb = za + len * 0.18;
+    winN(L, x, z0, za, zb, 1, 2.4, '#5a7080', '#ffffff', r() < 0.3 + night * 0.6);
+    if (za - 0.35 > z0) { polyN(wallQuad(x - s * 0.06, za - 0.35, x - s * 0.06, za, 1, 2.4), toneN(L.door, za, 0.9)); }
+    if (zb > z0) { polyN(wallQuad(x - s * 0.06, Math.max(zb, z0), x - s * 0.06, zb + 0.35, 1, 2.4), toneN(L.door, zb, 0.9)); }
+  }
+  const dz = L.z0 + len * 0.33; if (dz + 1 > z0) { polyN(wallQuad(x - s * 0.05, Math.max(dz, z0), x - s * 0.05, dz + 1, 0, 2.2), toneN(L.door, dz)); }
+  const ga = L.z1 - len * 0.26, gb = L.z1 - 0.4;
+  if (gb > z0) { polyN(wallQuad(x - s * 0.05, Math.max(ga, z0), x - s * 0.05, gb, 0, 2.4), toneN('#ecebe6', ga)); ctx.strokeStyle = toneN('#b8b4a8', ga); ctx.lineWidth = 1; for (let y = 0.5; y < 2.4; y += 0.45) { const a = P(x - s * 0.06, y, Math.max(ga, z0)), b = P(x - s * 0.06, y, gb); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  // A driveway, a hip roof and a chimney.
+  if (gb > z0) { polyN([P(x - s * 0.1, 0.07, Math.max(ga, z0)), P(s * EDGE_X, 0.07, Math.max(ga, z0)), P(s * EDGE_X, 0.07, gb), P(x - s * 0.1, 0.07, gb)], toneN('#c8c0b0', ga)); }
+  const ridge = x + s * L.depth * 0.5, rz0 = Math.max(L.z0 + 3, z0), rz1 = Math.max(L.z1 - 3, z0);
+  const cz = L.z0 + len * 0.7; if (cz > z0) { polyN(wallQuad(ridge - s * 2, cz, ridge - s * 2, cz + 0.7, H, H + 3), toneN('#a0583a', cz, 0.9)); }
+  polyN([P(x - s * 0.7, H, z0), P(x - s * 0.7, H, z1 + 0.4), P(ridge, H + 2.4, rz1), P(ridge, H + 2.4, rz0)], toneN(L.roof, mid));
+  if (L.z0 > cam.z + NEAR_Z) { polyN([P(x - s * 0.7, H, L.z0 - 0.4), P(x + s * (L.depth + 0.7), H, L.z0 - 0.4), P(ridge, H + 2.4, L.z0 + 3)], toneN(L.roof, L.z0, 0.7)); }
+  // A white picket fence along the pavement, with a gap at the path and a letterbox.
+  const xf = s * (EDGE_X + 0.3);
+  ctx.strokeStyle = toneN('#ffffff', mid); ctx.lineWidth = 1.4;
+  for (let zz = Math.ceil(Math.max(L.z0 - 0.6, z0) / 0.35) * 0.35; zz < L.z1 + 0.6; zz += 0.35) {
+    if (Math.abs(zz - dz - 0.5) < 0.7 || zz > ga - 0.2) { continue; }
+    const a = P(xf, 0, zz), b = P(xf, 0.95, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  }
+  const fa = P(xf, 0.7, Math.max(L.z0 - 0.6, z0)), fb = P(xf, 0.7, Math.max(dz - 0.2, z0)); ctx.beginPath(); ctx.moveTo(fa.x, fa.y); ctx.lineTo(fb.x, fb.y); ctx.stroke();
+  const lb = P(xf, 1.15, dz - 0.4); if (lb.rz > 1) { const k = lb.k; ctx.fillStyle = toneN('#6a5040', dz); ctx.fillRect(lb.x - 0.04 * k, lb.y, 0.08 * k, 1.15 * k); ctx.fillStyle = toneN(L.door, dz); ctx.fillRect(lb.x - 0.25 * k, lb.y - 0.3 * k, 0.5 * k, 0.32 * k); }
+}
+function drawCaravan(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), r = rngN(L.seed + 6);
+  // A dark skirt underneath, a pale roof cap and a coloured band along the side.
+  polyN(wallQuad(x - s * 0.02, z0, x - s * 0.02, z1, 0, 0.35), toneN('#3a3a3a', mid));
+  polyN(wallQuad(x - s * 0.02, z0, x - s * 0.02, z1, H - 0.25, H), toneN(L.color, mid, 1.12));
+  polyN(wallQuad(x - s * 0.03, z0, x - s * 0.03, z1, 1.15, 1.45), toneN(L.band, mid));
+  // Rust where the paint has gone.
+  if (L.rust > 0.4) { for (let i = 0; i < 4; i++) { const za = L.z0 + r() * (len - 1), zb = za + 0.4 + r() * 0.8, ya = 0.4 + r() * 1.5; if (zb > z0) { polyN(wallQuad(x - s * 0.04, Math.max(za, z0), x - s * 0.04, zb, ya, ya + 0.3 + r() * 0.4), toneN('#a0603a', za, 0.9)); } } }
+  winN(L, x, z0, L.z0 + len * 0.1, L.z0 + len * 0.38, 1.6, 2.15, '#4a5a6a', '#d8d8d0', r() < 0.2 + night * 0.7);
+  winN(L, x, z0, L.z0 + len * 0.78, L.z0 + len * 0.92, 1.6, 2.15, '#4a5a6a', '#d8d8d0', false);
+  const dz = L.z0 + len * 0.52; if (dz + 0.7 > z0) { polyN(wallQuad(x - s * 0.05, Math.max(dz, z0), x - s * 0.05, dz + 0.7, 0.35, 2.15), toneN(shadeN(L.color, 0.85), dz), toneN('#8a8a80', dz), 1); }
+  // Wheels.
+  const w = P(x - s * 0.1, 0.32, L.z0 + len * 0.45); if (w.rz > 1 && L.z0 + len * 0.45 > z0) { ctx.fillStyle = toneN('#1e1e22', mid); ctx.beginPath(); ctx.ellipse(w.x, w.y, 0.34 * w.k * 0.6, 0.34 * w.k, 0, 0, TWO_PI); ctx.fill(); }
+  // A tarp awning on poles, and a washing line.
+  if (L.awn) {
+    const za = Math.max(L.z0 + len * 0.15, z0), zb = L.z0 + len * 0.9;
+    if (zb > z0) {
+      polyN([P(x, H - 0.3, za), P(x, H - 0.3, zb), P(x - s * 2.6, 2.0, zb), P(x - s * 2.6, 2.0, za)], rgbaN(toneN(L.awn, mid), 0.85));
+      ctx.strokeStyle = toneN('#6a6a6a', mid); ctx.lineWidth = 1.2; for (const zz of [za, zb]) { const a = P(x - s * 2.6, 0, zz), b = P(x - s * 2.6, 2.0, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+    }
+  }
+  if (L.wash && L.z1 > z0 + 1) {
+    const xa = x - s * 3.1, a = P(xa, 1.9, Math.max(L.z0 + 0.5, z0 + 0.5)), b = P(xa, 1.9, L.z1 - 0.3);
+    if (a.rz > 1) {
+      ctx.strokeStyle = toneN('#d8d8d8', mid); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const cols = ['#e86a6a', '#ffffff', '#6a9ae8', '#f2d13a', '#8ac88a'];
+      for (let i = 0; i < 5; i++) { const zz = mixN(Math.max(L.z0 + 0.8, z0 + 0.8), L.z1 - 0.6, (i + 0.5) / 5), c = P(xa, 1.9, zz); if (c.rz > 1) { ctx.fillStyle = toneN(cols[(i + L.seed) % 5 < 0 ? 0 : (i + L.seed) % 5], zz); ctx.fillRect(c.x - 0.18 * c.k, c.y, 0.36 * c.k, 0.5 * c.k); } }
+    }
   }
 }
 function drawJail(L, x, z0, z1, H) {

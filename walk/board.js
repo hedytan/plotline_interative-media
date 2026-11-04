@@ -21,10 +21,33 @@ const GROWTH = [11, 4];                                     // % price rise per 
 const RENT_YIELD = [0.09, 0.05], INTEREST = 0.05;           // tenants pay this share of the price a year; the bank charges 5%
 const LAND_TAX = 0.035, STREET_SHARE = 9000;                // Rule 2: the tax on your land, and everyone's equal share of it
 const MOVED = [4, 3, 2, 2, 1];                              // households living in a lot, by tier
-const ZONE_NAMES = ['Inner city', 'Inner ring', 'Middle ring', 'Outer suburbs', 'New estates', 'Paddock estates'];
+// Six towns, one for each class. ← turns to a poorer town, → to a richer one. You start in the middle.
+// Each block of a town is a building type: a number is a district tier (0 shacks, 1 shops and
+// terraces, 2 mansions, 3 brick and glass, 4 towers); a word is a town's own type.
+const TOWNS = [
+  { name: 'Castle Hill', cls: 'Royalty', price: 9.5e6, rent: 4200, green: true, slots: ['villa', 'castle', 'castle', 'villa', 'castle', 'villa', 'castle', 'castle', 'villa', 'castle'] },
+  { name: 'Mansion Row', cls: 'The rich', price: 3.4e6, rent: 1900, green: true, slots: [2, 2, 'villa', 2, 2, 'villa', 2, 'villa', 2, 2] },
+  { name: 'The City', cls: 'Upper middle class', price: 1.4e6, rent: 820, slots: [1, 3, 3, 4, 4, 3, 1, 4, 4, 3] },
+  { name: 'Leafy Suburbs', cls: 'Middle class', price: 760000, rent: 520, green: true, slots: ['bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow'] },
+  { name: 'Working Town', cls: 'Working class', price: 430000, rent: 360, slots: [0, 1, 0, 0, 1, 0, 1, 0, 0, 1] },
+  { name: 'The Fringe', cls: 'The poorest', price: 175000, rent: 190, slots: ['caravan', 0, 'caravan', 'caravan', 0, 'caravan', 'caravan', 0, 'caravan', 'caravan'] }
+];
+const ZONE_NAMES = TOWNS.map(t => t.name), START_ZONE = 3;
+// The building types that only some towns have: their district (for colours and the ground), lot size and title-deed name.
+const STYLES_LOT = {
+  castle: { tier: 2, len: [28, 33], setback: 8, name: 'A castle', moved: 1, priceK: 1.6, col: ['#8a4a9a', '#d8b0e8'] },
+  villa: { tier: 2, len: [20, 26], setback: 6, name: 'Grand villa', moved: 1, priceK: 0.8, col: ['#c8322a', '#f2d13a'] },
+  bungalow: { tier: 1, len: [11, 14], setback: 4.5, name: 'Family bungalow', moved: 1, priceK: 1, col: ['#3f8fd6', '#a9d8f0'] },
+  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] }
+};
+function townSlot(slot) { return TOWNS[zone].slots[slot]; }
+function chunkStyle(slot) { const v = townSlot(slot); return typeof v === 'string' ? v : null; }
+function deedName(L) { return L.style ? STYLES_LOT[L.style].name : DISTRICTS[L.tier].name; }
+function deedCol(L) { return L.style ? STYLES_LOT[L.style].col[0] : DISTRICTS[L.tier].stripe[0]; }
+function movedFrom(L) { return L.style ? STYLES_LOT[L.style].moved : MOVED[L.tier]; }
 const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47', SHARE_COL = '#3f9e6a';
 
-let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid = 0, rentWeek = RENT_WEEK, rentBase = RENT_WEEK;
+let wallet = START_SAVINGS, lifeAge = START_AGE, zone = START_ZONE, market = 1, rentPaid = 0, rentWeek = TOWNS[START_ZONE].rent, rentBase = RENT_WEEK;
 let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
 let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
 let rules = 1, firstRun = null, startSeed = null, emptyK = 1;
@@ -34,14 +57,14 @@ const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
-function commuteMin() { return 15 + zone * 25; }
+function commuteMin() { return [15, 20, 10, 35, 55, 95][zone]; }
 function commuteText() { const m = commuteMin(); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; }
 function sayToast(text) { toasts.push({ text, t: clockT }); }
 function popMoney(v, label) { moneyPops.push({ text: (v < 0 ? '−' : '+') + money(Math.abs(v)) + (label ? '  ' + label : ''), t: clockT + moneyPops.length * 0.35, up: v > 0 }); }
 function addMoney(v, label) { if (Math.abs(v) < 1) { return; } wallet += v; popMoney(v, label); sound.cash(v > 0); }
-function priceOf(L) { return BASE_PRICE[L.tier] * Math.pow(ZONE_PRICE, zone) * market * L.priceK; }
-function chunkTier(slot) { return Math.max(0, TIER_OF[slot] - zone); }
-function rentFor(zn) { return Math.round(rentBase * Math.pow(0.8, zn)); }
+function priceOf(L) { return TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * L.priceK; }
+function chunkTier(slot) { const v = townSlot(slot); return typeof v === 'string' ? STYLES_LOT[v].tier : v; }
+function rentFor(zn) { return Math.round(TOWNS[zn].rent * rentBase / RENT_WEEK); }
 // What a home you own is worth now, and what the bank will still lend you against them all.
 function valueOf(o) { return o.price * (market / o.mBuy) * o.lift; }
 function totalValue() { return owned.reduce((s, o) => s + valueOf(o), 0); }
@@ -68,7 +91,7 @@ function fillSign(text, tier) {
     .replace('{growth}', Math.round(GROWTH * 100 + 4)).replace(/{commute}/g, commuteText());
 }
 function pickSign(tier, r) {
-  const pool = landlordMode ? SIGNS.landlord : zone >= 3 && r() < 0.5 ? SIGNS.out : SIGNS[tier];
+  const pool = landlordMode ? SIGNS.landlord : zone >= 4 && r() < 0.5 ? SIGNS.out : SIGNS[tier];
   return fillSign(pool[Math.floor(r() * pool.length)], tier);
 }
 
@@ -84,6 +107,18 @@ function plotsForChunk(ch, r) {
       Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: rules === 1 ? inv : -1 });
     }
   }
+  // Front-yard trees in the suburbs, palms at the villas, bins and a fire drum at the caravan park.
+  for (const L of ch.lots) {
+    const mid = (L.z0 + L.z1) / 2;
+    if (L.style === 'bungalow' && L.tree) { ch.props.push({ kind: 'tree', x: L.side * (EDGE_X + 2.2), z: L.z0 + (L.z1 - L.z0) * 0.2, h: mixN(4, 5.5, r()), tone: r() }); }
+    if (L.style === 'villa' || L.style === 'castle') { ch.props.push({ kind: 'tree', x: L.side * (EDGE_X + 1.8), z: mid - 5, h: mixN(5, 7, r()), tone: r() }, { kind: 'tree', x: L.side * (EDGE_X + 1.8), z: mid + 5, h: mixN(5, 7, r()), tone: r() }); }
+    if (L.style === 'caravan' && r() < 0.5) { ch.props.push({ kind: 'bin', x: L.side * (EDGE_X - 0.6), z: mid, tone: r() }); }
+  }
+  for (const b of ch.back) {
+    if (ch.style === 'bungalow') { b.h = mixN(5, 7.5, r()); b.color = pickN(r, ['#c8a890', '#b8a898', '#a8b0a0']); }
+    if (ch.style === 'caravan') { b.h = mixN(2.5, 4, r()); b.color = pickN(r, ['#9a9080', '#8a8a7a']); }
+    if (ch.style === 'castle' || ch.style === 'villa') { b.h = mixN(12, 18, r()); b.color = pickN(r, ['#5a8a4a', '#4a7a42', '#6a9a52']); }
+  }
   // A signpost at the crossing: which way is cheaper, which way is richer.
   ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
   // Billboards on the pavement, written from the prices on this block.
@@ -93,7 +128,7 @@ function plotsForChunk(ch, r) {
     ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, text: pickSign(ch.tier, r), col: DISTRICTS[ch.tier].stripe[0] });
   }
   // An open home with a queue down the pavement, in the cheaper districts.
-  if (ch.tier <= 2 && r() < 0.55) {
+  if (ch.tier <= 2 && zone >= 2 && r() < 0.55) {
     const L = ch.lots.find(l => !l.special && !l.forSale && l.tier <= 2);
     if (L) {
       const n = 8 + Math.floor(r() * 10), zz = L.z0 + 1;
@@ -119,7 +154,7 @@ function addGarden(ch, L, fresh) {
 function boardUpdate(z) {
   updateTurn();
   const dt = Math.min(deltaTime / 1000, 0.05);
-  if (!paused && !intro && !ending) { market *= 1 + GROWTH[rules - 1] * dt / 100; }
+  if (!paused && !intro && !ending) { market *= 1 + GROWTH[rules - 1] / 100 * dt / 100; }
   if (ending && ending.kind === 'rule1') { emptyK = Math.max(0.06, 1 - (clockT - ending.t) / 3); }
   for (const ch of chunks.values()) {
     evolveStreet(ch);
@@ -135,7 +170,7 @@ function boardUpdate(z) {
     for (const L of ch.lots) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
-        Object.assign(L, { forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
         preserveLot(L);
         ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
         sound.jail(); sayToast('Sold, to an investor. Before you even got there.');
@@ -197,7 +232,7 @@ function useHere() {
 function buyLot(L) {
   const price = priceOf(L), dep = price * DEPOSIT, cash = Math.min(wallet, dep), fromEquity = dep - cash;
   addMoney(-cash, 'deposit'); equityUsed += fromEquity; loans += price - dep + fromEquity;
-  const first = !home, ch = chunks.get(Math.floor(L.z0 / CHUNK_LEN)), mid = (L.z0 + L.z1) / 2, n = MOVED[L.tier];
+  const first = !home, ch = chunks.get(Math.floor(L.z0 / CHUNK_LEN)), mid = (L.z0 + L.z1) / 2, n = movedFrom(L);
   const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
   owned.push(o);
   if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
@@ -225,7 +260,7 @@ function buyLot(L) {
 function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = kind === 'rule1' ? 0.6 : 0.15; nightTarget = baseNight; }
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
-  wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; rentBase = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  wallet = START_SAVINGS; lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
   owned = []; loans = 0; equityUsed = 0; rentIn = 0; movedOut = 0; newNeighbours = 0; taxShared = 0; emptyK = 1;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0; moneyPops.length = 0;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
@@ -246,12 +281,12 @@ function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 &&
 let sideSt = null;   // the side street: { chunks, zone, dir, zc (its crossing in this street), s0 (that crossing in its own street), c }
 function tryTurn(dir) {
   if (turnAnim || intro || ending || nameBox) { return; }
-  if (dir > 0 && zone === 0) { sayToast('This is the inner city. There is no richer town than this.'); return; }
-  if (dir < 0 && zone === ZONE_NAMES.length - 1) { sayToast('This is as far out as the city goes.'); return; }
+  if (dir > 0 && zone === 0) { sayToast('This is Castle Hill. There is nowhere richer.'); return; }
+  if (dir < 0 && zone === ZONE_NAMES.length - 1) { sayToast('This is The Fringe. There is nowhere poorer.'); return; }
   const c = Math.floor(distanceWalked / CHUNK_LEN) + (modN(distanceWalked, CHUNK_LEN) < CROSS_W / 2 + 1 ? 0 : 1);
   queuedTurn = dir; makeSide(dir, c);
   const ahead = Math.max(0, c * CHUNK_LEN + CROSS_W / 2 - distanceWalked);
-  sayToast(`${dir < 0 ? '← Turning left to a cheaper town' : '→ Turning right to a richer town'}, ${ZONE_NAMES[zone - dir]}${ahead > 4 ? `, at the corner ${Math.round(ahead)} m ahead` : ''}.`);
+  sayToast(`${dir < 0 ? '← Turning left to a poorer town' : '→ Turning right to a richer town'}, ${ZONE_NAMES[zone - dir]}${ahead > 4 ? `, at the corner ${Math.round(ahead)} m ahead` : ''}.`);
 }
 function makeSide(dir, c) {
   const zc = c * CHUNK_LEN + CROSS_W / 2;
@@ -333,7 +368,7 @@ function finishTurn() {
   firedCasinos.clear(); visitedJails.clear();
   lastChunk = Math.floor(distanceWalked / CHUNK_LEN); lastTier = -1; ownedFromC = lastChunk + 1;
   stepSpeed = 0; dashTarget = null; streetT = clockT - 5; buildSkyline();
-  sayToast(dir < 0 ? `Cheaper: ${ZONE_NAMES[zone]}. Homes −20%, rent ${money(rentWeek)}/wk.` : `Richer: ${ZONE_NAMES[zone]}. Homes +25%, rent ${money(rentWeek)}/wk.`);
+  sayToast(`${dir < 0 ? 'Poorer' : 'Richer'}: ${ZONE_NAMES[zone]}, ${TOWNS[zone].cls.toLowerCase()}. Homes from ${moneyK(TOWNS[zone].price * market * 0.8)}, rent ${money(rentWeek)}/wk.`);
 }
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
@@ -371,7 +406,7 @@ function drawTurnSign(q, p) {
     ctx.moveTo(left ? x0 + h * 0.5 : x0, y); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y); ctx.lineTo(left ? x0 + w : tip, y + h / 2); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y + h); ctx.lineTo(left ? x0 + h * 0.5 : x0, y + h); ctx.lineTo(left ? tip : x0, y + h / 2); ctx.closePath(); ctx.fill();
     if (k > 8) { ctx.fillStyle = '#fff'; ctx.font = `bold ${h * 0.42}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, left ? q.x - w / 2 + h * 0.2 : q.x + w / 2 - h * 0.2, y + h / 2 + 1, w * 0.85); }
   };
-  if (out) { plate(top, `${out} · cheaper`, '#3f8fd6', true); }
+  if (out) { plate(top, `${out} · poorer`, '#3f8fd6', true); }
   if (inn) { plate(top + h * 1.2, `${inn} · richer`, '#c8322a', false); }
   ctx.restore();
 }
@@ -488,7 +523,7 @@ function drawBoardHud() {
     noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
     fill(rules === 1 ? '#c8322a' : SHARE_COL); rect(x, y, 6, h, 8, 0, 0, 8);
     fill(120, 100, 90); textSize(11); textAlign(LEFT, TOP); text(`${rules === 1 ? 'RULE 1 · MONOPOLIST' : 'RULE 2 · PROSPERITY'}  ·  AGE ${lifeAge}`, x + 16, y + 12);
-    fill(40, 30, 24); textStyle(BOLD); textSize(17); text(ZONE_NAMES[zone], x + 16, y + 30); textStyle(NORMAL);
+    fill(40, 30, 24); textStyle(BOLD); textSize(17); text(ZONE_NAMES[zone], x + 16, y + 30); const nw2 = textWidth(ZONE_NAMES[zone]); textStyle(NORMAL); textSize(11); fill(150, 120, 100); text(`· ${TOWNS[zone].cls}`, x + 22 + nw2, y + 35); textSize(13);
     fill(90, 70, 60); textSize(13);
     text(`You own ${owned.length}${rules === 1 ? ' of ' + OWN_GOAL : ''} home${owned.length === 1 ? '' : 's'}${owned.length ? ' · worth ' + moneyK(totalValue()) : ''}`, x + 16, y + 56, w - 24);
     if (rules === 1) { fill(movedOut ? color(200, 50, 40) : color(90, 70, 60)); text(`${movedOut} household${movedOut === 1 ? '' : 's'} moved out`, x + 16, y + 76); }
@@ -520,7 +555,7 @@ function drawBoardHud() {
       noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
     }
     fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
-    text('↑ walk  ·  ← cheaper town  ·  → richer town  ·  E buy  ·  mouse look', width / 2, height - 14); noStroke();
+    text('↑ walk  ·  ← poorer town  ·  → richer town  ·  E buy  ·  mouse look', width / 2, height - 14); noStroke();
     drawNextBar();
     // What the street sounds like, bottom left.
     if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
@@ -530,7 +565,7 @@ function drawBoardHud() {
     }
   }
   if (intro && rules === 1) {
-    storyCard('BUY THE STREET', [`You’re 24, renting, with ${moneyK(START_SAVINGS)} saved.`, 'Buy homes anywhere: cheap towns or rich ones.', 'Every home you own pays you rent, and the bank', 'lends you more against it. Own 5 homes to win.', 'Pay day comes as you walk. ← cheaper town, → richer.'], 'Click or press E to start');
+    storyCard('BUY THE STREET', [`You’re 24, renting, with ${moneyK(START_SAVINGS)} saved.`, 'Six towns, from caravans to castles. Buy anywhere.', 'Every home you own pays you rent, and the bank', 'lends you more against it. Own 5 homes to win.', 'At a corner: ← poorer town, → richer town.'], 'Click or press E to start');
   }
   if (intro && rules === 2) {
     storyCard('RULE 2 · PROSPERITY', ['Lizzie Magie’s other rules. Same street, same money.', 'Land gets dearer because people live near it.', 'So land is taxed, and the tax is shared out', 'equally to everyone on the street.', 'Buy where you like. Watch what your neighbours do.'], 'Click or press E to start', 1, SHARE_COL);
@@ -563,10 +598,10 @@ function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
 }
 // A listing card in the style of a Monopoly title deed.
 function drawListing(L, x, y) {
-  const price = priceOf(L), dep = price * DEPOSIT, w = 200, weekly = price * RENT_YIELD[rules - 1] / 52, pw = buyingPower(), n = MOVED[L.tier];
+  const price = priceOf(L), dep = price * DEPOSIT, w = 200, weekly = price * RENT_YIELD[rules - 1] / 52, pw = buyingPower(), n = movedFrom(L);
   push(); noStroke(); fill(0, 50); rect(x + 3, y + 4, w, 168, 6); fill(255, 252, 244); rect(x, y, w, 168, 6);
-  fill(DISTRICTS[L.tier].stripe[0]); rect(x + 8, y + 8, w - 16, 38, 3);
-  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(9); text('TITLE DEED · FOR SALE', x + w / 2, y + 18); textSize(13); text(DISTRICTS[L.tier].name.toUpperCase(), x + w / 2, y + 34);
+  fill(deedCol(L)); rect(x + 8, y + 8, w - 16, 38, 3);
+  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(9); text('TITLE DEED · FOR SALE', x + w / 2, y + 18); textSize(13); text(deedName(L).toUpperCase(), x + w / 2, y + 34);
   textStyle(NORMAL); textSize(12); fill(40, 30, 24);
   const rows = [['Price', moneyK(price)], ['Deposit (10%)', money(dep)], ['A tenant would pay', money(weekly) + '/wk'], ['Lives here now', `${n} household${n > 1 ? 's' : ''}`], ['You have', money(pw)]];
   rows.forEach(([a, b], i) => { const ly = y + 60 + i * 20, short = i === 4 && pw < dep; fill(short ? color(200, 50, 40) : color(40, 30, 24)); textAlign(LEFT, CENTER); text(a, x + 14, ly); textAlign(RIGHT, CENTER); text(b, x + w - 14, ly); });
@@ -594,9 +629,9 @@ function nextForSale() {
 function nextText() {
   const L = plotHere(distanceWalked), pw = buyingPower();
   if (L) { const dep = priceOf(L) * DEPOSIT; return pw >= dep ? 'Press E to buy it' : `Deposit ${moneyK(dep)} · you have ${moneyK(pw)} · pay day in ${paydayIn()} m`; }
-  if (atCrossing(distanceWalked + 12) || atCrossing(distanceWalked + 6)) { return '← cheaper town  ·  → richer town  ·  ↑ keep going'; }
+  if (atCrossing(distanceWalked + 12) || atCrossing(distanceWalked + 6)) { return '← poorer town  ·  → richer town  ·  ↑ keep going'; }
   const n = nextForSale();
-  if (n && pw < priceOf(n.L) * DEPOSIT) { return zone < ZONE_NAMES.length - 1 ? `Too dear here. Turn ← to a cheaper town, or wait for pay day` : `Too dear. Pay day in ${paydayIn()} m`; }
+  if (n && pw < priceOf(n.L) * DEPOSIT) { return zone < ZONE_NAMES.length - 1 ? `Too dear here. Turn ← to a poorer town, or wait for pay day` : `Too dear. Pay day in ${paydayIn()} m`; }
   return 'Walk to the next FOR SALE sign';
 }
 function drawNextBar() {
@@ -652,7 +687,7 @@ function evolveStreet(ch) {
   for (const L of ch.lots) {
     if (L.owned || L.vacant || lifeAge < L.redevelopYear) { continue; }
     L.formerName = L.formerName || L.name || 'LOCAL HOMES';
-    L.H = Math.max(L.H * 1.65, 20 + (L.seed % 19)); L.tier = 3; L.glass = true; L.color = '#88999f';
+    L.H = Math.max(L.H * 1.65, 20 + (L.seed % 19)); L.tier = 3; L.style = null; L.glass = true; L.color = '#88999f';
     L.vacant = true; L.forSale = false; L.investorAt = -1; L.sign = true; L.name = 'PRIVATE INVESTMENT'; L.changedYear = lifeAge;
     L.born = clockT; preserveLot(L);
   }
