@@ -803,7 +803,7 @@ function drawLot(L) {
   // Near end, facing you: back-lit, so darker, with a warm rim on its top edge.
   if (L.z0 > cam.z + NEAR_Z) {
     const nq = wallQuad(x, L.z0, xo, L.z0, 0, H); polyN(nq, toneN(L.color, L.z0, 0.55));
-    ctx.strokeStyle = rgbaN('#ffd9a0', 0.55 * (1 - night)); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(nq[3].x, nq[3].y); ctx.lineTo(nq[2].x, nq[2].y); ctx.stroke();
+    ctx.strokeStyle = rgbaN('#ffd9a0', 0.55 * (1 - night)); ctx.lineWidth = 1.2; ctx.beginPath(); segN(nq[3], nq[2]); ctx.stroke();
   }
   const near = P(x, 0, z0); if (near.rz > FAR_Z) {return;}
   if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
@@ -825,7 +825,7 @@ function facadeWindows(L, x, z0, z1, rows, cols, opt) {
     if (opt.frame && ya > 0.3) { windowSill(L, x, z0, za, zb, ya, opt.frame); }
     polyN(q, glassFill(q, glass, lit, (za + zb) / 2), opt.frame ? toneN(opt.frame, za) : null, opt.frameW || 1);
     if (opt.frame) { windowBars(q, opt.frame, za); }
-    if (opt.boarded && r() < opt.boarded) { ctx.strokeStyle = toneN('#7a5a3a', za); ctx.lineWidth = Math.max(1, (q[1].y - q[2].y) * 0.08); ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[2].x, q[2].y); ctx.moveTo(q[1].x, q[1].y); ctx.lineTo(q[3].x, q[3].y); ctx.stroke(); }
+    if (opt.boarded && r() < opt.boarded) { ctx.strokeStyle = toneN('#7a5a3a', za); ctx.lineWidth = Math.min(5, Math.max(1, Math.abs(q[1].y - q[2].y) * 0.08)); ctx.beginPath(); segN(q[0], q[2]); segN(q[1], q[3]); ctx.stroke(); }
     if (opt.box && j > 0) {polyN(wallQuad(x - L.side * 0.15, Math.max(za, z0), x - L.side * 0.15, zb, ya - 0.35, ya), toneN(opt.box, za));}
   }}
 }
@@ -887,7 +887,7 @@ function drawYard(L) {
   polyN(wallQuad(xh, z0, xh, L.z1, 0, 1.0), toneN('#3f6f3a', midN(z0, L.z1)));
   polyN([P(xh, 1.0, z0), P(xh, 1.0, L.z1), P(xh + L.side * 0.6, 1.1, L.z1), P(xh + L.side * 0.6, 1.1, z0)], toneN('#5a8f4a', midN(z0, L.z1)));
   ctx.strokeStyle = toneN('#2a2a30', L.z0); ctx.lineWidth = 1;
-  for (let zz = Math.ceil(z0 / 0.5) * 0.5; zz < L.z1; zz += 0.5) { if ((zz - L.z0) / (L.z1 - L.z0) > 0.42 && (zz - L.z0) / (L.z1 - L.z0) < 0.58) {continue;} const a = P(xh - L.side * 0.1, 1.0, zz), b = P(xh - L.side * 0.1, 1.7, zz); if (a.rz > 0.5) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  for (let zz = Math.ceil(z0 / 0.5) * 0.5; zz < L.z1; zz += 0.5) { if ((zz - L.z0) / (L.z1 - L.z0) > 0.42 && (zz - L.z0) / (L.z1 - L.z0) < 0.58) {continue;} const a = P(xh - L.side * 0.1, 1.0, zz), b = P(xh - L.side * 0.1, 1.7, zz); if (a.rz > 0.5) { ctx.beginPath(); segN(a, b); ctx.stroke(); } }
   if (L.fountain) {
     const fz = midN(L.z0, L.z1), fx = L.side * (EDGE_X + L.setback * 0.55), c = P(fx, 0, fz); if (c.rz < 1.5) {return;}
     const k = c.k; ctx.fillStyle = toneN('#e8e0d0', fz); ctx.beginPath(); ctx.ellipse(c.x, c.y - 0.3 * k, 1.4 * k, 1.4 * k * cam.eye / c.rz + 0.3 * k * 0.3, 0, 0, TWO_PI); ctx.fill();
@@ -914,8 +914,8 @@ function drawTower(L, x, z0, z1, H) {
   polyN(fq, g);
   ctx.strokeStyle = toneN('#3a4a5a', midN(z0, z1)); ctx.lineWidth = 1;
   const floors = Math.floor(H / 3.6), floorStep = Math.max(1, Math.floor(floors / Math.max(4, Math.abs(fq[1].y - fq[2].y) / 6)));
-  for (let f = 1; f < floors; f += floorStep) { const a = P(x, f * 3.6, z0), b = P(x, f * 3.6, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-  for (let zz = Math.ceil(L.z0 / 2) * 2; zz < z1; zz += 2) { if (zz < z0) {continue;} const a = P(x, 0, zz), b = P(x, H, zz); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let f = 1; f < floors; f += floorStep) { const a = P(x, f * 3.6, z0), b = P(x, f * 3.6, z1); ctx.beginPath(); segN(a, b); ctx.stroke(); }
+  for (let zz = Math.ceil(L.z0 / 2) * 2; zz < z1; zz += 2) { if (zz < z0) {continue;} const a = P(x, 0, zz), b = P(x, H, zz); ctx.beginPath(); segN(a, b); ctx.stroke(); }
   if (night > 0.2 && !L.vacant) { const r = rngN(L.seed); ctx.fillStyle = `rgba(255,220,140,${night * 0.8})`; for (let i = 0; i < 40; i++) { const zz = L.z0 + r() * len, y = r() * H; if (zz > z0) { const p = P(x - L.side * 0.05, y, zz); ctx.fillRect(p.x - 1, p.y - 1, Math.max(2, p.k * 1.2), Math.max(1.5, p.k * 0.8)); } } }
   polyN(wallQuad(x, z0, x, z1, 0, 4), toneN('#2a3440', midN(z0, z1)));
   facadeWindows(L, x, z0, z1, [[0.3, 3.6]], Math.max(2, Math.round(len / 4)), { padU: 0.05, lit: 0.9, glass: '#ffd98a' });
@@ -950,7 +950,12 @@ function winN(L, x, z0, za, zb, ya, yb, glass, frame, lit) {
 }
 /* ---------- Making the houses look real: materials, glass, shadows ---------- */
 // A line segment, skipped when either end is behind the camera.
-function segN(a, b) { if (a.rz > 0.5 && b.rz > 0.5) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); } }
+function segN(a, b) {
+  const Z = 0.6; if (a.rz < Z && b.rz < Z) { return; }
+  const cut = (p, q) => { const t = (Z - p.rz) / (q.rz - p.rz), rx = p.rx + (q.rx - p.rx) * t, ry = p.ry + (q.ry - p.ry) * t; return { x: cam.cx + rx * cam.f / Z, y: cam.hy + ry * cam.f / Z }; };
+  const A = a.rz < Z ? cut(a, b) : a, B = b.rz < Z ? cut(b, a) : b;
+  ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y);
+}
 // Glass reflects the bright sky at the top and goes dark towards the bottom.
 function glassFill(q, glass, lit, z) {
   const top = Math.min(q[2].y, q[3].y), bot = Math.max(q[0].y, q[1].y);
@@ -962,11 +967,11 @@ function glassFill(q, glass, lit, z) {
 }
 // A cross of glazing bars, only when the window is big enough to see them.
 function windowBars(q, frame, z) {
-  if (Math.abs(q[0].y - q[3].y) < 14) { return; }
+  if (q.some(p => p.rz < 0.6) || Math.abs(q[0].y - q[3].y) < 14) { return; }
   const m = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
   const t1 = m(q[3], q[2], 0.5), b1 = m(q[0], q[1], 0.5), l1 = m(q[0], q[3], 0.62), r1 = m(q[1], q[2], 0.62);
-  ctx.strokeStyle = toneN(frame, z); ctx.lineWidth = Math.max(1, Math.abs(q[0].y - q[3].y) * 0.04);
-  ctx.beginPath(); ctx.moveTo(t1.x, t1.y); ctx.lineTo(b1.x, b1.y); ctx.moveTo(l1.x, l1.y); ctx.lineTo(r1.x, r1.y); ctx.stroke();
+  ctx.strokeStyle = toneN(frame, z); ctx.lineWidth = Math.min(4, Math.max(1, Math.abs(q[0].y - q[3].y) * 0.04));
+  ctx.beginPath(); segN(t1, b1); segN(l1, r1); ctx.stroke();
 }
 // A sill that sticks out under the window and catches the light.
 function windowSill(L, x, z0, za, zb, ya, frame) {
@@ -989,7 +994,7 @@ function drawMaterial(L, x, z0, z1, H) {
   const s = L.side, xm = x - s * 0.02, near = P(xm, 0, Math.max(z0, cam.z + 2)), far = P(xm, 0, z1);
   const course = mat === 'board' ? 0.22 : mat === 'brick' ? 0.3 : 0;
   if (course && near.k * course > 3.2) {
-    ctx.strokeStyle = mat === 'board' ? 'rgba(40,24,12,0.16)' : 'rgba(250,240,225,0.28)'; ctx.lineWidth = mat === 'board' ? Math.max(1, near.k * 0.02) : Math.max(0.6, near.k * 0.012);
+    ctx.strokeStyle = mat === 'board' ? 'rgba(40,24,12,0.16)' : 'rgba(250,240,225,0.28)'; ctx.lineWidth = mat === 'board' ? Math.min(2.5, Math.max(1, near.k * 0.02)) : Math.min(1.8, Math.max(0.6, near.k * 0.012));
     ctx.beginPath();
     for (let y = course; y < H - 0.05; y += course) { const a = P(xm, y, z0), b = P(xm, y, z1); segN(a, b); }
     ctx.stroke();
@@ -1027,10 +1032,10 @@ function drawWeathering(L, x, z0, z1, H) {
 // Rows of roof tiles and a gutter, on a roof plane from the eave (e) up to the ridge (r).
 function roofCourses(ex, ey, ez0, ez1, rx, ry, rz0, rz1, col, z, n = 9) {
   const a = P(ex, ey, ez0); if (a.rz < 1 || a.k * (ry - ey) / n < 2.5) { return; }
-  ctx.strokeStyle = toneN(col, z, 0.72); ctx.lineWidth = Math.max(1, a.k * 0.025); ctx.beginPath();
+  ctx.strokeStyle = toneN(col, z, 0.72); ctx.lineWidth = Math.min(2.5, Math.max(1, a.k * 0.025)); ctx.beginPath();
   for (let i = 1; i < n; i++) { const t = i / n, p0 = P(lerp(ex, rx, t), lerp(ey, ry, t), lerp(ez0, rz0, t)), p1 = P(lerp(ex, rx, t), lerp(ey, ry, t), lerp(ez1, rz1, t)); segN(p0, p1); }
   ctx.stroke();
-  const g0 = P(ex, ey - 0.05, ez0), g1 = P(ex, ey - 0.05, ez1); ctx.strokeStyle = toneN('#e8e4dc', z, 0.9); ctx.lineWidth = Math.max(1.5, a.k * 0.12); ctx.beginPath(); segN(g0, g1); ctx.stroke();
+  const g0 = P(ex, ey - 0.05, ez0), g1 = P(ex, ey - 0.05, ez1); ctx.strokeStyle = toneN('#e8e4dc', z, 0.9); ctx.lineWidth = Math.min(5, Math.max(1.5, P(ex, ey, (ez0 + ez1) / 2).k * 0.1)); ctx.beginPath(); segN(g0, g1); ctx.stroke();
 }
 function drawCastle(L, x, z0, z1, H) {
   const s = L.side, len = L.z1 - L.z0, stone = L.color, gz = L.z0 + len / 2, r = rngN(L.seed + 3);
@@ -1043,7 +1048,7 @@ function drawCastle(L, x, z0, z1, H) {
   }
   // Stone courses and battlements along the wall.
   ctx.strokeStyle = toneN(shadeN(stone, 0.82), midN(z0, z1)); ctx.lineWidth = 1;
-  for (let y = 1.1; y < H; y += 1.1) { const a = P(x - s * 0.02, y, z0), b = P(x - s * 0.02, y, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let y = 1.1; y < H; y += 1.1) { const a = P(x - s * 0.02, y, z0), b = P(x - s * 0.02, y, z1); ctx.beginPath(); segN(a, b); ctx.stroke(); }
   for (let zz = L.z0; zz < L.z1 - 0.6; zz += 1.4) { if (zz + 0.7 > z0) { polyN(wallQuad(x, Math.max(zz, z0), x, zz + 0.7, H, H + 0.9), toneN(stone, zz, 1.02)); } }
   // Arrow-slit windows.
   for (let zz = L.z0 + 3; zz < L.z1 - 2; zz += 3.2) { if (Math.abs(zz - gz) > 4) { winN(L, x, z0, zz, zz + 0.35, H * 0.45, H * 0.72, '#2a2430', null, false); } }
@@ -1052,7 +1057,7 @@ function drawCastle(L, x, z0, z1, H) {
     const pts = []; for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; pts.push(P(x - s * 0.05, 3.2 + Math.sin(a) * 1.8, gz - Math.cos(a) * 1.8)); }
     if (gz - 1.8 > z0) { polyN([P(x - s * 0.05, 0, gz - 1.8), ...pts, P(x - s * 0.05, 0, gz + 1.8)], toneN('#2a2018', gz)); }
     ctx.strokeStyle = toneN('#c8a040', gz); ctx.lineWidth = 1.2;
-    for (let zz = gz - 1.5; zz <= gz + 1.5; zz += 0.5) { if (zz > z0) { const a = P(x - s * 0.06, 0.4, zz), b = P(x - s * 0.06, 3.6 + Math.cos((zz - gz) / 1.8 * HALF_PI) * 1.2, zz); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+    for (let zz = gz - 1.5; zz <= gz + 1.5; zz += 0.5) { if (zz > z0) { const a = P(x - s * 0.06, 0.4, zz), b = P(x - s * 0.06, 3.6 + Math.cos((zz - gz) / 1.8 * HALF_PI) * 1.2, zz); ctx.beginPath(); segN(a, b); ctx.stroke(); } }
   }
   const ma = x - s * 0.4, mb = x - s * 2.8;
   polyN([P(ma, 0.06, z0), P(mb, 0.06, z0), P(mb, 0.06, z1), P(ma, 0.06, z1)], toneN('#5aa0c8', midN(z0, z1)));
@@ -1072,7 +1077,7 @@ function drawCastle(L, x, z0, z1, H) {
       polyN([a1, a2, apex], toneN(L.roof, zt));
       polyN([a1, P(xt + s * 1.4, TH, zt), apex], toneN(L.roof, zt, 0.75));
       // A flag on a pole, rippling.
-      const top = P(xt + s * 1.4, TH + 8, zt); ctx.strokeStyle = toneN('#4a4048', zt); ctx.lineWidth = Math.max(1, apex.k * 0.06); ctx.beginPath(); ctx.moveTo(apex.x, apex.y); ctx.lineTo(top.x, top.y); ctx.stroke();
+      const top = P(xt + s * 1.4, TH + 8, zt); ctx.strokeStyle = toneN('#4a4048', zt); ctx.lineWidth = Math.min(5, Math.max(1, apex.k * 0.06)); ctx.beginPath(); segN(apex, top); ctx.stroke();
       const fl = []; for (let i = 0; i <= 6; i++) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 7.9 + wv, zt + u * 2)); }
       for (let i = 6; i >= 0; i--) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 6.9 + wv, zt + u * 2)); }
       polyN(fl, toneN(L.flag, zt));
@@ -1088,8 +1093,8 @@ function drawVilla(L, x, z0, z1, H) {
   // A long balcony with a white railing.
   polyN(wallQuad(x - s * 0.9, z0, x - s * 0.9, z1, 3.3, 3.55), toneN('#ffffff', midN(z0, z1)));
   ctx.strokeStyle = toneN('#ffffff', midN(z0, z1)); ctx.lineWidth = 1;
-  for (let zz = Math.ceil(z0 / 0.4) * 0.4; zz < z1; zz += 0.4) { const a = P(x - s * 0.9, 3.55, zz), b = P(x - s * 0.9, 4.4, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
-  const ra = P(x - s * 0.9, 4.4, z0), rb = P(x - s * 0.9, 4.4, z1); ctx.beginPath(); ctx.moveTo(ra.x, ra.y); ctx.lineTo(rb.x, rb.y); ctx.stroke();
+  for (let zz = Math.ceil(z0 / 0.4) * 0.4; zz < z1; zz += 0.4) { const a = P(x - s * 0.9, 3.55, zz), b = P(x - s * 0.9, 4.4, zz); if (a.rz > 0.6) { ctx.beginPath(); segN(a, b); ctx.stroke(); } }
+  const ra = P(x - s * 0.9, 4.4, z0), rb = P(x - s * 0.9, 4.4, z1); ctx.beginPath(); segN(ra, rb); ctx.stroke();
   // Columns and a pediment at the front door.
   const dz = L.z0 + len * 0.5;
   for (const u of [-1.6, -0.6, 0.6, 1.6]) { const zc = dz + u; if (zc > z0) { polyN(wallQuad(x - s * 1.4, zc - 0.2, x - s * 1.4, zc + 0.2, 0, 6.6), toneN('#fffaf0', zc, 1.05)); } }
@@ -1119,7 +1124,7 @@ function drawBungalow(L, x, z0, z1, H) {
     const lp = P(x - s * 0.1, 2.45, dz + 1.25); if (lp.rz > 1) { ctx.fillStyle = night > 0.3 ? '#ffe8a0' : toneN('#3a3a3a', dz); ctx.fillRect(lp.x - lp.k * 0.07, lp.y - lp.k * 0.12, lp.k * 0.14, lp.k * 0.22); }
   }
   const ga = L.z1 - len * 0.26, gb = L.z1 - 0.4;
-  if (gb > z0) { polyN(wallQuad(x - s * 0.05, Math.max(ga, z0), x - s * 0.05, gb, 0, 2.4), toneN('#ecebe6', ga)); ctx.strokeStyle = toneN('#b8b4a8', ga); ctx.lineWidth = 1; for (let y = 0.5; y < 2.4; y += 0.45) { const a = P(x - s * 0.06, y, Math.max(ga, z0)), b = P(x - s * 0.06, y, gb); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+  if (gb > z0) { polyN(wallQuad(x - s * 0.05, Math.max(ga, z0), x - s * 0.05, gb, 0, 2.4), toneN('#ecebe6', ga)); ctx.strokeStyle = toneN('#b8b4a8', ga); ctx.lineWidth = 1; for (let y = 0.5; y < 2.4; y += 0.45) { const a = P(x - s * 0.06, y, Math.max(ga, z0)), b = P(x - s * 0.06, y, gb); ctx.beginPath(); segN(a, b); ctx.stroke(); } }
   // A driveway, a hip roof and a chimney.
   if (gb > z0) { polyN([P(x - s * 0.1, 0.07, Math.max(ga, z0)), P(s * EDGE_X, 0.07, Math.max(ga, z0)), P(s * EDGE_X, 0.07, gb), P(x - s * 0.1, 0.07, gb)], toneN('#c8c0b0', ga)); }
   const ridge = x + s * L.depth * 0.5, rz0 = Math.max(L.z0 + 3, z0), rz1 = Math.max(L.z1 - 3, z0);
@@ -1132,9 +1137,9 @@ function drawBungalow(L, x, z0, z1, H) {
   ctx.strokeStyle = toneN('#ffffff', mid); ctx.lineWidth = 1.4;
   for (let zz = Math.ceil(Math.max(L.z0 - 0.6, z0) / 0.35) * 0.35; zz < L.z1 + 0.6; zz += 0.35) {
     if (Math.abs(zz - dz - 0.5) < 0.7 || zz > ga - 0.2) { continue; }
-    const a = P(xf, 0, zz), b = P(xf, 0.95, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    const a = P(xf, 0, zz), b = P(xf, 0.95, zz); if (a.rz > 0.6) { ctx.beginPath(); segN(a, b); ctx.stroke(); }
   }
-  const fa = P(xf, 0.7, Math.max(L.z0 - 0.6, z0)), fb = P(xf, 0.7, Math.max(dz - 0.2, z0)); ctx.beginPath(); ctx.moveTo(fa.x, fa.y); ctx.lineTo(fb.x, fb.y); ctx.stroke();
+  const fa = P(xf, 0.7, Math.max(L.z0 - 0.6, z0)), fb = P(xf, 0.7, Math.max(dz - 0.2, z0)); ctx.beginPath(); segN(fa, fb); ctx.stroke();
   const lb = P(xf, 1.15, dz - 0.4); if (lb.rz > 1) { const k = lb.k; ctx.fillStyle = toneN('#6a5040', dz); ctx.fillRect(lb.x - 0.04 * k, lb.y, 0.08 * k, 1.15 * k); ctx.fillStyle = toneN(L.door, dz); ctx.fillRect(lb.x - 0.25 * k, lb.y - 0.3 * k, 0.5 * k, 0.32 * k); }
 }
 function drawCaravan(L, x, z0, z1, H) {
@@ -1155,13 +1160,13 @@ function drawCaravan(L, x, z0, z1, H) {
     const za = Math.max(L.z0 + len * 0.15, z0), zb = L.z0 + len * 0.9;
     if (zb > z0) {
       polyN([P(x, H - 0.3, za), P(x, H - 0.3, zb), P(x - s * 2.6, 2.0, zb), P(x - s * 2.6, 2.0, za)], rgbaN(toneN(L.awn, mid), 0.85));
-      ctx.strokeStyle = toneN('#6a6a6a', mid); ctx.lineWidth = 1.2; for (const zz of [za, zb]) { const a = P(x - s * 2.6, 0, zz), b = P(x - s * 2.6, 2.0, zz); if (a.rz > 0.6) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+      ctx.strokeStyle = toneN('#6a6a6a', mid); ctx.lineWidth = 1.2; for (const zz of [za, zb]) { const a = P(x - s * 2.6, 0, zz), b = P(x - s * 2.6, 2.0, zz); if (a.rz > 0.6) { ctx.beginPath(); segN(a, b); ctx.stroke(); } }
     }
   }
   if (L.wash && L.z1 > z0 + 1) {
     const xa = x - s * 3.1, a = P(xa, 1.9, Math.max(L.z0 + 0.5, z0 + 0.5)), b = P(xa, 1.9, L.z1 - 0.3);
     if (a.rz > 1) {
-      ctx.strokeStyle = toneN('#d8d8d8', mid); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = toneN('#d8d8d8', mid); ctx.lineWidth = 1; ctx.beginPath(); segN(a, b); ctx.stroke();
       const cols = ['#e86a6a', '#ffffff', '#6a9ae8', '#f2d13a', '#8ac88a'];
       for (let i = 0; i < 5; i++) { const zz = mixN(Math.max(L.z0 + 0.8, z0 + 0.8), L.z1 - 0.6, (i + 0.5) / 5), c = P(xa, 1.9, zz); if (c.rz > 1) { ctx.fillStyle = toneN(cols[(i + L.seed) % 5 < 0 ? 0 : (i + L.seed) % 5], zz); ctx.fillRect(c.x - 0.18 * c.k, c.y, 0.36 * c.k, 0.5 * c.k); } }
     }
@@ -1171,7 +1176,7 @@ function drawJail(L, x, z0, z1, H) {
   const len = L.z1 - L.z0;
   // Stone blocks.
   ctx.strokeStyle = toneN('#55565e', midN(z0, z1)); ctx.lineWidth = 1;
-  for (let y = 0.6; y < H; y += 0.6) { const a = P(x - L.side * 0.02, y, z0), b = P(x - L.side * 0.02, y, z1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let y = 0.6; y < H; y += 0.6) { const a = P(x - L.side * 0.02, y, z0), b = P(x - L.side * 0.02, y, z1); ctx.beginPath(); segN(a, b); ctx.stroke(); }
   // Barred windows in orange and blue stripes.
   const r = rngN(L.seed);
   for (let i = 0; i < 5; i++) {for (const [ya, yb] of [[2.2, 3.8], [5.2, 6.8]]) {
