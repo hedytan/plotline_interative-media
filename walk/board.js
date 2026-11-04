@@ -476,8 +476,31 @@ function drawOwnedLot(L) {
 
 
 // People on the pavement: residents, queues, people moving out with their boxes, new neighbours.
+// People on the street notice you. What they say depends on whose home it is, the rules,
+// and how many homes you already own.
+let talkT = -9;
+const SAY = {
+  family1: ['Are you buying our house?', 'We could never afford to buy it.', 'Please… we’ve got nowhere else.', 'The kids grew up here.'],
+  family2: ['Come and have a look!', 'Buy it, we’re staying either way.', 'You’ll like the neighbours.'],
+  renter: ['Looking for a place too?', 'Rent went up again.', 'Good luck. Everything’s so dear.', 'Forty people at the last inspection.'],
+  wary: ['You’re the one buying everything.', 'Are you our new landlord?', 'My landlord sold up last week.', 'We’re next, aren’t we?'],
+  cold: ['Landlord.', 'Don’t buy ours too.', 'Happy now?', 'There used to be kids on this street.'],
+  shared: ['Morning, neighbour!', 'The kids play outside again.', 'Nice to have you here.', 'The land tax fixed the park.']
+};
+function moodN() { return rules === 2 ? 'shared' : owned.length === 0 ? 'renter' : owned.length < 3 ? 'wary' : 'cold'; }
+function noticeYou(q, p) {
+  if (p.mover || p.arrive || p.talked || intro || ending || turnAnim) { return; }
+  const dz = p.z - distanceWalked; if (dz < 1.5 || dz > 8 || q.k < 3 || q.x < 40 || q.x > width - 40) { return; }
+  if (clockT - talkT < 3.2) { return; }
+  p.talked = true; if (!p.lotRef && Math.random() < 0.35) { return; }
+  const pool = p.lotRef ? SAY[rules === 1 ? 'family1' : 'family2'] : SAY[moodN()];
+  p.say = pool[Math.floor(Math.random() * pool.length)]; p.sayT = clockT; p.mood = p.lotRef ? (rules === 1 ? 'sad' : 'warm') : moodN(); talkT = clockT;
+  if (sound && sound.enabled && sound.context && sound._note) { const t = sound.context.currentTime, warm = p.mood === 'shared' || p.mood === 'renter' || p.mood === 'warm'; sound._note(warm ? 620 : 300, t, 0.12, 'triangle', 0.03); sound._note(warm ? 780 : 260, t + 0.1, 0.16, 'triangle', 0.03); }
+}
 function drawPerson(q, p) {
   const k = q.k; if (k < 1.5) { return; }
+  noticeYou(q, p);
+  const looking = p.say && !p.mover && clockT > p.sayT && clockT < p.sayT + 6;
   const h = p.h, walking = p.mover || p.arrive, sway = Math.sin(clockT * 1.5 + p.ph) * 0.03 * k, step = walking ? Math.sin(p.ph * 2) * 0.12 * k : 0;
   const coats = ['#3f5a7a', '#7a3f4a', '#4a6a4a', '#8a6a3a', '#5a4a6a', '#2a3a4a', '#9a5a3a'], skin = ['#e8c4a0', '#c8946a', '#8a5a3a', '#f0d0b0'];
   ctx.save(); ctx.globalAlpha = (1 - fogFor(p.z) * 0.8) * (p.mover ? Math.min(1, (p.until - clockT) / 3) : 1);
@@ -486,6 +509,18 @@ function drawPerson(q, p) {
   ctx.fillStyle = toneN(coats[Math.floor(p.tone * coats.length)], p.z);
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k, 0.12 * k) : ctx.rect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k); ctx.fill();
   ctx.fillStyle = toneN(skin[Math.floor(p.tone * 7) % skin.length], p.z); ctx.beginPath(); ctx.arc(q.x + sway, q.y - (h - 0.12) * k, 0.13 * k, 0, TWO_PI); ctx.fill();
+  if (looking && k > 6) {
+    // They turn to look at you: eyes, and a wave if they are friendly, arms folded if not.
+    const hx = q.x + sway, hy2 = q.y - (h - 0.1) * k, cold = p.mood === 'wary' || p.mood === 'cold';
+    ctx.fillStyle = '#2a1e18';
+    if (cold) { ctx.fillRect(hx - 0.07 * k, hy2 - 0.01 * k, 0.05 * k, 0.015 * k + 1); ctx.fillRect(hx + 0.02 * k, hy2 - 0.01 * k, 0.05 * k, 0.015 * k + 1); }
+    else { ctx.beginPath(); ctx.arc(hx - 0.045 * k, hy2, 0.018 * k + 0.5, 0, TWO_PI); ctx.arc(hx + 0.045 * k, hy2, 0.018 * k + 0.5, 0, TWO_PI); ctx.fill(); }
+    ctx.strokeStyle = toneN(coats[Math.floor(p.tone * coats.length)], p.z); ctx.lineCap = 'round'; ctx.lineWidth = Math.min(8, 0.12 * k);
+    ctx.beginPath();
+    if (p.mood === 'shared' || p.mood === 'renter' || p.mood === 'warm') { const wv = Math.sin(clockT * 9) * 0.12 * k; ctx.moveTo(hx + 0.22 * k, q.y - (h - 0.35) * k); ctx.lineTo(hx + 0.42 * k + wv, q.y - (h + 0.2) * k); }
+    else { ctx.moveTo(hx - 0.22 * k, q.y - (h - 0.6) * k); ctx.lineTo(hx + 0.22 * k, q.y - (h - 0.7) * k); }
+    ctx.stroke(); ctx.lineCap = 'butt';
+  }
   if (p.box) {
     // A moving box held in front, taped across the top.
     const bw = 0.62 * k, bh = 0.46 * k, by = q.y - (h - 0.55) * k;
@@ -494,7 +529,7 @@ function drawPerson(q, p) {
     ctx.strokeStyle = toneN('#7a5a3a', p.z); ctx.lineWidth = Math.max(1, 0.03 * k); ctx.strokeRect(q.x - bw / 2 + sway, by, bw, bh);
   } else if (p.tone > 0.6 && !walking) { ctx.fillStyle = '#e8e8f0'; ctx.fillRect(q.x + 0.15 * k + sway, q.y - (h - 0.55) * k, 0.12 * k, 0.2 * k); }   // a phone, checking listings
   ctx.restore();
-  if (p.say && clockT > p.sayT && clockT < p.sayT + 6 && k > 2.5) { speechBubble(q.x + sway, q.y - (h + 0.25) * k, p.say, Math.min(1, (clockT - p.sayT) / 0.3, (p.sayT + 6 - clockT) / 0.5), p.mover ? '#c8322a' : SHARE_COL); }
+  if (p.say && clockT > p.sayT && clockT < p.sayT + 6 && k > 2.5) { speechBubble(q.x + sway, q.y - (h + 0.25) * k, p.say, Math.min(1, (clockT - p.sayT) / 0.3, (p.sayT + 6 - clockT) / 0.5), p.mover || p.mood === 'sad' || p.mood === 'wary' || p.mood === 'cold' ? '#c8322a' : SHARE_COL); }
 }
 // What a person says, in a white bubble above their head.
 function speechBubble(x, y, txt, a, col) {
