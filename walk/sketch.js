@@ -42,6 +42,7 @@ const SHOP_NAMES = [
 ];
 
 let seed = 2718, distanceWalked = 0, clockT = 0, paused = false, stepSpeed = 0, autoWalk = false, pointerHeld = false;
+let stillT = 0, mouseMoveT = -9, lastMX = 0, lastMY = 0;
 let stepPhase = 0, bobAmp = 0, lookYaw = 0, lookPitch = 0, canvasNode, sound, audioStarted = false, grain;
 let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
@@ -176,7 +177,15 @@ function draw() {
   if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
   bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
-  lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
+  // Stop walking and you can stop and look: the mouse turns your head much further, and if you
+  // stand still beside a home for sale, you turn to face it.
+  if (mouseX !== lastMX || mouseY !== lastMY) { lastMX = mouseX; lastMY = mouseY; mouseMoveT = clockT; }
+  stillT = Math.abs(stepSpeed) < 0.15 && !turnAnim && !intro ? stillT + dt : 0;
+  const lookRange = mixN(0.3, 1.2, easeN((stillT - 0.3) / 0.8));
+  let yawAim = constrain(mx, -0.5, 0.5) * 2 * lookRange;
+  const facing = stillT > 0.9 && clockT - mouseMoveT > 1.2 && typeof plotHere === 'function' ? plotHere(distanceWalked) : null;
+  if (facing) { yawAim = facing.side * 0.85; }
+  lookYaw = lerp(lookYaw, yawAim, facing ? 0.035 : 0.05);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
@@ -221,7 +230,7 @@ function updateLandmarks(z) {
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(L.forSale && !L.owned)) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -374,7 +383,7 @@ function drawWorld(z, side) {
   for (const L of lots) {
     const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK);
     if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); }
+    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); } else if (L.forSale) { drawForSale(L); }
     const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
   }
   const items = [];

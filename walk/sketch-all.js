@@ -384,6 +384,7 @@ const SHOP_NAMES = [
 ];
 
 let seed = 2718, distanceWalked = 0, clockT = 0, paused = false, stepSpeed = 0, autoWalk = false, pointerHeld = false;
+let stillT = 0, mouseMoveT = -9, lastMX = 0, lastMY = 0;
 let stepPhase = 0, bobAmp = 0, lookYaw = 0, lookPitch = 0, canvasNode, sound, audioStarted = false, grain;
 let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
@@ -518,7 +519,15 @@ function draw() {
   if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
   bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
-  lookYaw = lerp(lookYaw, constrain(mx, -0.5, 0.5) * 0.6, 0.05);
+  // Stop walking and you can stop and look: the mouse turns your head much further, and if you
+  // stand still beside a home for sale, you turn to face it.
+  if (mouseX !== lastMX || mouseY !== lastMY) { lastMX = mouseX; lastMY = mouseY; mouseMoveT = clockT; }
+  stillT = Math.abs(stepSpeed) < 0.15 && !turnAnim && !intro ? stillT + dt : 0;
+  const lookRange = mixN(0.3, 1.2, easeN((stillT - 0.3) / 0.8));
+  let yawAim = constrain(mx, -0.5, 0.5) * 2 * lookRange;
+  const facing = stillT > 0.9 && clockT - mouseMoveT > 1.2 && typeof plotHere === 'function' ? plotHere(distanceWalked) : null;
+  if (facing) { yawAim = facing.side * 0.85; }
+  lookYaw = lerp(lookYaw, yawAim, facing ? 0.035 : 0.05);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
@@ -563,7 +572,7 @@ function updateLandmarks(z) {
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(L.forSale && !L.owned)) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -716,7 +725,7 @@ function drawWorld(z, side) {
   for (const L of lots) {
     const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK);
     if (g <= 0.01) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); }
+    riseK = g; drawLot(L); riseK = 1; if (L.owned) { drawYours(L); } else if (L.forSale) { drawForSale(L); }
     const age = clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, age);}
   }
   const items = [];
@@ -1424,7 +1433,10 @@ function plotsForChunk(ch, r) {
     const cand = ch.lots.filter(L => !L.special && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
     if (cand.length) {
       const L = cand[Math.floor(r() * cand.length)], inv = r() < 0.3 ? mixN(22, 45, r()) : -1;
-      Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: rules === 1 ? inv : -1 });
+      Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), investorAt: rules === 1 ? inv : -1 });
+      // The family who live there, out the front of their home.
+      const mid = (L.z0 + L.z1) / 2;
+      for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'person', x: side * (EDGE_X - 0.7 - k * 0.4), z: mid + (k ? 1.4 : -0.6), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, lotRef: L }); }
     }
   }
   // Front-yard trees in the suburbs, palms at the villas, bins and a fire drum at the caravan park.
@@ -1491,7 +1503,7 @@ function boardUpdate(z) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
         Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
-        preserveLot(L);
+        preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
         ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
         sound.jail(); sayToast('An investor bought it first.');
       }
@@ -1554,7 +1566,8 @@ function buyLot(L) {
   const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
   owned.push(o);
   if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
-  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, born: clockT + 0.2, thud: false });
+  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false }); if (L.born === undefined || L.born > clockT) { L.born = clockT + 0.2; }
+  if (ch && rules === 1) { ch.props = ch.props.filter(p => p.lotRef !== L); }
   if (rules === 1) {
     if (!first) { L.color = mixHex(L.color, OWNER_COL, 0.5); }
     // The people who lived here pack up and walk away down the street.

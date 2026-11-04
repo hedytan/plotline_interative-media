@@ -111,7 +111,10 @@ function plotsForChunk(ch, r) {
     const cand = ch.lots.filter(L => !L.special && L.side === side && L.z0 > ch.z0 + CROSS_W + 4);
     if (cand.length) {
       const L = cand[Math.floor(r() * cand.length)], inv = r() < 0.3 ? mixN(22, 45, r()) : -1;
-      Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: rules === 1 ? inv : -1 });
+      Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), investorAt: rules === 1 ? inv : -1 });
+      // The family who live there, out the front of their home.
+      const mid = (L.z0 + L.z1) / 2;
+      for (let k = 0; k < 2; k++) { ch.props.push({ kind: 'person', x: side * (EDGE_X - 0.7 - k * 0.4), z: mid + (k ? 1.4 : -0.6), tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, lotRef: L }); }
     }
   }
   // Front-yard trees in the suburbs, palms at the villas, bins and a fire drum at the caravan park.
@@ -178,7 +181,7 @@ function boardUpdate(z) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
         Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
-        preserveLot(L);
+        preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
         ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
         sound.jail(); sayToast('An investor bought it first.');
       }
@@ -241,7 +244,8 @@ function buyLot(L) {
   const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
   owned.push(o);
   if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
-  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, born: clockT + 0.2, thud: false });
+  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false }); if (L.born === undefined || L.born > clockT) { L.born = clockT + 0.2; }
+  if (ch && rules === 1) { ch.props = ch.props.filter(p => p.lotRef !== L); }
   if (rules === 1) {
     if (!first) { L.color = mixHex(L.color, OWNER_COL, 0.5); }
     // The people who lived here pack up and walk away down the street.
