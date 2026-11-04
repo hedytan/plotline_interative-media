@@ -448,6 +448,12 @@ function drawBoardHud() {
     fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
     text('↑ walk  ·  ← cheaper town  ·  → richer town  ·  E buy / work  ·  mouse look', width / 2, height - 14); noStroke();
     drawNextBar();
+    // What the street sounds like, bottom left.
+    if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
+      const on = sound.enabled && sound.context && sound.context.state === 'running', label = on ? `♪  ${MUSIC_NAME[sound.style]}` : '♪  Click to hear the street · M sound';
+      textStyle(BOLD); textSize(12); const lw = textWidth(label) + 24; noStroke(); fill(0, 60); rect(16 + 2, height - 46 + 3, lw, 26, 13); fill(sound.style === 'rich' ? color(212, 160, 23) : sound.style === 'poor' ? color(110, 100, 96) : color(63, 143, 214)); rect(16, height - 46, lw, 26, 13);
+      fill(255); textAlign(LEFT, CENTER); text(label, 28, height - 33); textStyle(NORMAL);
+    }
   }
   if (intro) { storyCard('THE LANDLORD’S WALK', [`You’re 24, renting, $22k saved.`, 'Buy a home before you turn 30.', 'Homes cost too much: work shifts at NOW HIRING signs.', 'At a corner, ← turns to a cheaper town, → to a richer one.'], 'Click or press E to start'); }
   if (ending) {

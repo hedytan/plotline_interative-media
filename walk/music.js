@@ -8,6 +8,9 @@
  * Wealth comes from the town (zone) and the district of the block you are on. When it
  * changes, the music fades over to the new style at the next bar. Native Web Audio, no files.
  */
+// The band's volume, well above the street hum so it is clearly heard.
+const MUSIC_VOL = 6;
+const MUSIC_NAME = { rich: 'Lounge jazz · a rich street', mid: 'Bright pop · a middling street', poor: 'Old tape, out-of-tune piano · a poor street' };
 const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 const STYLES = {
   // chords as MIDI notes, one bar each; bass walks through the chord tones
@@ -24,7 +27,7 @@ class WalkSound extends StreetSound {
     this.padGain.disconnect();
     this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.master);
     this.styleGain = this.context.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
-    this.music.gain.setTargetAtTime(0.9, this.context.currentTime, 1);
+    this.music.gain.setTargetAtTime(MUSIC_VOL, this.context.currentTime, 1);
   }
   // One synth note through its own filter and pan, with an envelope.
   _m(freq, when, dur, type, gain, cutoff = 3000, pan = 0, attack = 0.01) {

@@ -146,6 +146,9 @@ window.StreetSound = StreetSound;
  * Wealth comes from the town (zone) and the district of the block you are on. When it
  * changes, the music fades over to the new style at the next bar. Native Web Audio, no files.
  */
+// The band's volume, well above the street hum so it is clearly heard.
+const MUSIC_VOL = 6;
+const MUSIC_NAME = { rich: 'Lounge jazz · a rich street', mid: 'Bright pop · a middling street', poor: 'Old tape, out-of-tune piano · a poor street' };
 const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 const STYLES = {
   // chords as MIDI notes, one bar each; bass walks through the chord tones
@@ -162,7 +165,7 @@ class WalkSound extends StreetSound {
     this.padGain.disconnect();
     this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.master);
     this.styleGain = this.context.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
-    this.music.gain.setTargetAtTime(0.9, this.context.currentTime, 1);
+    this.music.gain.setTargetAtTime(MUSIC_VOL, this.context.currentTime, 1);
   }
   // One synth note through its own filter and pan, with an envelope.
   _m(freq, when, dur, type, gain, cutoff = 3000, pan = 0, attack = 0.01) {
@@ -1461,6 +1464,12 @@ function drawBoardHud() {
     fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
     text('↑ walk  ·  ← cheaper town  ·  → richer town  ·  E buy / work  ·  mouse look', width / 2, height - 14); noStroke();
     drawNextBar();
+    // What the street sounds like, bottom left.
+    if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
+      const on = sound.enabled && sound.context && sound.context.state === 'running', label = on ? `♪  ${MUSIC_NAME[sound.style]}` : '♪  Click to hear the street · M sound';
+      textStyle(BOLD); textSize(12); const lw = textWidth(label) + 24; noStroke(); fill(0, 60); rect(16 + 2, height - 46 + 3, lw, 26, 13); fill(sound.style === 'rich' ? color(212, 160, 23) : sound.style === 'poor' ? color(110, 100, 96) : color(63, 143, 214)); rect(16, height - 46, lw, 26, 13);
+      fill(255); textAlign(LEFT, CENTER); text(label, 28, height - 33); textStyle(NORMAL);
+    }
   }
   if (intro) { storyCard('THE LANDLORD’S WALK', [`You’re 24, renting, $22k saved.`, 'Buy a home before you turn 30.', 'Homes cost too much: work shifts at NOW HIRING signs.', 'At a corner, ← turns to a cheaper town, → to a richer one.'], 'Click or press E to start'); }
   if (ending) {
