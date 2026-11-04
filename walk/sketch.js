@@ -48,7 +48,7 @@ let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChun
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
 const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
-const APPEAR_Z = 55, RISE_T = 1.8;   // lots build when you come this close; rise time in seconds
+const APPEAR_Z = 36, RISE_T = 3.2;   // lots build when you come this close; rise time in seconds
 let riseK = 1, mouseMoved = false;
 // Held keys are tracked directly from the browser, so walking works the same in p5.js 1.x and 2.x.
 const keysHeld = new Set();

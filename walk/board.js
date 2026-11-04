@@ -244,7 +244,7 @@ function buyLot(L) {
   const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
   owned.push(o);
   if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
-  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false }); if (L.born === undefined || L.born > clockT) { L.born = clockT + 0.2; }
+  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false }); L.born = clockT + 0.3;   // it rises again, as yours
   if (ch && rules === 1) { ch.props = ch.props.filter(p => p.lotRef !== L); }
   if (rules === 1) {
     if (!first) { L.color = mixHex(L.color, OWNER_COL, 0.5); }
@@ -607,10 +607,12 @@ function drawBoardHud() {
     if (np) { iconRow(x + 16, y + 68, np, Math.floor((w - 50) / 15), 12, (ix, iy) => personIcon(ix, iy, 12, pc, rules === 1)); }
     else { fill(150, 130, 120); textSize(11); text(rules === 1 ? 'Families moved out: none yet' : 'Nobody has to leave', x + 16, y + 68); }
     // Money, top right.
-    const ww = 170, wx = width - ww - 16, wh = 62;
+    const ww = 190, wx = width - ww - 16, perMin = homesPerMinute(), wh = perMin > 1 ? 84 : 62, bump = Math.max(0, 1 - (clockT - coinHitT) / 0.25);
     fill(0, 50); rect(wx + 3, y + 4, ww, wh, 8); fill(255, 250, 238); rect(wx, y, ww, wh, 8);
     fill(120, 100, 90); textSize(10); textAlign(RIGHT, TOP); text('YOU CAN SPEND', wx + ww - 14, y + 10);
-    fill(40, 30, 24); textStyle(BOLD); textSize(24); text(money(buyingPower()), wx + ww - 14, y + 26); textStyle(NORMAL);
+    fill(bump > 0 ? lerpColor(color(40, 30, 24), color(47, 138, 58), bump) : color(40, 30, 24)); textStyle(BOLD); textSize(24 + bump * 4); text(money(buyingPower()), wx + ww - 14, y + 26 - bump * 2); textStyle(NORMAL);
+    if (perMin > 1) { fill(47, 138, 58); textStyle(BOLD); textSize(12); text(`▲ ${money(perMin)} a minute`, wx + ww - 14, y + 58); textStyle(ITALIC); textSize(10); fill(120, 100, 90); text('you didn’t work for this', wx + ww - 14, y + 72); textStyle(NORMAL); }
+    drawCoins(wx + ww - 60, y + 38);
     for (let i = moneyPops.length - 1; i >= 0; i--) {
       const m = moneyPops[i], age2 = clockT - m.t; if (age2 > 2.4) { moneyPops.splice(i, 1); continue; } if (age2 < 0) { continue; }
       fill(m.up ? '#2f8a3a' : '#c8322a'); textStyle(BOLD); textSize(16); textAlign(RIGHT, TOP); drawingContext.globalAlpha = 1 - easeN((age2 - 1.6) / 0.8);
@@ -671,6 +673,25 @@ function drawOpening() {
   pop();
 }
 // Just after you buy: a stamp, and the name of who had to leave (or who moved in).
+// Your homes go up in value every second, so the bank will lend you more: coins fly from each
+// home you own to your money, and the number ticks up while you stand there.
+const coins = []; let coinT = 0, coinHitT = -9;
+function homesPerMinute() { return owned.length ? totalValue() * 0.6 * GROWTH[rules - 1] / 100 / 100 * 60 : 0; }
+function drawCoins(tx, ty) {
+  if (owned.length && !paused && clockT - coinT > Math.max(0.35, 1.6 - owned.length * 0.25)) {
+    coinT = clockT;
+    const mine = []; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.owned && riseOf(L.born) > 0.9) { const q = P(L.side * (EDGE_X + L.setback + 1), L.H * 0.8, (L.z0 + L.z1) / 2); if (q.rz > 2 && q.x > 0 && q.x < width) { mine.push(q); } } } }
+    const from = mine.length ? mine[Math.floor(Math.random() * mine.length)] : { x: 30 + Math.random() * 160, y: 60 };
+    coins.push({ x: from.x, y: from.y, t: clockT, arc: 80 + Math.random() * 80 });
+  }
+  for (let i = coins.length - 1; i >= 0; i--) {
+    const c = coins[i], u = (clockT - c.t) / 0.9;
+    if (u >= 1) { coins.splice(i, 1); coinHitT = clockT; if (sound && sound.enabled && sound.context && sound._note) { sound._note(2093 + Math.random() * 200, sound.context.currentTime, 0.12, 'sine', 0.012); } continue; }
+    const e = u * u * (3 - 2 * u), x = lerp(c.x, tx, e), yy = lerp(c.y, ty, e) - Math.sin(u * PI) * c.arc, r = 9 * (1 - u * 0.3);
+    push(); noStroke(); fill(0, 40); circle(x + 2, yy + 3, r * 2); fill(OWNER_COL); circle(x, yy, r * 2); fill('#fff1b0'); circle(x - r * 0.25, yy - r * 0.25, r * 0.8);
+    fill(120, 80, 10); textStyle(BOLD); textSize(r * 1.2); textAlign(CENTER, CENTER); text('$', x, yy + 0.5); pop();
+  }
+}
 function drawSoldBeat() {
   if (!soldBeat) { return; }
   const age = clockT - soldBeat.t; if (age > 4) { soldBeat = null; return; }
@@ -737,7 +758,7 @@ function nextText() {
 }
 function drawNextBar() {
   const t = nextText(); push(); textFont('Georgia'); textStyle(BOLD); textSize(17);
-  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(270, width * 0.42) + 8 || x + w > width - 16 - 170 - 8, y = crowded ? 124 : 16;
+  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(270, width * 0.42) + 8 || x + w > width - 16 - 190 - 8, y = crowded ? 124 : 16;
   noStroke(); fill(0, 60); rect(x + 3, y + 4, w, 40, 20); fill(42, 30, 24); rect(x, y, w, 40, 20);
   fill('#ffd23f'); rect(x + 10, y + 11, 52, 18, 9); fill(42, 30, 24); textSize(10); textAlign(CENTER, CENTER); text('NEXT', x + 36, y + 20.5);
   fill(255, 236, 190); textSize(17); textAlign(LEFT, CENTER); text(t, x + 72, y + 21);
