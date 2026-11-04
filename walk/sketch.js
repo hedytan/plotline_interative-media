@@ -199,7 +199,7 @@ function draw() {
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
   // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
-  try { drawSky(); drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
+  try { drawSky(); drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); if (typeof drawStreetLife === 'function') { drawStreetLife(); } } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
   pop();
   drawOverlays();
 }

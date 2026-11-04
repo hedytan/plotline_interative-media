@@ -25,7 +25,9 @@ class WalkSound extends StreetSound {
     super._build(); if (!this.context) { return; }
     // The old district pad is kept silent: the band below replaces it.
     this.padGain.disconnect();
-    this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.master);
+    // Every family that moves out muffles the band a little, as if the street were emptying.
+    this.muffle = this.context.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 16000; this.muffle.connect(this.master);
+    this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.muffle);
     this.styleGain = this.context.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
     this.music.gain.setTargetAtTime(MUSIC_VOL, this.context.currentTime, 1);
   }
@@ -66,10 +68,27 @@ class WalkSound extends StreetSound {
     this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
     this.nextStyle = this.wealth > 0.62 ? 'rich' : this.wealth < 0.3 ? 'poor' : 'mid';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
+    const life = typeof streetLife === 'function' ? streetLife() : 1;
+    this.muffle.frequency.setTargetAtTime(350 + life * life * 15000, now, 0.8);
     // The poor tape crackles all the time it plays.
     if (this.style === 'poor' && Math.random() < 0.5) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
     // Schedule the band a little ahead, an eighth note at a time.
     while (this.nextAt < now + 0.15) { this._play(this.nextAt); }
+  }
+  // A family leaves: the band stops for a moment, a door shuts, and a falling minor phrase.
+  evict() {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const t = this.context.currentTime, g = this.styleGain.gain;
+    g.cancelScheduledValues(t); g.setTargetAtTime(0, t, 0.05); g.setTargetAtTime(STYLES[this.style || 'mid'].gain, t + 2.6, 0.6);
+    this._kick(t + 0.05, 0.35); this._hit(t + 0.05, 0.25, 400, 0.15, 'lowpass');
+    [64, 60, 57, 52].forEach((n, i) => { this._m(MIDI(n), t + 0.4 + i * 0.42, 1.4, 'triangle', 0.05, 1600); this._m(MIDI(n) * 1.006, t + 0.4 + i * 0.42, 1.4, 'triangle', 0.025, 1200); });
+  }
+  // New neighbours arrive (Rule 2): a rising major phrase and a ring of a bike bell.
+  welcome() {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const t = this.context.currentTime;
+    [60, 64, 67, 72, 76].forEach((n, i) => this._m(MIDI(n + 12), t + 0.1 + i * 0.12, 0.9, 'triangle', 0.04, 5000, -0.4 + i * 0.2));
+    this._m(2637, t + 0.8, 0.6, 'sine', 0.02, 9000); this._m(2637, t + 1.0, 0.6, 'sine', 0.02, 9000);
   }
   _play(t) {
     const S = STYLES[this.style], eighth = 60 / S.bpm / 2, step = this.step % 32, bar = Math.floor(step / 8), beat8 = step % 8;
