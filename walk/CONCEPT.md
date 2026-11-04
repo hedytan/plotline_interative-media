@@ -3,31 +3,37 @@
 **Live:** https://hedytan.github.io/plotline_interative-media/walk/
 
 ## What it is
-An interactive artwork. It is not a playable version of Monopoly. It takes Monopoly's rules and turns them into a lived experience: you walk down a street that generates itself as you go, and you play to win by buying the homes along it.
+An interactive artwork. It takes Monopoly's rules and turns them into a lived experience on a street that generates itself as you walk.
 
 ## Who it is for
 Young people who rent, and anyone who has played Monopoly and "won".
 
 ## What it says
-Under Monopoly's rules, every home you win costs someone else theirs. The money comes from owning, not from working. The city gets emptier and more expensive, and people are pushed further out.
+**Your win is someone else's loss.** In Round 1 you are the landlord and you win. In Round 2 you walk the same street as the family you pushed out.
 
-This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, before Parker Brothers sold it as Monopoly in 1935. The artwork shows her warning first, then plays her other rules (a land tax shared by everyone) on the same street.
+This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, before Parker Brothers sold it as Monopoly in 1935.
+
+## How it plays (about a minute each round)
+1. **Round 1, you are the landlord.** One street. Press E at a FOR SALE home to buy it. Buy 3 homes. There is no money to manage.
+2. **Round 2, you are them.** You are the first family you evicted, carrying a moving box. You walk past the homes you bought ("OWNED BY YOU"). Every home for rent is too dear. At each corner you are pushed into a poorer town further out, until you can rent a caravan in The Fringe, 1h 35m from work.
+3. **End card:** "Your win was their loss", then Magie's story.
 
 ## How each interaction carries the meaning
 
 | Interaction | What the player sees or hears | What it means |
 |---|---|---|
-| Walking (↑) | Homes rise out of the ground ahead of you; a year passes every half lap | The landscape is generated as you move; time passes only when you take part |
-| Stopping beside a home for sale | The camera turns to face it; the family out the front speaks to you | A listing is someone's home |
+| Walking (↑) | Homes rise out of the ground ahead of you | The landscape is generated as you move |
+| Stopping beside a home for sale | The camera turns to face it; the family out the front speaks ("The kids grew up here.") | A listing is someone's home |
 | Buying (E) | A SOLD stamp and the family's name; they carry boxes away; the music stops for a moment | Your win is their loss |
-| Buying a second or third home | The real house sinks into the ground; a giant plastic Monopoly house (then a red hotel) drops onto the lot with a click | To the winner, a home is only a game piece |
-| Owning | Gold coins fly from your homes to your money: "▲ $59,493 a year, you didn't work for this" | Wealth comes from owning, not working |
-| Buying more | The street loses its colour, the music goes muffled, neighbours fold their arms ("Landlord.") | Displacement and isolation build up |
-| Investors | A plot is bought before you get there and becomes an empty tower: "SOLD to an investor. Will sit empty." | Homes built as investments, not to live in |
-| Satirical billboards | The same billboard changes as you change: "Light-filled! (One window.)" becomes "Landlord of the Year: YOU", then "Nobody lives here now. Great investment." | The city's advertising flatters whoever has the money |
-| Turning at a corner (← / →) | Six towns from a caravan park to a castle; signposts give the commute ("The Fringe · 1h 35m to work") | Urban sprawl: the cheaper the home, the further from work |
+| Buying a second or third home | The real house sinks; a giant plastic Monopoly house (then a red hotel) drops onto the lot | To the winner, a home is only a game piece |
+| Buying more | The street loses colour, the music goes muffled, neighbours fold their arms ("Landlord.") | Displacement and isolation build up |
+| Winning | Every house ahead becomes a grey plastic piece | The winner's street is a board, not a place |
+| Round 2: the box | You carry a moving box in front of you the whole time | You are now the one who had to leave |
+| Round 2: your old street | Your homes carry "OWNED BY YOU" signs | The same street, from the other side |
+| Round 2: applying (E) | "TOO DEAR · $470 a week. You can pay $230. 50 other people applied too." | Unaffordable rent and competition |
+| Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
+| Satirical billboards | They change with you: "Light-filled! (One window.)", "Landlord of the Year: YOU", "No pets. No kids. No chance." | The city's advertising flatters whoever has the money |
 | Music | Jazz on rich streets, pop in the middle, an out-of-tune tape on poor streets | You can hear the class of a street |
-| Ending, then Round 2 | Every house ahead becomes a grey plastic piece and the street empties; the 1904 / 1935 story; then the same street under the shared land tax, where nobody has to leave | There was another set of rules |
 
 ## Research and influences
 - Lizzie Magie, *The Landlord's Game* (patented 1904), and its two rule sets (monopolist and anti-monopolist, "Prosperity").
@@ -46,6 +52,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | 5 | 2–8 Dec | Reflection: what changed after feedback and why. | Reflection submitted |
 
 ## Changes made after tutor feedback
+- **Play-test:** the meaning still did not come through: there was too much to manage (money, loans, pay day, two rule sets, choosing towns). **Change:** cut to one idea in two rounds: you win as the landlord, then walk the same street as the family you evicted.
 - **Feedback:** the meaning was unclear: a Monopoly game, or an artwork? **Change:** it is framed as an artwork from the opening card onwards, and this page states who it is for and what it says.
 - **Feedback:** interactions were not all meaningful. **Change:** each interaction is listed above with what it means; features that do not carry the meaning were cut (shift work, casinos, jail).
 - **Feedback:** suggested satirical signs and commentary on sprawl and unaffordable apartments. **Change:** billboards now react to the player; investor towers sit empty; signposts show the commute.
