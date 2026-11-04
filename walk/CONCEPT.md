@@ -33,6 +33,8 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Round 2: applying (E) | "TOO DEAR · $470 a week. You can pay $230. 50 other people applied too." | Unaffordable rent and competition |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
 | Satirical billboards | They change with you: "Light-filled! (One window.)", "Landlord of the Year: YOU", "No pets. No kids. No chance." | The city's advertising flatters whoever has the money |
+| The sound of homes | Every lived-in home has its own sound through the wall: kids, a dog, a piano, the TV. Stand still and it comes through clearly. Buy it and it goes silent | A home is somebody's life; buying it takes that life off the street |
+| Round 2: sound | Plates rattle in your box with each step; your old home echoes once, faintly; each rejection is a phone notification | Memory and loss, heard rather than read |
 | Music | Jazz on rich streets, pop in the middle, an out-of-tune tape on poor streets | You can hear the class of a street |
 
 ## Research and influences

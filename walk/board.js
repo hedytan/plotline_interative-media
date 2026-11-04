@@ -197,9 +197,41 @@ function addGarden(ch, L, fresh) {
   }
 }
 
+/* ---------- The sound of the homes ---------- */
+// Every lived-in home has its own sound: kids, a dog, a piano, the TV. Walk past and you hear it
+// through the wall; stand still and it comes through clearly. Buy it and it goes quiet for good.
+function lifeKind(L) {
+  const pool = L.style === 'caravan' || L.tier === 0 ? ['dog', 'radio', 'baby', 'tv', 'kids'] : L.tier >= 3 ? ['tv', 'piano', 'baby', 'talk'] : L.tier === 2 ? ['piano', 'dog', 'kids', 'talk'] : ['kids', 'dog', 'piano', 'cook', 'tv', 'baby'];
+  return pool[Math.abs(L.seed >> 3) % pool.length];
+}
+function lived(L) { return !L.special && !L.vacant && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
+function houseLife() {
+  if (!sound || !sound.life) { return; }
+  const listen = intro || ending || turnAnim ? 0 : easeN((stillT - 0.6) / 1.2);
+  sound.listenK = listen;
+  if (intro || paused || turnAnim) { return; }
+  const near = [];
+  for (const ch of chunks.values()) {
+    for (const L of ch.lots) {
+      const mid = (L.z0 + L.z1) / 2, d = Math.hypot(mid - distanceWalked, EDGE_X + L.setback + 2); if (d > 24) { continue; }
+      if (L.lifeAt === undefined) { L.lifeAt = clockT + Math.random() * 2.5; }
+      // Round 2: your old home. For a moment you hear it as it was.
+      if (rules === 2 && L.home && L.owned && !L.memDone && Math.abs(mid - distanceWalked) < 10) { L.memDone = true; const q = P(L.side * (EDGE_X + L.setback + 2), 1.5, mid); sound.life(lifeKind(L), 1.2, q.rx / (Math.abs(q.rz) + 4), true); }
+      if (!ending && lived(L)) { near.push({ L, d, mid }); }
+    }
+  }
+  near.sort((a, b) => a.d - b.d);
+  for (const { L, d, mid } of near.slice(0, 3)) {
+    if (clockT < L.lifeAt) { continue; }
+    const q = P(L.side * (EDGE_X + L.setback + 2), 1.5, mid), g = Math.pow(1 - d / 24, 2) * (0.7 + listen * 0.5) * 1.6;
+    const len = sound.life(lifeKind(L), g, q.rx / (Math.abs(q.rz) + 4));
+    L.lifeAt = clockT + len + mixN(1.2, 3.5, Math.random()) * (1 - listen * 0.6);
+  }
+}
+
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
-  updateTurn();
+  updateTurn(); houseLife();
   const dt = Math.min(deltaTime / 1000, 0.05);
   // Prices rise with time, and time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
@@ -288,7 +320,7 @@ function useHere() {
   if (!act) { sayToast('Find a FOR SALE sign first.'); return; }
   if (rules === 2) {
     if (rentedAt) { return; }
-    if (!act.ok) { soldBeat = { t: clockT, stamp: 'TOO DEAR', col: [110, 100, 96], l1: `${money(rentAsk(L))} a week. You can pay ${money(RENT_BUDGET)}.`, l2: `${L.applicants} other people applied too.`, dur: 2.6 }; if (sound.jail) { sound.jail(); } return; }
+    if (!act.ok) { soldBeat = { t: clockT, stamp: 'TOO DEAR', col: [110, 100, 96], l1: `${money(rentAsk(L))} a week. You can pay ${money(RENT_BUDGET)}.`, l2: `${L.applicants} other people applied too.`, dur: 2.6 }; if (sound.ding) { sound.ding(); } return; }
     L.forSale = false; rentedAt = clockT;
     soldBeat = { t: clockT, stamp: 'HOME', col: [63, 111, 168], l1: `${meName()} found a home.`, l2: `${deedName(L)}, ${commuteShort(zone)}.`, dur: 2.8 }; if (sound.welcome) { sound.welcome(); }
     return;
@@ -779,7 +811,7 @@ function drawOpening() {
   textStyle(BOLD); textSize(17); fill(r1 ? color(200, 50, 40) : color(63, 111, 168)); text(r1 ? 'Every home you buy, a family has to leave.' : `You can pay ${money(RENT_BUDGET)} a week. You’re carrying a box.`, rx + n2 * 26 + 12, ry + 11, tw - n2 * 26 - 12);
   // Row 3: the keys.
   const ky = y + 248; textStyle(BOLD); textSize(13);
-  const keys = [['↑', 'walk'], ['E', r1 ? 'buy' : 'rent'], ['mouse', 'look around']];
+  const keys = [['↑', 'walk'], ['E', r1 ? 'buy' : 'rent'], ['stand still', 'listen']];
   let kx = rx; for (const [k, label] of keys) { const kw = textWidth(k) + 20; fill(255); stroke(90, 70, 60); strokeWeight(1.5); rect(kx, ky, kw, 28, 6); noStroke(); fill(40, 30, 24); textAlign(CENTER, CENTER); text(k, kx + kw / 2, ky + 14); textStyle(NORMAL); fill(90, 70, 60); textAlign(LEFT, CENTER); text(label, kx + kw + 8, ky + 14); kx += kw + textWidth(label) + 28; textStyle(BOLD); }
   textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 30); drawingContext.globalAlpha = 1;
   pop();

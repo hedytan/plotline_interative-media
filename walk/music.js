@@ -30,6 +30,54 @@ class WalkSound extends StreetSound {
     this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.muffle);
     this.styleGain = this.context.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
     this.music.gain.setTargetAtTime(MUSIC_VOL, this.context.currentTime, 1);
+    // Life inside the houses, heard through the walls: muffled while you walk, clear when you stop to listen.
+    this.lifeFilter = this.context.createBiquadFilter(); this.lifeFilter.type = 'lowpass'; this.lifeFilter.frequency.value = 1100;
+    this.lifeGain = this.context.createGain(); this.lifeGain.gain.value = 1; this.lifeFilter.connect(this.lifeGain); this.lifeGain.connect(this.master);
+    this.listenK = 0;
+  }
+  // One sound of somebody's home: kids, a dog, a piano, the TV... Returns how long it lasts.
+  life(kind, gain, pan, memory) {
+    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 36 || !this.lifeFilter) { return 0; }
+    const ctx = this.context, t = ctx.currentTime + 0.02, out = ctx.createGain(), p = ctx.createStereoPanner(), made = [out, p];
+    out.gain.value = gain; p.pan.value = Math.max(-1, Math.min(1, pan)); out.connect(p);
+    if (memory) {
+      // A memory: far away, dark, with an echo.
+      const f = ctx.createBiquadFilter(), d = ctx.createDelay(1), fb = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 650; d.delayTime.value = 0.27; fb.gain.value = 0.5;
+      p.connect(f); f.connect(this.lifeGain); f.connect(d); d.connect(fb); fb.connect(d); d.connect(this.lifeGain); made.push(f, d, fb);
+    } else { p.connect(this.lifeFilter); }
+    const R = Math.random;
+    const tone = (freq, when, dur, type, g, to) => {
+      const o = ctx.createOscillator(), e = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = type; f.type = 'lowpass'; f.frequency.value = 2600;
+      o.frequency.setValueAtTime(freq, when); if (to) { o.frequency.exponentialRampToValueAtTime(to, when + dur); }
+      e.gain.setValueAtTime(0, when); e.gain.linearRampToValueAtTime(g, when + 0.012); e.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(f); f.connect(e); e.connect(out); this.mvoices++; o.onended = () => { this.mvoices--; o.disconnect(); f.disconnect(); e.disconnect(); }; o.start(when); o.stop(when + dur + 0.03);
+    };
+    const hiss = (when, dur, freq, g, type = 'bandpass', q = 3) => {
+      const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), e = ctx.createGain(); s2.buffer = this.noise; f.type = type; f.frequency.value = freq; f.Q.value = q;
+      e.gain.setValueAtTime(0, when); e.gain.linearRampToValueAtTime(g, when + 0.01); e.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      s2.connect(f); f.connect(e); e.connect(out); this.mvoices++; s2.onended = () => { this.mvoices--; s2.disconnect(); f.disconnect(); e.disconnect(); }; s2.start(when, R() * 2); s2.stop(when + dur + 0.03);
+    };
+    let len = 1;
+    if (kind === 'kids') { const n = 3 + Math.floor(R() * 4); for (let i = 0; i < n; i++) { const f0 = 650 + R() * 600; tone(f0, t + i * 0.15, 0.13, 'sine', 0.07, f0 * (1.2 + R() * 0.4)); } hiss(t + 0.1, 0.3, 3000, 0.03); len = n * 0.15 + 0.3; }
+    else if (kind === 'dog') { const n = 1 + Math.floor(R() * 3); for (let i = 0; i < n; i++) { tone(430, t + i * 0.3, 0.14, 'square', 0.035, 240); hiss(t + i * 0.3, 0.1, 850, 0.12); } len = n * 0.3; }
+    else if (kind === 'piano') { const sc = [60, 62, 64, 67, 69, 72], n = 4 + Math.floor(R() * 3); let k = Math.floor(R() * 3); for (let i = 0; i < n; i++) { k = Math.max(0, Math.min(5, k + Math.floor(R() * 3) - 1)); tone(MIDI(sc[k]), t + i * 0.34, 0.9, 'triangle', 0.06); tone(MIDI(sc[k] + 12), t + i * 0.34, 0.4, 'sine', 0.015); } len = n * 0.34 + 0.6; }
+    else if (kind === 'tv' || kind === 'talk') { const n = 6 + Math.floor(R() * 7), base = kind === 'tv' ? 160 : 120; for (let i = 0; i < n; i++) { const w = t + i * 0.14 + (i % 4 === 3 ? 0.12 : 0); hiss(w, 0.11, 500 + R() * 800, 0.09, 'bandpass', 6); tone(base + R() * 70, w, 0.11, 'sawtooth', 0.012); } if (kind === 'tv' && R() < 0.4) { for (let i = 0; i < 8; i++) { hiss(t + n * 0.15 + i * 0.05, 0.08, 1200 + R() * 900, 0.03, 'bandpass', 2); } } len = n * 0.16 + 0.4; }
+    else if (kind === 'baby') { for (let i = 0; i < 2; i++) { tone(470 + R() * 40, t + i * 0.75, 0.6, 'sawtooth', 0.018, 640); } len = 1.5; }
+    else if (kind === 'cook') { hiss(t, 1.5, 5200, 0.035, 'highpass', 0.7); tone(2300 + R() * 400, t + 0.5, 0.3, 'sine', 0.035); tone(2900, t + 0.55, 0.2, 'sine', 0.02); len = 1.6; }
+    else if (kind === 'radio') { const sc = [57, 60, 62, 64, 67]; for (let i = 0; i < 6; i++) { tone(MIDI(sc[Math.floor(R() * 5)]), t + i * 0.22, 0.2, 'square', 0.014); hiss(t + i * 0.22, 0.2, 2500, 0.008, 'highpass', 1); } len = 1.5; }
+    setTimeout(() => { made.forEach(nd => { try { nd.disconnect(); } catch (e) { } }); }, (len + 3) * 1000);
+    return len;
+  }
+  // Round 2: you carry a box, and the plates in it rattle with each step.
+  footstep(pace = 0.4) {
+    super.footstep(pace);
+    if (typeof rules !== 'undefined' && rules === 2 && this._ok && this.context && this.context.state === 'running' && Math.random() < 0.7) { const t = this.context.currentTime + 0.03; this._m(2600 + Math.random() * 900, t, 0.09, 'sine', 0.02, 9000); if (Math.random() < 0.5) { this._m(3400 + Math.random() * 600, t + 0.05, 0.07, 'sine', 0.012, 9000); } }
+  }
+  // A phone notification: your application was turned down.
+  ding() {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const t = this.context.currentTime, ctx = this.context;
+    [[1320, 0], [990, 0.14]].forEach(([f, dt]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + dt); g.gain.linearRampToValueAtTime(0.09, t + dt + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.5); o.connect(g); g.connect(this.master); o.start(t + dt); o.stop(t + dt + 0.55); });
   }
   // One synth note through its own filter and pan, with an envelope.
   _m(freq, when, dur, type, gain, cutoff = 3000, pan = 0, attack = 0.01) {
@@ -69,7 +117,11 @@ class WalkSound extends StreetSound {
     this.nextStyle = this.wealth > 0.62 ? 'rich' : this.wealth < 0.3 ? 'poor' : 'mid';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
     const life = typeof streetLife === 'function' ? streetLife() : 1;
+    const listen = this.listenK || 0;
     this.muffle.frequency.setTargetAtTime(350 + life * life * 15000, now, 0.8);
+    // Stop and listen: the band and the street fade back, the homes beside you come through the wall.
+    this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen), now, 0.4);
+    if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
     // The poor tape crackles all the time it plays.
     if (this.style === 'poor' && Math.random() < 0.5) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
     // Schedule the band a little ahead, an eighth note at a time.
