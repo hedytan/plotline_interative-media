@@ -390,7 +390,7 @@ let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChun
 let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
 const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
-const APPEAR_Z = 36, RISE_T = 3.2;   // lots build when you come this close; rise time in seconds
+const APPEAR_Z = 36, RISE_T = 2.4;   // lots build when you come this close; rise time in seconds
 let riseK = 1, mouseMoved = false;
 // Held keys are tracked directly from the browser, so walking works the same in p5.js 1.x and 2.x.
 const keysHeld = new Set();
@@ -1339,7 +1339,7 @@ const START_AGE = 24, END_AGE = 30, START_SAVINGS = 60000, OWN_GOAL = 5;
 const WAGES = 60000, LIVING = 22000, RENT_WEEK = 380;     // take-home pay, living costs, rent
 const BASE_PRICE = [520000, 780000, 1600000, 2400000, 4800000];  // by district tier, inner city
 const ZONE_PRICE = 0.8, DEPOSIT = 0.1;                     // prices fall 20% per town out
-const GROWTH = [11, 4];                                     // % price rise per 100 s walked, by rule
+const GROWTH = [8, 3];                                      // % price rise per year (a year = half a lap walked), by rule
 const RENT_YIELD = [0.09, 0.05], INTEREST = 0.05;           // tenants pay this share of the price a year; the bank charges 5%
 const LAND_TAX = 0.035, STREET_SHARE = 9000;                // Rule 2: the tax on your land, and everyone's equal share of it
 const MOVED = [4, 3, 2, 2, 1];                              // households living in a lot, by tier
@@ -1417,7 +1417,7 @@ function fillSign(text, tier) {
   const L = { tier, priceK: 1 };
   return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + Math.floor(Math.random() * 15))
     .replace('{price}', moneyK(priceOf(L))).replace('{deposit}', moneyK(priceOf(L) * DEPOSIT))
-    .replace('{growth}', Math.round(GROWTH * 100 + 4)).replace(/{commute}/g, commuteText());
+    .replace('{growth}', GROWTH[0]).replace(/{commute}/g, commuteText());
 }
 function pickSign(tier, r) {
   const pool = landlordMode ? SIGNS.landlord : zone >= 4 && r() < 0.5 ? SIGNS.out : SIGNS[tier];
@@ -1486,7 +1486,9 @@ function addGarden(ch, L, fresh) {
 function boardUpdate(z) {
   updateTurn();
   const dt = Math.min(deltaTime / 1000, 0.05);
-  if (!paused && !intro && !ending) { market *= 1 + GROWTH[rules - 1] / 100 * dt / 100; }
+  // Prices rise with time, and time is the walk: standing still, nothing changes.
+  const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
+  if (!paused && !intro && !ending && walked > 0 && walked < 5) { market *= 1 + GROWTH[rules - 1] / 100 * walked / YEAR_M; }
   if (ending && ending.kind === 'rule1') { emptyK = Math.max(0.06, 1 - (clockT - ending.t) / 3); }
   for (const ch of chunks.values()) {
     evolveStreet(ch);
@@ -1929,11 +1931,11 @@ function drawBoardHud() {
     if (np) { iconRow(x + 16, y + 68, np, Math.floor((w - 50) / 15), 12, (ix, iy) => personIcon(ix, iy, 12, pc, rules === 1)); }
     else { fill(150, 130, 120); textSize(11); text(rules === 1 ? 'Families moved out: none yet' : 'Nobody has to leave', x + 16, y + 68); }
     // Money, top right.
-    const ww = 190, wx = width - ww - 16, perMin = homesPerMinute(), wh = perMin > 1 ? 84 : 62, bump = Math.max(0, 1 - (clockT - coinHitT) / 0.25);
+    const ww = 190, wx = width - ww - 16, perMin = homesPerYear(), wh = perMin > 1 ? 84 : 62, bump = Math.max(0, 1 - (clockT - coinHitT) / 0.25);
     fill(0, 50); rect(wx + 3, y + 4, ww, wh, 8); fill(255, 250, 238); rect(wx, y, ww, wh, 8);
     fill(120, 100, 90); textSize(10); textAlign(RIGHT, TOP); text('YOU CAN SPEND', wx + ww - 14, y + 10);
     fill(bump > 0 ? lerpColor(color(40, 30, 24), color(47, 138, 58), bump) : color(40, 30, 24)); textStyle(BOLD); textSize(24 + bump * 4); text(money(buyingPower()), wx + ww - 14, y + 26 - bump * 2); textStyle(NORMAL);
-    if (perMin > 1) { fill(47, 138, 58); textStyle(BOLD); textSize(12); text(`▲ ${money(perMin)} a minute`, wx + ww - 14, y + 58); textStyle(ITALIC); textSize(10); fill(120, 100, 90); text('you didn’t work for this', wx + ww - 14, y + 72); textStyle(NORMAL); }
+    if (perMin > 1) { fill(47, 138, 58); textStyle(BOLD); textSize(12); text(`▲ ${money(perMin)} a year`, wx + ww - 14, y + 58); textStyle(ITALIC); textSize(10); fill(120, 100, 90); text('you didn’t work for this', wx + ww - 14, y + 72); textStyle(NORMAL); }
     drawCoins(wx + ww - 60, y + 38);
     for (let i = moneyPops.length - 1; i >= 0; i--) {
       const m = moneyPops[i], age2 = clockT - m.t; if (age2 > 2.4) { moneyPops.splice(i, 1); continue; } if (age2 < 0) { continue; }
@@ -1998,9 +2000,10 @@ function drawOpening() {
 // Your homes go up in value every second, so the bank will lend you more: coins fly from each
 // home you own to your money, and the number ticks up while you stand there.
 const coins = []; let coinT = 0, coinHitT = -9;
-function homesPerMinute() { return owned.length ? totalValue() * 0.6 * GROWTH[rules - 1] / 100 / 100 * 60 : 0; }
+const YEAR_M = 240; let lastWalkZ = 0;   // half a lap (48 m x 10 / 2) is a year
+function homesPerYear() { return owned.length ? totalValue() * GROWTH[rules - 1] / 100 : 0; }
 function drawCoins(tx, ty) {
-  if (owned.length && !paused && clockT - coinT > Math.max(0.35, 1.6 - owned.length * 0.25)) {
+  if (owned.length && !paused && Math.abs(stepSpeed) > 0.5 && clockT - coinT > Math.max(0.35, 1.6 - owned.length * 0.25)) {
     coinT = clockT;
     const mine = []; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.owned && riseOf(L.born) > 0.9) { const q = P(L.side * (EDGE_X + L.setback + 1), L.H * 0.8, (L.z0 + L.z1) / 2); if (q.rz > 2 && q.x > 0 && q.x < width) { mine.push(q); } } } }
     const from = mine.length ? mine[Math.floor(Math.random() * mine.length)] : { x: 30 + Math.random() * 160, y: 60 };
