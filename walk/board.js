@@ -64,7 +64,9 @@ const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
-function commuteMin() { return [15, 20, 10, 35, 55, 95][zone]; }
+const COMMUTE = [15, 20, 10, 35, 55, 95];   // minutes to work in the city, by town
+function commuteMin(zn = zone) { return COMMUTE[zn]; }
+function commuteShort(zn) { const m = COMMUTE[zn]; return m < 60 ? `${m} min to work` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} to work`; }
 function commuteText() { const m = commuteMin(); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; }
 function sayToast(text) { toasts.push({ text, t: clockT }); }
 function popMoney(v, label) { moneyPops.push({ text: (v < 0 ? '−' : '+') + money(Math.abs(v)) + (label ? '  ' + label : ''), t: clockT + moneyPops.length * 0.35, up: v > 0 }); }
@@ -88,19 +90,33 @@ const SIGNS = {
   2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s investment.', 'Heritage charm from {price}. Heritage wages not included.', 'Live where your barista can’t.', 'Second home? Third home? Why stop?'],
   3: ['Luxury apartments. 80% empty. 100% sold.', 'Off the plan from {price}. Off your budget forever.', 'Rooftop pool for owners. Rooftop view of it for renters.', 'Prices up {growth}% this year. Wages up 3%.', 'Invest in bricks. Live in a shoebox.'],
   4: ['Penthouse {price}. Studio from your dreams.', 'Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
-  out: ['New estate! Commute just {commute}.', 'Paddock to palace. Shops coming 2041.', 'Room to breathe. Nothing to do.', 'Only {commute} to the city. Each way.'],
-  landlord: ['Welcome, landlord. Rent goes up Monday.', 'Your tenant is 24 and saving for a deposit. Sound familiar?', 'Raise the rent? Everyone else is.', 'Congratulations. You are the market now.']
+  out: ['New estate! Commute just {commute}.', 'Paddock to palace. Shops coming 2041.', 'Pushed out of the city? Welcome! Homes from {price}.', 'Only {commute} to the city. Each way.', 'The bus comes twice a day. Enjoy the space.'],
+  // Once you own homes, the city starts talking to you instead.
+  landlord: ['Landlord of the Year: YOU', 'Fewer neighbours. More equity.', 'Raise the rent? Everyone else is.', 'Your tenant is 24 and saving for a deposit. Sound familiar?', 'Congratulations. You are the market now.', 'Negative gearing: the tax office helps you buy their home.', 'Another family moved further out. Your commute: 0 min.'],
+  // Luxury towers going up where homes were.
+  luxury: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon.', 'From {price}. Bought by people who won’t live here.', 'Coming soon: 300 homes nobody here can afford.', 'Invest in bricks. Live in a shoebox.'],
+  // A street that has been emptied.
+  empty: ['Nobody lives here now. Great investment.', 'Ghost street. Prime location.', 'For lease. For lease. For lease.', 'Quiet neighbourhood. Very quiet.'],
+  // Her other rules: the signs tell what the shared land tax pays for.
+  shared: ['Land tax shared: {share} to everyone this year.', 'Homes are for living in.', 'Rent steady. Neighbours stayed.', 'The park is open. It’s yours too.', 'New school, paid for by the land.']
 };
-function fillSign(text, tier) {
+function fillSign(text, tier, n = 0) {
   const L = { tier, priceK: 1 };
-  return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + Math.floor(Math.random() * 15))
+  return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + (n % 15))
     .replace('{price}', moneyK(priceOf(L))).replace('{deposit}', moneyK(priceOf(L) * DEPOSIT))
-    .replace('{growth}', GROWTH[0]).replace(/{commute}/g, commuteText());
+    .replace('{growth}', GROWTH[0]).replace('{share}', money(STREET_SHARE)).replace(/{commute}/g, commuteText());
 }
-function pickSign(tier, r) {
-  const pool = landlordMode ? SIGNS.landlord : zone >= 4 && r() < 0.5 ? SIGNS.out : SIGNS[tier];
-  return fillSign(pool[Math.floor(r() * pool.length)], tier);
+// Which voice the city speaks in right now: it changes as you change the street.
+function signPool(tier) {
+  if (rules === 2) { return SIGNS.shared; }
+  if (movedOut >= 8) { return SIGNS.empty; }
+  if (owned.length) { return SIGNS.landlord; }
+  if (zone >= 4) { return SIGNS.out; }
+  if (tier >= 3) { return SIGNS.luxury; }
+  return SIGNS[tier];
 }
+function signText(p) { if (p.fixed || p.idx === undefined) { return p.text || ""; } const pool = signPool(p.tier); return fillSign(pool[p.idx % pool.length], p.tier, p.idx); }
+function pickSign(tier, r) { return fillSign(SIGNS[tier][Math.floor(r() * SIGNS[tier].length)], tier); }
 
 
 /* ---------- Called from chunkAt() ---------- */
@@ -133,9 +149,9 @@ function plotsForChunk(ch, r) {
   ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
   // Billboards on the pavement, written from the prices on this block.
   for (let i = 0; i < 2; i++) {
-    if (r() < 0.75) { continue; }
+    if (r() < 0.45) { continue; }
     const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
-    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, text: pickSign(ch.tier, r), col: DISTRICTS[ch.tier].stripe[0] });
+    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, tier: ch.tier, idx: Math.floor(r() * 1000), col: DISTRICTS[ch.tier].stripe[0] });
   }
   // An open home with a queue down the pavement, in the cheaper districts.
   if (ch.tier <= 2 && zone >= 2 && r() < 0.55) {
@@ -184,7 +200,7 @@ function boardUpdate(z) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
         Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
         preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
-        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', col: '#c8322a', born: clockT });
+        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', fixed: true, col: '#c8322a', born: clockT });
         sound.jail(); sayToast('An investor bought it first.');
       }
     }
@@ -382,7 +398,7 @@ function finishTurn() {
   firedCasinos.clear(); visitedJails.clear();
   lastChunk = Math.floor(distanceWalked / CHUNK_LEN); lastTier = -1; ownedFromC = lastChunk + 1;
   stepSpeed = 0; dashTarget = null; streetT = clockT - 5; buildSkyline();
-  sayToast(`${ZONE_NAMES[zone]} · ${TOWNS[zone].cls}`);
+  sayToast(`${ZONE_NAMES[zone]} · ${TOWNS[zone].cls} · ${commuteShort(zone)}`);
 }
 function newStreet() {
   const c = Math.floor(distanceWalked / CHUNK_LEN);
@@ -420,8 +436,8 @@ function drawTurnSign(q, p) {
     ctx.moveTo(left ? x0 + h * 0.5 : x0, y); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y); ctx.lineTo(left ? x0 + w : tip, y + h / 2); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y + h); ctx.lineTo(left ? x0 + h * 0.5 : x0, y + h); ctx.lineTo(left ? tip : x0, y + h / 2); ctx.closePath(); ctx.fill();
     if (k > 8) { ctx.fillStyle = '#fff'; ctx.font = `bold ${h * 0.42}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, left ? q.x - w / 2 + h * 0.2 : q.x + w / 2 - h * 0.2, y + h / 2 + 1, w * 0.85); }
   };
-  if (out) { plate(top, `${out} · poorer`, '#3f8fd6', true); }
-  if (inn) { plate(top + h * 1.2, `${inn} · richer`, '#c8322a', false); }
+  if (out) { plate(top, `${out} · ${commuteShort(zone + 1)}`, '#3f8fd6', true); }
+  if (inn) { plate(top + h * 1.2, `${inn} · ${commuteShort(zone - 1)}`, '#c8322a', false); }
   ctx.restore();
 }
 // A big roadside billboard; the text is generated from the street's own prices.
@@ -436,7 +452,7 @@ function drawBillboard(q, p) {
   if (w > 50) {
     ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const size = Math.max(7, h * 0.16); ctx.font = `bold ${size}px Georgia, serif`;
-    const words = p.text.split(' '), lines = []; let line = '';
+    const words = signText(p).split(' '), lines = []; let line = '';
     for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.86 && line) { lines.push(line); line = wd; } else { line = t; } }
     lines.push(line);
     const lh = size * 1.15, y0 = top - h / 2 - (lines.length - 1) * lh / 2;
@@ -603,7 +619,7 @@ function drawBoardHud() {
     noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
     fill(rules === 1 ? '#c8322a' : SHARE_COL); rect(x, y, 6, h, 8, 0, 0, 8);
     fill(40, 30, 24); textStyle(BOLD); textSize(16); textAlign(LEFT, TOP); text(ZONE_NAMES[zone], x + 16, y + 10);
-    textStyle(NORMAL); textSize(11); fill(150, 120, 100); textAlign(RIGHT, TOP); text(`AGE ${lifeAge} / ${END_AGE}`, x + w - 12, y + 13); textAlign(LEFT, TOP);
+    textStyle(NORMAL); textSize(11); fill(150, 120, 100); textAlign(RIGHT, TOP); text(`AGE ${lifeAge} / ${END_AGE}`, x + w - 12, y + 13); text(commuteShort(zone), x + w - 12, y + 27); textAlign(LEFT, TOP);
     for (let i = 0; i < Math.max(OWN_GOAL, owned.length); i++) { houseIcon(x + 16 + i * 22, y + 38, 17, i < owned.length ? color(OWNER_COL) : color(190, 175, 160), i < owned.length); }
     const pc = rules === 1 ? color(200, 50, 40) : color(SHARE_COL), np = rules === 1 ? movedOut : newNeighbours;
     if (np) { iconRow(x + 16, y + 68, np, Math.floor((w - 50) / 15), 12, (ix, iy) => personIcon(ix, iy, 12, pc, rules === 1)); }
@@ -640,7 +656,7 @@ function drawBoardHud() {
   if (!intro && !ending) { drawSoldBeat(); }
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'rule1') {
-    const lines = [`You own ${owned.length} homes, worth ${moneyK(totalValue())}.`, `Your tenants paid you ${money(rentIn)}.`, `${movedOut} families moved out so you could buy.`, '', 'This game was invented in 1904 by Lizzie Magie.', 'She called it The Landlord’s Game. It was a warning:', 'under these rules one player wins, and the street empties.', 'She wrote a second set of rules too.'];
+    const lines = [`You own ${owned.length} homes, worth ${moneyK(totalValue())}.`, `Your tenants paid you ${money(rentIn)}.`, `${movedOut} families moved further out so you could buy.`, '', 'This game was invented in 1904 by Lizzie Magie.', 'She called it The Landlord’s Game. It was a warning:', 'under these rules one player wins, and the street empties.', 'She wrote a second set of rules too.'];
     storyCard(owned.length >= OWN_GOAL ? 'YOU WIN' : 'TIME’S UP', lines, clockT - ending.t > 3.5 ? 'Press E or click to play her other rules' : '', easeN((clockT - ending.t - 2.5) / 1.2));
   }
   if (ending && ending.kind === 'rule2') {
@@ -657,7 +673,7 @@ function drawOpening() {
   push(); noStroke(); fill(20, 14, 10, 150); rect(0, 0, width, height);
   const w = Math.min(600, width - 32), h = 320, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
   fill(0, 60); rect(x + 4, y + 6, w, h, 12); fill(255, 250, 238); rect(x, y, w, h, 12); fill(col); rect(x, y, w, 34, 12, 12, 0, 0);
-  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text(r1 ? 'MONOPOLY, PLAYED ON A REAL STREET' : 'ROUND 2 · THE SAME STREET, HER OTHER RULES', cx, y + 17);
+  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text(r1 ? 'AN ARTWORK · MONOPOLY’S RULES, LIVED ON A REAL STREET' : 'ROUND 2 · THE SAME STREET, HER OTHER RULES', cx, y + 17);
   fill(40, 30, 24); textSize(Math.min(34, w / 14)); text(r1 ? 'THE LANDLORD’S WALK' : 'NOBODY HAS TO LEAVE', cx, y + 70);
   // Row 1: the goal.
   const rx = x + 34, tw = w - 68;
