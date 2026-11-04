@@ -6,8 +6,10 @@
  * grows grander. Every lap past GO is a year: pay day, rent day, and you get a year older.
  * Billboards along the street are generated from the prices around you. FOR SALE plots tick
  * up while you look at them, and investors sometimes buy them before you get there.
- * Each year at GO, your rent goes up and you choose: stay and pay, or move further out (cheaper,
- * but a longer commute). A NEXT line and a pink arrow always show what to do. Buy a home if you
+ * At every crossing you can turn: left takes you to a cheaper town further out, right to a richer
+ * one closer in. Each town has its own houses, prices and rent. The homes are far too dear, so
+ * you work: NOW HIRING signs on the street pay a shift (better in the richer towns), but prices
+ * rise while you work. A NEXT line and a pink arrow always show what to do. Buy a home if you
  * can; the walk ends when you do, or at 30.
  */
 const START_AGE = 24, END_AGE = 30, START_SAVINGS = 22000;
@@ -15,9 +17,12 @@ const WAGES = 52000, LIVING = 24000, RENT_WEEK = 380;     // take-home pay, livi
 const BASE_PRICE = [520000, 780000, 1600000, 2400000, 4800000];  // by district tier, inner city
 const ZONE_PRICE = 0.8, DEPOSIT = 0.1, GROWTH = 0.07;          // prices fall 20% per zone out; 7% a year
 const ZONE_NAMES = ['Inner city', 'Inner ring', 'Middle ring', 'Outer suburbs', 'New estates', 'Paddock estates'];
+// Work: a shift pays by the district you are in, and less the further out the town is.
+const SHIFT_PAY = [900, 1200, 1600, 2200, 3200], SHIFT_ZONE = 0.85, SHIFT_INFLATION = 0.012;
+const JOBS = [['Stack shelves', 'Wash dishes', 'Sort parcels'], ['Pour coffee', 'Bake bread', 'Shelve books'], ['Walk the dogs', 'Mow the lawns', 'Clean the pool'], ['Wait tables', 'Fold shirts', 'Hang art'], ['Temp at reception', 'Valet the cars', 'Polish the lobby']];
 const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47';
 
-let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid = 0, rentWeek = RENT_WEEK;
+let wallet = START_SAVINGS, lifeAge = START_AGE, zone = 0, market = 1, rentPaid = 0, rentWeek = RENT_WEEK, rentBase = RENT_WEEK, shift = null;
 let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
 let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
 const toasts = [], moneyPops = [];
@@ -32,6 +37,9 @@ function popMoney(v, label) { moneyPops.push({ text: (v < 0 ? '−' : '+') + mon
 function addMoney(v, label) { wallet += v; popMoney(v, label); sound.cash(v > 0); }
 function priceOf(L) { return BASE_PRICE[L.tier] * Math.pow(ZONE_PRICE, zone) * market * L.priceK; }
 function chunkTier(slot) { return Math.max(0, TIER_OF[slot] - zone); }
+// You live in the town you walk in: rent is cheaper the further out it is.
+function rentFor(zn) { return Math.round(rentBase * Math.pow(0.8, zn)); }
+function shiftPay(tier) { return Math.round(SHIFT_PAY[tier] * Math.pow(SHIFT_ZONE, zone) / 10) * 10; }
 
 /* ---------- Generated billboards ---------- */
 // Sentence templates; {tokens} are filled with live numbers from the street around you.
@@ -71,6 +79,17 @@ function plotsForChunk(ch, r) {
       Object.assign(L, { forSale: true, priceK: mixN(0.85, 1.2, r()), setback: 0, investorAt: r() < 0.35 ? mixN(22, 45, r()) : -1 });
     }
   }
+  // A NOW HIRING sign on one shop per block, so you can earn on the way.
+  if (r() < 0.75) {
+    const cand = ch.lots.filter(L => !L.special && !L.forSale && !L.owned && L.z0 > ch.z0 + CROSS_W + 2);
+    if (cand.length) {
+      const L = cand[Math.floor(r() * cand.length)], jobs = JOBS[ch.tier];
+      Object.assign(L, { hiring: true, job: jobs[Math.floor(r() * jobs.length)], pay: shiftPay(ch.tier) });
+      ch.props.push({ kind: 'hiring', x: L.side * (EDGE_X - 0.7), z: (L.z0 + L.z1) / 2 - 1.5, side: L.side, L });
+    }
+  }
+  // A signpost at the crossing: which way is cheaper, which way is richer.
+  ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
   // Billboards on the pavement, written from the prices on this block.
   for (let i = 0; i < 2; i++) {
     if (r() < 0.25) { continue; }
@@ -91,7 +110,7 @@ function plotsForChunk(ch, r) {
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
   if (queuedTurn && atCrossing(z)) { const d = queuedTurn; queuedTurn = 0; tryTurn(d); }
-  updateTurn();
+  updateTurn(); updateShift();
   if (!paused && !intro && !ending) { market *= 1 + GROWTH * Math.min(deltaTime / 1000, 0.05) / 100; }   // ~7% for every 100 s walked
   for(const ch of chunks.values()){evolveStreet(ch);}
   // Investors buy plots out from under you.
@@ -111,19 +130,12 @@ function boardUpdate(z) {
 // Every lap past GO is a year.
 function onPassGo() {
   if (ending || intro) { return; }
-  lifeAge++; const rentYear = rentWeek * 52; rentPaid += rentYear;
+  lifeAge++; rentWeek = rentFor(zone); const rentYear = rentWeek * 52; rentPaid += rentYear;
   addMoney(WAGES, 'wages'); setTimeout(() => addMoney(-rentYear, 'rent'), 500); setTimeout(() => addMoney(-LIVING, 'living costs'), 1000);
   if (home) { setTimeout(() => addMoney(rentWeek * 52 * 0.9, 'rent from your tenant'), 1500); }
-  rentWeek = Math.round(rentWeek * 1.06);
-  sayToast(`A year passes. You’re ${lifeAge}. Your rent goes up to ${money(rentWeek)}/wk.`);
-  if (lifeAge >= END_AGE && !home) { setTimeout(() => endWalk('renter'), 2400); return; }
-  // Every year, the same choice renters make: pay the new rent, or move further out.
-  if (!home && zone < ZONE_NAMES.length - 1) { setTimeout(() => { if (!ending) { nameBox = { t: clockT, stay: rentWeek, move: Math.round(rentWeek * 0.8) }; } }, 1800); }
-}
-function chooseMove(move) {
-  const c = nameBox; if (!c) { return; } nameBox = null;
-  if (move) { rentWeek = c.move; turnAnim = { dir: -1, t: clockT }; sound.turn(-1); }
-  else { sayToast(`You stay. Rent ${money(rentWeek)}/wk.`); }
+  rentBase = Math.round(rentBase * 1.06); rentWeek = rentFor(zone);
+  sayToast(`A year passes. You’re ${lifeAge}. Rent in ${ZONE_NAMES[zone]} goes up to ${money(rentWeek)}/wk.`);
+  if (lifeAge >= END_AGE && !home) { setTimeout(() => endWalk('renter'), 2400); }
 }
 function onChance(kind) {
   if (kind === 'boom') { market *= 1.08; sayToast('Interest rates cut! Everything for sale just went up 8%.'); }
@@ -136,8 +148,8 @@ function plotHere(z) {
   let best = null;
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
-      if (!L.forSale) { continue; }
-      const d = Math.abs((L.z0 + L.z1) / 2 - z);
+      if (!L.forSale && !L.hiring) { continue; }
+      const d = Math.abs((L.z0 + L.z1) / 2 - z) + (L.hiring ? 2 : 0);
       if (d < 10 && (!best || d < best.d)) { best = { L, d }; }
     }
   }
@@ -145,6 +157,7 @@ function plotHere(z) {
 }
 function actionFor(L) {
   if (!L) { return null; }
+  if (L.hiring) { return { label: `E  ·  ${L.job}: work a shift  (+${money(L.pay)})`, ok: true }; }
   if (home) { return { label: 'You already own a home.', ok: false }; }
   const dep = priceOf(L) * DEPOSIT;
   return wallet >= dep ? { label: `E  ·  Buy it  (deposit ${money(dep)})`, ok: true } : { label: `Deposit ${money(dep)}  ·  you have ${money(wallet)}`, ok: false };
@@ -152,7 +165,8 @@ function actionFor(L) {
 function useHere() {
   if (intro) { intro = false; return; }
   if (ending || nameBox) { return; }
-  const L = plotHere(distanceWalked), act = actionFor(L); if (!act) { sayToast('Walk to a FOR SALE sign first.'); return; }
+  const L = plotHere(distanceWalked), act = actionFor(L); if (!act) { sayToast('Walk to a FOR SALE or NOW HIRING sign first.'); return; }
+  if (L.hiring) { startShift(L); return; }
   if (!act.ok) { sayToast(home ? act.label : `Not enough for the deposit yet.`); return; }
   const price = priceOf(L), dep = price * DEPOSIT;
   addMoney(-dep, 'deposit');
@@ -162,21 +176,31 @@ function useHere() {
   landlordMode = true;
   sayToast(`You bought a home! ${commuteText()} from the city.`);
 }
+// Working a shift: the walk stops for a moment, you get paid, and prices rise while you worked.
+function startShift(L) { shift = { L, t: clockT }; nameBox = shift; sound.turn(1); }
+function updateShift() {
+  if (!shift || clockT - shift.t < 1.8) { return; }
+  const L = shift.L; shift = null; nameBox = null; L.hiring = false;
+  addMoney(L.pay, 'shift'); market *= 1 + SHIFT_INFLATION;
+  sayToast(`You worked a shift: +${money(L.pay)}. Prices rose ${(SHIFT_INFLATION * 100).toFixed(1)}% meanwhile.`);
+}
 function endWalk(kind) { if (ending) { return; } ending = { kind, t: clockT }; sound.go(); baseNight = 0.6; nightTarget = 0.6; }
 function restartWalk() {
-  streetMemory.clear(); nameBox = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; home = null; ending = null; landlordMode = false;
+  streetMemory.clear(); nameBox = null; shift = null; wallet = START_SAVINGS; lifeAge = START_AGE; zone = 0; market = 1; rentPaid = 0; rentWeek = RENT_WEEK; rentBase = RENT_WEEK; home = null; ending = null; landlordMode = false;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true;
   seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
 
-/* ---------- Turning: left moves you further out, right moves you back in ---------- */
+/* ---------- Turning: left to a cheaper town further out, right to a richer one closer in ---------- */
 function nextCrossing(z) { const local = modN(z, CHUNK_LEN); return local < CROSS_W - 1 ? 0 : CHUNK_LEN - local + 2; }
 function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
 function tryTurn(dir) {
-  if (turnAnim || intro || ending) { return; }
+  if (turnAnim || intro || ending || nameBox) { return; }
+  if (dir > 0 && zone === 0) { sayToast('This is the inner city. There is no richer town than this.'); return; }
+  if (dir < 0 && zone === ZONE_NAMES.length - 1) { sayToast('This is as far out as the city goes.'); return; }
   if (!atCrossing(distanceWalked)) {
     const ahead = nextCrossing(distanceWalked);
-    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left (further out)' : 'right (toward the city)'} at the crossing ahead.`); }
+    if (ahead < 30) { queuedTurn = dir; sayToast(`Turning ${dir < 0 ? 'left, to a cheaper town' : 'right, to a richer town'} at the crossing ahead.`); }
     else { sayToast(`No corner here. The next crossing is ${Math.round(ahead)} m ahead.`); }
     return;
   }
@@ -189,9 +213,9 @@ function updateTurn() {
   fadeA = easeN((u - 0.45) / 0.55);
   if (u >= 1) {
     const dir = turnAnim.dir; turnAnim = null; turnYaw = 0; fadeA = 1;
-    zone = constrain(zone - dir, 0, ZONE_NAMES.length - 1);
+    zone = constrain(zone - dir, 0, ZONE_NAMES.length - 1); rentWeek = rentFor(zone);
     newStreet();
-    sayToast(dir < 0 ? `Further out: ${ZONE_NAMES[zone]}. Prices −20%. Commute ${commuteText()}.` : `Back toward the city: ${ZONE_NAMES[zone]}. Commute ${commuteText()}.`);
+    sayToast(dir < 0 ? `Cheaper: ${ZONE_NAMES[zone]}. Homes −20%, rent ${money(rentWeek)}/wk, but jobs pay less.` : `Richer: ${ZONE_NAMES[zone]}. Homes +25%, rent ${money(rentWeek)}/wk, jobs pay more.`);
   }
 }
 function newStreet() {
@@ -217,6 +241,37 @@ function drawForSale(L) {
     ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
     ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(`deposit ${moneyK(priceOf(L) * DEPOSIT)}`, base.x, top - h * 0.2 + h * 0.8);
   }
+  ctx.restore();
+}
+// A NOW HIRING board outside a shop, with the job and what a shift pays.
+function drawHiring(q, p) {
+  if (!p.L.hiring) { return; }
+  const k = q.k, w = 2.6 * k, h = 1.5 * k, top = q.y - 2.4 * k; if (k < 2) { return; }
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
+  ctx.fillStyle = '#3a3a40'; ctx.fillRect(q.x - w * 0.42, top, 0.1 * k, 2.4 * k); ctx.fillRect(q.x + w * 0.42 - 0.1 * k, top, 0.1 * k, 2.4 * k);
+  ctx.fillStyle = '#fffaee'; ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.fillRect(q.x - w / 2, top - h, w, h); ctx.strokeRect(q.x - w / 2, top - h, w, h);
+  ctx.fillStyle = '#2e9e47'; ctx.fillRect(q.x - w / 2, top - h, w, h * 0.36);
+  if (w > 26) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText('NOW HIRING', q.x, top - h * 0.82);
+    ctx.font = `bold ${h * 0.24}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(`${money(p.L.pay)}/shift`, q.x, top - h * 0.45);
+    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(p.L.job, q.x, top - h * 0.16, w * 0.9);
+  }
+  ctx.restore();
+}
+// A street sign at each crossing: left to a cheaper town, right to a richer one.
+function drawTurnSign(q, p) {
+  const k = q.k; if (k < 3) { return; }
+  const w = 3.4 * k, h = 0.55 * k, top = q.y - 3.4 * k, out = zone < ZONE_NAMES.length - 1 ? ZONE_NAMES[zone + 1] : null, inn = zone > 0 ? ZONE_NAMES[zone - 1] : null;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
+  ctx.fillStyle = '#3a4a3a'; ctx.fillRect(q.x - 0.06 * k, top - 0.2 * k, 0.12 * k, 3.6 * k);
+  const plate = (y, text, col, left) => {
+    ctx.fillStyle = col; ctx.beginPath(); const x0 = left ? q.x - w : q.x, tip = left ? x0 : x0 + w;
+    ctx.moveTo(left ? x0 + h * 0.5 : x0, y); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y); ctx.lineTo(left ? x0 + w : tip, y + h / 2); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y + h); ctx.lineTo(left ? x0 + h * 0.5 : x0, y + h); ctx.lineTo(left ? tip : x0, y + h / 2); ctx.closePath(); ctx.fill();
+    if (k > 8) { ctx.fillStyle = '#fff'; ctx.font = `bold ${h * 0.42}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, left ? q.x - w / 2 + h * 0.2 : q.x + w / 2 - h * 0.2, y + h / 2 + 1, w * 0.85); }
+  };
+  if (out) { plate(top, `${out} · cheaper`, '#3f8fd6', true); }
+  if (inn) { plate(top + h * 1.2, `${inn} · richer`, '#c8322a', false); }
   ctx.restore();
 }
 // A big roadside billboard; the text is generated from the street's own prices.
@@ -308,8 +363,8 @@ function drawBoardHud() {
     }
     // The plot beside you.
     const L = plotHere(z), act = actionFor(L);
-    if (L) { drawListing(L, width - 16 - 200, y + 84); }
-    if (act) {
+    if (L && L.forSale) { drawListing(L, width - 16 - 200, y + 84); }
+    if (act && !shift) {
       textStyle(BOLD); textSize(17); const tw = textWidth(act.label) + 40, bx = width / 2 - tw / 2, by = height - 116;
       fill(0, 60); rect(bx + 3, by + 4, tw, 44, 22); fill(act.ok ? color(255, 250, 238) : color(240, 232, 220)); rect(bx, by, tw, 44, 22);
       fill(act.ok ? color(40, 30, 24) : color(110, 90, 80)); textAlign(CENTER, CENTER); text(act.label, width / 2, by + 23); textStyle(NORMAL);
@@ -321,18 +376,17 @@ function drawBoardHud() {
       noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
     }
     fill(255, 230); textSize(12); textAlign(CENTER, BOTTOM); stroke(0, 100); strokeWeight(2);
-    text('↑ walk  ·  E buy  ·  mouse look', width / 2, height - 14); noStroke();
+    text('↑ walk  ·  ← cheaper town  ·  → richer town  ·  E buy / work  ·  mouse look', width / 2, height - 14); noStroke();
     drawNextBar();
   }
-  if (intro) { storyCard('THE LANDLORD’S WALK', [`You’re 24, renting, $22k saved.`, 'Buy a home before you turn 30.'], 'Click or press E to start'); }
+  if (intro) { storyCard('THE LANDLORD’S WALK', [`You’re 24, renting, $22k saved.`, 'Buy a home before you turn 30.', 'Homes cost too much: work shifts at NOW HIRING signs.', 'At a corner, ← turns to a cheaper town, → to a richer one.'], 'Click or press E to start'); }
   if (ending) {
     const lines = ending.kind === 'owner'
       ? [`You bought a home at ${home.lifeAge}, ${home.commute} from the city.`, `It cost ${money(home.price)}. You’ll be paying it off until you’re ${home.lifeAge + 30}.`, `Along the way you paid ${money(rentPaid)} in rent.`, `Prices rose ${Math.round((market - 1) * 100)}% while you saved.`, 'You’re a landlord now, too. Someone your age rents from you.']
       : [`You’re ${lifeAge}, and you’re still renting.`, `You paid ${money(rentPaid)} in rent.`, `You saved ${money(wallet)}.`, `Prices rose ${Math.round((market - 1) * 100)}% while you saved.`, 'The street grew grander every year. None of it was yours.'];
     storyCard(ending.kind === 'owner' ? 'YOU OWN A HOME' : 'STILL RENTING', [...lines, '', 'Monopoly began in 1904 as The Landlord’s Game, a warning about landlords.'], 'Press R to walk again', easeN((clockT - ending.t) / 1.2));
   }
-  if (nameBox && !ending) { drawMoveChoice();
-  }
+  if (shift && !ending) { drawShiftCard(); }
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
 }
@@ -364,24 +418,28 @@ function drawListing(L, x, y) {
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
-  if (nameBox && (code === 'Digit1' || code === 'Numpad1')) { chooseMove(false); return true; }
-  if (nameBox && (code === 'Digit2' || code === 'Numpad2')) { chooseMove(true); return true; }
+  if (code === 'ArrowLeft' || code === 'KeyA') { tryTurn(-1); return true; }
+  if (code === 'ArrowRight' || code === 'KeyD') { tryTurn(1); return true; }
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && intro) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
   return false;
 }
 
 /* ---------- What to do next: one line at the top, and a pink arrow in the street ---------- */
-function nextForSale() {
+function nextForSale(kind) {
   let best = null; const z = distanceWalked;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (!L.forSale) { continue; } const m = (L.z0 + L.z1) / 2; if (m - z > -6 && m - z < 90 && (!best || m < best.m)) { best = { L, m }; } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (kind === 'job' ? !L.hiring : !L.forSale) { continue; } const m = (L.z0 + L.z1) / 2; if (m - z > -6 && m - z < 90 && (!best || m < best.m)) { best = { L, m }; } } }
   return best;
 }
+// Can you afford the next home on this street? If not, the next job is where to go.
+function needWork() { const n = nextForSale(); return !home && (!n || wallet < priceOf(n.L) * DEPOSIT); }
 function nextText() {
   if (home) { return 'You own a home.'; }
   const L = plotHere(distanceWalked);
-  if (L) { const dep = priceOf(L) * DEPOSIT; return wallet >= dep ? 'Press E to buy it' : `Deposit ${moneyK(dep)} · you have ${moneyK(wallet)} · keep walking to GO`; }
-  return 'Walk to the next FOR SALE sign';
+  if (L && L.hiring) { return `Press E to work: ${L.job}, +${moneyK(L.pay)}`; }
+  if (L) { const dep = priceOf(L) * DEPOSIT; return wallet >= dep ? 'Press E to buy it' : `Deposit ${moneyK(dep)} · you have ${moneyK(wallet)} · go and earn it`; }
+  if (atCrossing(distanceWalked + 12) || atCrossing(distanceWalked + 6)) { return '← cheaper town  ·  → richer town  ·  ↑ keep going'; }
+  return needWork() ? 'Too expensive. Work a shift at a NOW HIRING sign' : 'Walk to the next FOR SALE sign';
 }
 function drawNextBar() {
   const t = nextText(); push(); textFont('Georgia'); textStyle(BOLD); textSize(17);
@@ -394,40 +452,26 @@ function drawNextBar() {
 }
 function drawTargetMarker() {
   if (intro || ending || home || nameBox) { return; }
-  const n = nextForSale(); if (!n || n.m - distanceWalked < 3) { return; }
-  const q = P(n.L.side * (EDGE_X + 1.4), 4.6 + Math.abs(Math.sin(clockT * 3)) * 0.8, n.m); if (q.rz < 2 || q.rz > 95) { return; }
+  const n = nextForSale(needWork() ? 'job' : 'home'); if (!n || n.m - distanceWalked < 3) { return; }
+  const q = P(n.L.side * (EDGE_X + (n.L.hiring ? -0.7 : 1.4)), 4.6 + Math.abs(Math.sin(clockT * 3)) * 0.8, n.m); if (q.rz < 2 || q.rz > 95) { return; }
   const s = Math.max(14, Math.min(40, q.k * 1.1));
   ctx.save(); ctx.fillStyle = '#ff4f9a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(q.x - s * 0.6, q.y - s * 1.3); ctx.lineTo(q.x + s * 0.6, q.y - s * 1.3); ctx.lineTo(q.x + s * 0.6, q.y - s * 0.6); ctx.lineTo(q.x + s, q.y - s * 0.6); ctx.lineTo(q.x, q.y + s * 0.3); ctx.lineTo(q.x - s, q.y - s * 0.6); ctx.lineTo(q.x - s * 0.6, q.y - s * 0.6); ctx.closePath();
   ctx.stroke(); ctx.fill(); ctx.restore();
 }
-// The yearly choice at GO: two big cards.
-function moveCards() {
-  const w = Math.min(260, (width - 60) / 2), h = 170, gap = 20, x0 = width / 2 - w - gap / 2, y = height / 2 - h / 2 + 20;
-  return [{ x: x0, y, w, h, move: false }, { x: x0 + w + gap, y, w, h, move: true }];
-}
-function drawMoveChoice() {
-  const c = nameBox, a = easeN((clockT - c.t) / 0.4), nz = Math.min(zone + 1, ZONE_NAMES.length - 1), commuteNext = 15 + nz * 25;
-  push(); drawingContext.globalAlpha = a; noStroke(); fill(20, 14, 10, 130); rect(0, 0, width, height);
-  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(24); textAlign(CENTER, CENTER); text('Your rent went up. Stay or move?', width / 2, height / 2 - 90);
-  const fmtC = m => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`);
-  const info = [
-    ['1 · STAY', ZONE_NAMES[zone], `${money(c.stay)}/wk`, `Commute ${fmtC(commuteMin())}`, '#c8322a'],
-    ['2 · MOVE FURTHER OUT', ZONE_NAMES[nz], `${money(c.move)}/wk`, `Commute ${fmtC(commuteNext)}`, '#3f8fd6']
-  ];
-  moveCards().forEach((b, i) => {
-    const [t, place, rent, com, col] = info[i], hov = mouseX > b.x && mouseX < b.x + b.w && mouseY > b.y && mouseY < b.y + b.h;
-    fill(0, 70); rect(b.x + 3, b.y + 5, b.w, b.h, 12); fill(hov ? color(255, 255, 248) : color(255, 250, 238)); rect(b.x, b.y - (hov ? 4 : 0), b.w, b.h, 12);
-    fill(col); rect(b.x, b.y - (hov ? 4 : 0), b.w, 38, 12, 12, 0, 0);
-    fill(255); textSize(14); text(t, b.x + b.w / 2, b.y + 19 - (hov ? 4 : 0));
-    fill(40, 30, 24); textSize(18); text(place, b.x + b.w / 2, b.y + 64 - (hov ? 4 : 0));
-    textSize(24); text(rent, b.x + b.w / 2, b.y + 100 - (hov ? 4 : 0));
-    textStyle(NORMAL); textSize(14); fill(110, 90, 80); text(com, b.x + b.w / 2, b.y + 136 - (hov ? 4 : 0)); textStyle(BOLD);
-  });
+function drawShiftCard() {
+  const a = easeN((clockT - shift.t) / 0.3) * (1 - easeN((clockT - shift.t - 1.4) / 0.4)), L = shift.L;
+  push(); drawingContext.globalAlpha = a; noStroke(); fill(20, 14, 10, 120); rect(0, 0, width, height);
+  const w = Math.min(380, width - 32), h = 150, x = width / 2 - w / 2, y = height / 2 - h / 2;
+  fill(255, 250, 238); rect(x, y, w, h, 10); fill('#2e9e47'); rect(x, y, w, 40, 10, 10, 0, 0);
+  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(16); textAlign(CENTER, CENTER); text('WORKING A SHIFT', width / 2, y + 20);
+  fill(40, 30, 24); textSize(20); text(L.job, width / 2, y + 70);
+  const u = constrain((clockT - shift.t) / 1.6, 0, 1); fill(230, 220, 200); rect(x + 40, y + 100, w - 80, 12, 6); fill('#2e9e47'); rect(x + 40, y + 100, (w - 80) * u, 12, 6);
+  textStyle(NORMAL); textSize(13); fill(110, 90, 80); text(`+${money(L.pay)} when you finish`, width / 2, y + 130);
   pop();
 }
 function boardClick(mx, my) {
-  if (nameBox) { for (const b of moveCards()) { if (mx > b.x && mx < b.x + b.w && my > b.y && my < b.y + b.h) { chooseMove(b.move); return true; } } return true; }
+  if (nameBox) { return true; }
   if (intro) { intro = false; return true; }
   return false;
 }

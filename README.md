@@ -9,7 +9,8 @@ A first-person p5.js generative landscape (brief: *Generative Landscape*). You w
 
 The original Landlord's Walk (renter, 24, every lap past GO is a year, rising FOR SALE prices, investors buying plots out from under you, satirical billboards, open-home queues), made clearer and more meaningful:
 - **One goal, one next step.** A short intro (*You're 24, renting, $22k saved. Buy a home before you turn 30.*), a NEXT line at the top (*Walk to the next FOR SALE sign* / *Press E to buy it* / *Deposit $64k · you have $30k · keep walking to GO*) and a pink arrow over the next FOR SALE sign.
-- **A real choice every year.** At GO your rent goes up and the walk stops for one decision: **1 Stay** (pay the new rent, keep the short commute) or **2 Move further out** (cheaper rent and homes, longer commute). This replaces turning at corners; it is the trade-off renters actually face.
+- **Turn at the corners to a different town.** At every crossing a signpost shows the way: **←** to a cheaper town further out (homes −20%, lower rent, but jobs pay less), **→** to a richer one closer in (dearer homes, higher rent, better pay). Each town has its own houses, from shacks and terraces out on the estates to mansions and towers in the inner city, and keeps its own layout when you come back. Your rent is set by the town you're in when you pass GO.
+- **The homes are too expensive, so you work.** NOW HIRING signs outside shops offer a shift (*Pour coffee*, *Walk the dogs*, *Temp at reception*): press **E** and you earn $600–$3,200 depending on the district and town, but prices rise 1.2% while you work. When you can't afford the next home, the NEXT line and the pink arrow point you to the next job instead.
 - No casinos or jail. Painted trees.
 
 Files: `walk/index.html`, `walk/trees.js`, `walk/sketch.js`, `walk/board.js`, `walk/sketch-all.js` (paste into the p5 Web Editor).
