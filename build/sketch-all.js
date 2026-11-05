@@ -864,6 +864,35 @@ function drawPlot(L) {
   const xa = L.side * (EDGE_X + 0.2), xb = L.side * (EDGE_X + L.setback + L.depth + 2), mz = (z0 + L.z1) / 2;
   polyN([P(xa, 0.03, z0), P(xb, 0.03, z0), P(xb, 0.03, L.z1), P(xa, 0.03, L.z1)], toneN('#3f5a32', mz));
 }
+// One tree of the wild forest: painted broadleaf trees, dark pines, tall pale gums and low bushes.
+function drawWildTree(q, t) {
+  const k = q.k, h = t.h, z = t.z, fog = fogFor(z);
+  if (t.kind === 'sprite') { drawTree(q, { h: t.h, tone: t.tone, z, x: t.x }); return; }
+  ctx.save(); ctx.globalAlpha = 1 - fog * 0.6;
+  if (t.kind === 'pine') {
+    // A conifer: a dark trunk and four stacked tiers of needles, lit on one side.
+    const greens = ['#24452e', '#2f5a36', '#1f3d2c', '#365e3a'], g = greens[Math.floor(t.tone * 4)];
+    ctx.fillStyle = toneN('#4a3426', z); ctx.fillRect(q.x - 0.12 * k, q.y - h * 0.25 * k, 0.24 * k, h * 0.25 * k);
+    for (let i = 0; i < 4; i++) {
+      const yb = q.y - (h * 0.18 + i * h * 0.2) * k, wt = (1.6 - i * 0.32) * k * (h / 11), ht = h * 0.32 * k;
+      ctx.fillStyle = toneN(g, z, 1 - i * 0.04); ctx.beginPath(); ctx.moveTo(q.x - wt, yb); ctx.lineTo(q.x, yb - ht); ctx.lineTo(q.x + wt, yb); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = toneN(g, z, 1.25); ctx.beginPath(); ctx.moveTo(q.x - wt * 0.2, yb); ctx.lineTo(q.x, yb - ht); ctx.lineTo(q.x - wt * 0.75, yb); ctx.closePath(); ctx.fill();
+    }
+  } else if (t.kind === 'gum') {
+    // A gum tree: a tall, pale, leaning trunk and loose clumps of olive leaves high up.
+    const lean = (t.tone - 0.5) * 0.35 * k * h / 10;
+    ctx.strokeStyle = toneN(t.tone < 0.5 ? '#e8e0d0' : '#cfc4b0', z); ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, 0.28 * k);
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.quadraticCurveTo(q.x + lean, q.y - h * 0.5 * k, q.x + lean * 1.6, q.y - h * 0.82 * k); ctx.stroke();
+    ctx.lineWidth = Math.max(1, 0.12 * k); ctx.beginPath(); ctx.moveTo(q.x + lean * 0.9, q.y - h * 0.55 * k); ctx.lineTo(q.x + lean * 0.9 + 1.4 * k, q.y - h * 0.75 * k); ctx.moveTo(q.x + lean * 1.2, q.y - h * 0.65 * k); ctx.lineTo(q.x + lean - 1.3 * k, q.y - h * 0.85 * k); ctx.stroke();
+    const leaf = ['#6f7f4a', '#7a8a56', '#5f7046'][Math.floor(t.tone * 3)], r = rngN(Math.floor(z * 31));
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = toneN(leaf, z, 0.85 + r() * 0.3); ctx.beginPath(); ctx.ellipse(q.x + lean * 1.4 + (r() - 0.5) * 3 * k, q.y - (h * 0.72 + r() * h * 0.28) * k, (0.8 + r() * 0.7) * k, (0.5 + r() * 0.4) * k, 0, 0, TWO_PI); ctx.fill(); }
+  } else {
+    // A bush: a few overlapping round shapes, low to the ground.
+    const r = rngN(Math.floor(z * 17)), g = ['#3f6a3a', '#4a7a40', '#5a7a3a'][Math.floor(t.tone * 3)];
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = toneN(g, z, 0.85 + r() * 0.35); ctx.beginPath(); ctx.ellipse(q.x + (r() - 0.5) * h * 1.2 * k, q.y - h * (0.35 + r() * 0.3) * k, h * (0.45 + r() * 0.25) * k, h * (0.35 + r() * 0.2) * k, 0, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.restore();
+}
 // The forest that stood here before the street was built: a stand of trees on every lot,
 // sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
 function drawForest(L, k, back = 0, fall = 0, cut = false) {
@@ -872,7 +901,8 @@ function drawForest(L, k, back = 0, fall = 0, cut = false) {
   for (let row = rows - 1; row >= 0; row--) {
     for (let i = 0; i < n; i++) {
       const z = L.z0 + (i + 0.2 + r() * 0.6) * len / n, x = L.side * (EDGE_X + back + 1.4 + row * 4.5 + r() * 2);
-      list.push({ x, z, h: mixN(7, 12, r()), tone: r() });
+      const kr = r(), kind = kr < 0.3 ? 'sprite' : kr < 0.55 ? 'pine' : kr < 0.8 ? 'gum' : 'bush';
+      list.push({ x, z, kind, h: kind === 'bush' ? mixN(1.4, 2.8, r()) : kind === 'pine' ? mixN(8, 16, r()) : kind === 'gum' ? mixN(10, 18, r()) : mixN(6, 11, r()), tone: r() });
     }
   }
   list.sort((a, b) => b.z - a.z);
@@ -885,10 +915,10 @@ function drawForest(L, k, back = 0, fall = 0, cut = false) {
       if (k > 0.05) { ctx.fillStyle = toneN('#7a5a3a', t.z); ctx.fillRect(q.x - 0.25 * q.k, q.y - 0.5 * q.k * k, 0.5 * q.k, 0.5 * q.k * k); ctx.fillStyle = toneN('#d8c09a', t.z); ctx.beginPath(); ctx.ellipse(q.x, q.y - 0.5 * q.k * k, 0.25 * q.k, 0.08 * q.k, 0, 0, TWO_PI); ctx.fill(); }
       if (gone >= 1) { continue; }
       ctx.save(); ctx.globalAlpha = 1 - gone; ctx.translate(q.x, q.y); ctx.rotate(L.side * fall * 1.45); ctx.translate(-q.x, -q.y);
-      drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore(); continue;
+      drawWildTree(q, t); ctx.restore(); continue;
     }
     ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.min(1, 0.5 + k * 0.5), k); ctx.translate(-q.x, -q.y);
-    drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore();
+    drawWildTree(q, t); ctx.restore();
   }
 }
 // Dust kicked up while a building rises.
@@ -1625,7 +1655,7 @@ function boardUpdate(z) {
     }
   }
   if (!ending && rules === 1 && owned.length >= OWN_GOAL && clockT - owned[owned.length - 1].t > 4) { endWalk('rule1'); }
-  if (!ending && builtCount >= BUILD_GOAL) { endWalk('built'); }
+  if (builtCount >= nextThought) { sayToast(THOUGHTS[Math.floor(nextThought / 10 - 1) % THOUGHTS.length]); nextThought += 10; }
   // Round 2: nothing here is affordable, so at the next corner you are turned further out.
   // On the old street that happens only after you have walked past every home you bought.
   if (rules === 2 && !ending && !intro && !turnAnim && !sideSt && !rentedAt && zone < ZONE_NAMES.length - 1) {
@@ -1700,7 +1730,7 @@ function endWalkNow(kind) { ending = { kind, t: clockT }; sound.go(); baseNight 
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
-  owned = []; rentIn = 0; movedOut = 0; walkedTotal = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0; boardT0 = clockT; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0;
+  owned = []; rentIn = 0; movedOut = 0; walkedTotal = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0; boardT0 = clockT; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0; soldBeat = null;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -2093,8 +2123,8 @@ function drawBoardHud() {
   if (!intro) { drawHandPanel(); }
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'built') {
-    const lines = [`You cut down ${treesCut} trees.`, `You built ${homesBuilt} homes and ${towersBuilt} towers.`, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'];
-    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4 ? 'Press R or click to start again' : '', easeN((clockT - ending.t - 2) / 1.2), '#2f6a3a');
+    const lines = [`You cut down ${treesCut} trees.`, `You built ${homesBuilt} homes, ${shopsBuilt} shops and ${towersBuilt} towers.`, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'];
+    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4 ? 'F: keep building   ·   R: start again' : '', easeN((clockT - ending.t - 2) / 1.2), '#2f6a3a');
   }
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
@@ -2103,15 +2133,15 @@ function drawBoardHud() {
 function drawOpening() {
   const col = '#2f6a3a', pulse = 0.5 + 0.5 * Math.sin(clockT * 4);
   push(); noStroke(); fill(10, 20, 12, 130); rect(0, 0, width, height);
-  const w = Math.min(600, width - 32), h = 330, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
+  const w = Math.min(600, width - 32), h = 340, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
   fill(0, 60); rect(x + 4, y + 6, w, h, 12); fill(250, 252, 244); rect(x, y, w, h, 12); fill(col); rect(x, y, w, 34, 12, 12, 0, 0);
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text('AN INTERACTIVE ARTWORK · A GENERATIVE LANDSCAPE', cx, y + 17);
   fill(30, 40, 30); textSize(36); text('WE BUILD OUR WORLD', cx, y + 70);
   textStyle(ITALIC); textSize(16); fill(90, 100, 85); const tag = 'Everything here is forest. Make it the world you want.'; textSize(Math.min(16, 16 * (w - 40) / textWidth(tag))); text(tag, cx, y + 102); textStyle(BOLD);
   // The three moves.
-  const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: build homes on that side'], ['✊ ↑', 'Lift a fist: build towers on that side']];
-  rows.forEach(([k, label], i) => { const ry = y + 136 + i * 38; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
-  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use your hands with the camera.  ↑ walks.', cx, y + 258); text('No camera: Z / X cut, hold B for homes, N for towers.', cx, y + 276);
+  const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes'], ['☝ ↑', 'Lift a pointing finger: shops'], ['✊ ↑', 'Lift a fist: towers']];
+  rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
+  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use your hands with the camera.   ↑ walks, as far as you like.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
@@ -2289,8 +2319,9 @@ function drawJunk(q, p) {
 // Only lifting builds; a hand held still does nothing, so you chop first and build after.
 // Without a camera: ← / → chop... (X chops the right, Z the left), hold B for homes, N for towers.
 // Only in Round 1: the tenant owns no land to build on.
-let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0;
-const BUILD_GOAL = 10;
+let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0, shopsBuilt = 0;
+let nextThought = 10;
+const THOUGHTS = ['Every city was a forest once.', 'Listen. Fewer birds now.', 'We build our world the way we want it.', 'Nobody asks the forest.', 'How much is enough?'];
 let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9, liftK = 0;
 // Two hands, one for each side of the street. In the mirrored picture your left hand is on the left.
 const newHand = () => ({ ok: false, x: 0.5, y: 0.6, fist: false, t: 0, seen: -9, chopT: -9, trail: [], lift: 0 });
@@ -2318,12 +2349,14 @@ function gotHands(results) {
     const kp = h.keypoints || [], at = n => kp.find(k => k.name === n);
     const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { continue; }
     // A fist: the fingertips are close to the wrist compared with the size of the palm.
-    let fist = false;
+    // The shape of the hand: open (homes), pointing with one finger (shops) or a fist (towers).
+    let shape = 'open';
     if (wrist && mcp) {
-      const palm = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y) || 1, tips = ['index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip'].map(at).filter(Boolean);
-      if (tips.length) { fist = tips.reduce((s2, tp) => s2 + Math.hypot(tp.x - wrist.x, tp.y - wrist.y), 0) / tips.length / palm < 1.3; }
+      const palm = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y) || 1, reach = n => { const tp = at(n); return tp ? Math.hypot(tp.x - wrist.x, tp.y - wrist.y) / palm : 2; };
+      const idx = reach('index_finger_tip'), rest = (reach('middle_finger_tip') + reach('ring_finger_tip') + reach('pinky_finger_tip')) / 3;
+      shape = idx < 1.3 && rest < 1.3 ? 'fist' : idx > 1.6 && rest < 1.3 ? 'point' : 'open';
     }
-    seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist });
+    seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist: shape });
   }
   // Two hands: the one further left is your left hand. One hand: whichever half of the picture it is in.
   seen.sort((a, b) => a.x - b.x);
@@ -2334,9 +2367,10 @@ function gotHands(results) {
 function handFeed(nx, ny, fist = false) { handFeedSide(nx < 0.5 ? -1 : 1, nx, ny, fist); }
 // One position of one hand (0..1, mirrored like a mirror). Left hand -> left side of the street, right -> right.
 function handFeedSide(side, nx, ny, fist = false) {
+  const shape = fist === true ? 'fist' : fist || 'open';
   const now = performance.now() / 1000, s = hands[side], fresh = s.ok && now - s.seen < 0.4;
   if (fresh) { const up = s.y - ny; if (up > 0.004) { s.lift += up; } }   // lifting this hand builds on its side
-  s.x = nx; s.y = ny; s.fist = fist; s.t = now; s.ok = true; s.seen = now;
+  s.x = nx; s.y = ny; s.shape = shape; s.fist = shape === 'fist'; s.t = now; s.ok = true; s.seen = now;
   s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.3) { s.trail.shift(); }
   // A chop: a fast stroke of this hand, sideways or down (not up, which builds), cuts the forest on its side.
   const a = s.trail[0];
@@ -2351,7 +2385,7 @@ function lotRise(L) {
   const n = floorsOf(L), f = Math.floor((L.grow || 0) * n + 1e-6) / n, bump = L.floorT !== undefined ? Math.max(0, 1 - (clockT - L.floorT) / 0.18) : 0;
   return f + bump * 0.6 / n;
 }
-function floorsOf(L) { return L.buildKind === 'tower' ? 14 : Math.max(2, Math.round(L.H / 2.6)); }
+function floorsOf(L) { return Math.max(2, Math.min(16, Math.round(L.H / 3))); }
 function treesOn(L) { return Math.max(2, Math.round((L.z1 - L.z0) / 2.4)) * 3; }
 function chopForest(side) {
   if (!handsActive()) { return; }
@@ -2363,17 +2397,29 @@ function chopForest(side) {
   if (clockT - chopHintT > 10) { chopHintT = clockT; sayToast('The forest is gone. Lift an open hand for homes, a fist for towers.'); }
 }
 // A cleared lot becomes an investor's tower when a fist builds it.
-function makeTower(L) {
-  const r = rngN(L.seed + 5), t = makeLot(null, 4, L.side, L.z0, L.z1 - L.z0, r);
-  Object.assign(L, { style: null, tier: 4, H: mixN(45, 80, r()), depth: t.depth, color: t.color, crown: t.crown, spire: t.spire, glass: true, vacant: true, sign: true, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], setback: 0 });
+// What a cleared lot becomes. Each kind of hand builds a different family of buildings, picked at
+// random so the street never repeats: homes (bungalows, terraces, cottages, caravans, villas,
+// mansions), shops (corner shops, high-street shops, brick offices) or towers (brick and glass,
+// skyscrapers that stand empty, and on a big lot a castle).
+function makeBuilt(L, kind) {
+  const r = rngN(L.seed + 5 + builtCount * 31), len = L.z1 - L.z0;
+  let opts;
+  if (kind === 'tower') { opts = [['tier', 3], ['tier', 4], ['tier', 4]]; if (len >= 26) { opts.push(['style', 'castle']); } }
+  else if (kind === 'shop') { opts = [['tier', 1], ['tier', 1], ['tier', 0], ['tier', 3]]; }
+  else { opts = [['style', 'bungalow'], ['style', 'bungalow'], ['tier', 1], ['tier', 0]]; if (len >= 10) { opts.push(['style', 'caravan']); } if (len >= 18) { opts.push(['style', 'villa'], ['tier', 2]); } }
+  const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(null, tier, L.side, L.z0, len, r);
+  Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
+  if (how === 'style') { styleLot(L, v, r); }
+  if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
 }
+function makeTower(L) { makeBuilt(L, 'tower'); }
 function handUpdate(dt) {
   const now = performance.now() / 1000;
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
   // Keys stand in for the camera: B lifts homes and N towers, on both sides.
-  const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') ? dt * 0.6 : 0, keyFist = keysHeld.has('KeyN');
+  const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') || keysHeld.has('KeyV') ? dt * 0.6 : 0, keyShape = keysHeld.has('KeyN') ? 'fist' : keysHeld.has('KeyV') ? 'point' : 'open';
   for (const side of [-1, 1]) {
-    const s = hands[side], lift = s.lift + keyLift, fist = keyLift ? keyFist : s.ok && s.fist; s.lift = 0;
+    const s = hands[side], lift = s.lift + keyLift, shape = keyLift ? keyShape : s.ok ? s.shape || 'open' : 'open'; s.lift = 0;
     if (!handsActive() || lift <= 0) { continue; }
     // The lift raises the cleared lots on this hand's side, nearest first.
     const cleared = [];
@@ -2381,12 +2427,12 @@ function handUpdate(dt) {
     cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
     if (!cleared.length) { if (clockT - buildHintT > 6 && !keyLift) { buildHintT = clockT; sayToast(`Nothing cleared on the ${side < 0 ? 'left' : 'right'}. Chop the forest there first.`); } continue; }
     for (const L of cleared.slice(0, 2)) {
-      if (!L.buildKind) { L.buildKind = fist ? 'tower' : 'home'; if (fist) { makeTower(L); } }
+      if (!L.buildKind) { L.buildKind = shape === 'fist' ? 'tower' : shape === 'point' ? 'shop' : 'home'; makeBuilt(L, L.buildKind); }
       const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
       L.grow = Math.min(1, L.grow + lift * (L.buildKind === 'tower' ? 1.6 : 2.4));
       const after = Math.floor(L.grow * n + 1e-6);
       if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
-      if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; builtCount++; if (L.buildKind === 'tower') { towersBuilt++; } else { homesBuilt++; } if (sound.built) { sound.built(L.buildKind === 'tower'); } }
+      if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; builtCount++; if (L.buildKind === 'tower') { towersBuilt++; } else if (L.buildKind === 'shop') { shopsBuilt++; } else { homesBuilt++; } if (sound.built) { sound.built(L.buildKind === 'tower'); } }
     }
   }
 }
@@ -2402,11 +2448,11 @@ function drawHandPanel() {
     const s = hands[side]; if (!s.ok) { continue; }
     const col = side < 0 ? color(90, 200, 255) : color(255, 210, 60);
     stroke(col); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke();
-    fill(s.fist ? color(224, 48, 42) : col); circle(x + s.x * w, y + s.y * h, 16); fill(255); textSize(10); textAlign(CENTER, CENTER); text((side < 0 ? 'L ' : 'R ') + (s.fist ? '✊' : '✋'), x + s.x * w, y + s.y * h - 16);
+    fill(s.fist ? color(224, 48, 42) : col); circle(x + s.x * w, y + s.y * h, 16); fill(255); textSize(10); textAlign(CENTER, CENTER); text((side < 0 ? 'L ' : 'R ') + (s.shape === 'fist' ? '✊' : s.shape === 'point' ? '☝' : '✋'), x + s.x * w, y + s.y * h - 16);
   }
   const s = { ok: hands[-1].ok || hands[1].ok };
   fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
-  text(s.ok || !handStatus ? 'L hand → left · R hand → right\nswing: cut · ✋↑ homes · ✊↑ towers' : handStatus, x, y - 38, w + 4);
+  text(s.ok || !handStatus ? 'L hand → left · R hand → right · swing: cut\nlift ✋ homes · ☝ shops · ✊ towers' : handStatus, x, y - 38, w + 4);
   pop();
 }
 
@@ -2415,10 +2461,11 @@ function boardKey(e) {
   const code = e.code;
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
+  if (code === 'KeyF') { if (ending) { ending = null; baseNight = 0; nightTarget = 0; } else if (!intro) { endWalk('built'); } return true; }
   if (code === 'KeyH') { startHands(); return true; }
   if (code === 'KeyX' || code === 'ArrowRight' || code === 'KeyD') { chopForest(1); return true; }
   if (code === 'KeyZ' || code === 'ArrowLeft' || code === 'KeyA') { chopForest(-1); return true; }
-  if (code === 'KeyB' || code === 'KeyN') { return true; }
+  if (code === 'KeyB' || code === 'KeyN' || code === 'KeyV') { return true; }
   return false;
 }
 
@@ -2431,7 +2478,7 @@ function nextForSale() {
 function nextText() {
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
-  if (cleared) { return 'Lift a hand to build on its side  (✋ homes · ✊ towers)'; }
+  if (cleared) { return 'Lift a hand to build  (✋ homes · ☝ shops · ✊ towers)'; }
   if (forest) { return 'Swing your left or right hand to cut that side'; }
   return 'Walk on  ↑';
 }
@@ -2446,7 +2493,7 @@ function drawNextBar() {
 function drawTargetMarker() { }
 function boardClick(mx, my) {
   if (intro) { intro = false; return true; }
-  if (ending) { if (clockT - ending.t > 4) { restartWalk(); } return true; }
+  if (ending) { if (clockT - ending.t > 4) { ending = null; baseNight = 0; nightTarget = 0; } return true; }
   return false;
 }
 

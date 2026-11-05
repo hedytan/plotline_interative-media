@@ -409,6 +409,35 @@ function drawPlot(L) {
   const xa = L.side * (EDGE_X + 0.2), xb = L.side * (EDGE_X + L.setback + L.depth + 2), mz = (z0 + L.z1) / 2;
   polyN([P(xa, 0.03, z0), P(xb, 0.03, z0), P(xb, 0.03, L.z1), P(xa, 0.03, L.z1)], toneN('#3f5a32', mz));
 }
+// One tree of the wild forest: painted broadleaf trees, dark pines, tall pale gums and low bushes.
+function drawWildTree(q, t) {
+  const k = q.k, h = t.h, z = t.z, fog = fogFor(z);
+  if (t.kind === 'sprite') { drawTree(q, { h: t.h, tone: t.tone, z, x: t.x }); return; }
+  ctx.save(); ctx.globalAlpha = 1 - fog * 0.6;
+  if (t.kind === 'pine') {
+    // A conifer: a dark trunk and four stacked tiers of needles, lit on one side.
+    const greens = ['#24452e', '#2f5a36', '#1f3d2c', '#365e3a'], g = greens[Math.floor(t.tone * 4)];
+    ctx.fillStyle = toneN('#4a3426', z); ctx.fillRect(q.x - 0.12 * k, q.y - h * 0.25 * k, 0.24 * k, h * 0.25 * k);
+    for (let i = 0; i < 4; i++) {
+      const yb = q.y - (h * 0.18 + i * h * 0.2) * k, wt = (1.6 - i * 0.32) * k * (h / 11), ht = h * 0.32 * k;
+      ctx.fillStyle = toneN(g, z, 1 - i * 0.04); ctx.beginPath(); ctx.moveTo(q.x - wt, yb); ctx.lineTo(q.x, yb - ht); ctx.lineTo(q.x + wt, yb); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = toneN(g, z, 1.25); ctx.beginPath(); ctx.moveTo(q.x - wt * 0.2, yb); ctx.lineTo(q.x, yb - ht); ctx.lineTo(q.x - wt * 0.75, yb); ctx.closePath(); ctx.fill();
+    }
+  } else if (t.kind === 'gum') {
+    // A gum tree: a tall, pale, leaning trunk and loose clumps of olive leaves high up.
+    const lean = (t.tone - 0.5) * 0.35 * k * h / 10;
+    ctx.strokeStyle = toneN(t.tone < 0.5 ? '#e8e0d0' : '#cfc4b0', z); ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, 0.28 * k);
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.quadraticCurveTo(q.x + lean, q.y - h * 0.5 * k, q.x + lean * 1.6, q.y - h * 0.82 * k); ctx.stroke();
+    ctx.lineWidth = Math.max(1, 0.12 * k); ctx.beginPath(); ctx.moveTo(q.x + lean * 0.9, q.y - h * 0.55 * k); ctx.lineTo(q.x + lean * 0.9 + 1.4 * k, q.y - h * 0.75 * k); ctx.moveTo(q.x + lean * 1.2, q.y - h * 0.65 * k); ctx.lineTo(q.x + lean - 1.3 * k, q.y - h * 0.85 * k); ctx.stroke();
+    const leaf = ['#6f7f4a', '#7a8a56', '#5f7046'][Math.floor(t.tone * 3)], r = rngN(Math.floor(z * 31));
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = toneN(leaf, z, 0.85 + r() * 0.3); ctx.beginPath(); ctx.ellipse(q.x + lean * 1.4 + (r() - 0.5) * 3 * k, q.y - (h * 0.72 + r() * h * 0.28) * k, (0.8 + r() * 0.7) * k, (0.5 + r() * 0.4) * k, 0, 0, TWO_PI); ctx.fill(); }
+  } else {
+    // A bush: a few overlapping round shapes, low to the ground.
+    const r = rngN(Math.floor(z * 17)), g = ['#3f6a3a', '#4a7a40', '#5a7a3a'][Math.floor(t.tone * 3)];
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = toneN(g, z, 0.85 + r() * 0.35); ctx.beginPath(); ctx.ellipse(q.x + (r() - 0.5) * h * 1.2 * k, q.y - h * (0.35 + r() * 0.3) * k, h * (0.45 + r() * 0.25) * k, h * (0.35 + r() * 0.2) * k, 0, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.restore();
+}
 // The forest that stood here before the street was built: a stand of trees on every lot,
 // sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
 function drawForest(L, k, back = 0, fall = 0, cut = false) {
@@ -417,7 +446,8 @@ function drawForest(L, k, back = 0, fall = 0, cut = false) {
   for (let row = rows - 1; row >= 0; row--) {
     for (let i = 0; i < n; i++) {
       const z = L.z0 + (i + 0.2 + r() * 0.6) * len / n, x = L.side * (EDGE_X + back + 1.4 + row * 4.5 + r() * 2);
-      list.push({ x, z, h: mixN(7, 12, r()), tone: r() });
+      const kr = r(), kind = kr < 0.3 ? 'sprite' : kr < 0.55 ? 'pine' : kr < 0.8 ? 'gum' : 'bush';
+      list.push({ x, z, kind, h: kind === 'bush' ? mixN(1.4, 2.8, r()) : kind === 'pine' ? mixN(8, 16, r()) : kind === 'gum' ? mixN(10, 18, r()) : mixN(6, 11, r()), tone: r() });
     }
   }
   list.sort((a, b) => b.z - a.z);
@@ -430,10 +460,10 @@ function drawForest(L, k, back = 0, fall = 0, cut = false) {
       if (k > 0.05) { ctx.fillStyle = toneN('#7a5a3a', t.z); ctx.fillRect(q.x - 0.25 * q.k, q.y - 0.5 * q.k * k, 0.5 * q.k, 0.5 * q.k * k); ctx.fillStyle = toneN('#d8c09a', t.z); ctx.beginPath(); ctx.ellipse(q.x, q.y - 0.5 * q.k * k, 0.25 * q.k, 0.08 * q.k, 0, 0, TWO_PI); ctx.fill(); }
       if (gone >= 1) { continue; }
       ctx.save(); ctx.globalAlpha = 1 - gone; ctx.translate(q.x, q.y); ctx.rotate(L.side * fall * 1.45); ctx.translate(-q.x, -q.y);
-      drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore(); continue;
+      drawWildTree(q, t); ctx.restore(); continue;
     }
     ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.min(1, 0.5 + k * 0.5), k); ctx.translate(-q.x, -q.y);
-    drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore();
+    drawWildTree(q, t); ctx.restore();
   }
 }
 // Dust kicked up while a building rises.
