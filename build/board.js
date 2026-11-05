@@ -108,10 +108,14 @@ function houseLife() {
 /* ---------- Every frame ---------- */
 // How built-up the street around you is, smoothed for the NATURE -> CITY bar (works with the sound off too).
 let devBar = 0;
+// Smog: every building you put up greys the sky a little, wherever you are (0 = clean, 1 = after ~30).
+let smogK = 0, lookHint = false;
 function boardUpdate(z) {
   updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
   const devNow = sound && sound.devK ? sound.devK : 0; devBar += (devNow - devBar) * (1 - Math.exp(-dt * 1.5));
+  smogK += (Math.min(1, builtCount / 30) - smogK) * (1 - Math.exp(-dt * 0.6));
+  if (!lookHint && builtCount >= 6 && !ending) { lookHint = true; sayToast('Press C to look back at what you have done.'); }
   // Time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
   if (!paused && !intro && !ending && walked > 0 && walked < 5) { walkedTotal += walked; lifeAge = START_AGE + Math.floor(walkedTotal / 120); }
@@ -136,11 +140,12 @@ function useHere() { if (intro) { intro = false; } }
 function endWalk(kind) {
   if (ending) { return; }
   ending = { kind, t: clockT }; sound.go(); baseNight = 0.25; nightTarget = baseNight;
+  backWant = true;   // turn round and see the street you made, then the card
 }
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   lifeAge = START_AGE; zone = START_ZONE; market = 1; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null;
-  owned = []; walkedTotal = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
+  owned = []; walkedTotal = 0; smogK = 0; lookHint = false; backWant = false; backT = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -393,7 +398,7 @@ function drawBoardHud() {
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'built') {
     const lines = [`You cut down ${treesCut} trees.`, `You built ${homesBuilt} homes, ${shopsBuilt} shops and ${towersBuilt} towers.`, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'];
-    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4 ? 'F: keep building   ·   R: start again' : '', easeN((clockT - ending.t - 2) / 1.2), '#2f6a3a');
+    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4.5 ? 'F: keep building   ·   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), '#2f6a3a');
   }
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
@@ -410,7 +415,7 @@ function drawOpening() {
   // The three moves.
   const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes'], ['☝ ↑', 'Lift a pointing finger: shops'], ['✊ ↑', 'Lift a fist: towers']];
   rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
-  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use the camera: walk or run on the spot and the street moves with you.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
+  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H for the camera: walk or run on the spot to move.   C: look back.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
@@ -626,7 +631,8 @@ function boardKey(e) {
   const code = e.code;
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
-  if (code === 'KeyF') { if (ending) { ending = null; baseNight = 0; nightTarget = 0; } else if (!intro) { endWalk('built'); } return true; }
+  if (code === 'KeyC') { if (!intro && !ending) { backWant = !backWant; } return true; }
+  if (code === 'KeyF') { if (ending) { ending = null; baseNight = 0; nightTarget = 0; backWant = false; } else if (!intro) { endWalk('built'); } return true; }
   if (code === 'KeyH') { startHands(); return true; }
   if (code === 'KeyX' || code === 'ArrowRight' || code === 'KeyD') { chopForest(1); return true; }
   if (code === 'KeyZ' || code === 'ArrowLeft' || code === 'KeyA') { chopForest(-1); return true; }
@@ -638,6 +644,7 @@ function boardKey(e) {
 
 /* ---------- What to do next: one line at the top, and a pink arrow in the street ---------- */
 function nextText() {
+  if (backWant && !ending) { return 'Looking back  ·  C to turn round'; }
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
   if (cleared) { return 'Lift a hand to build  (✋ homes · ☝ shops · ✊ towers)'; }
@@ -662,7 +669,7 @@ function spawnBirds(L, side) {
   }
 }
 function drawTargetMarker() {
-  if (!birds.length) { return; }
+  if (!birds.length || mirrorView) { return; }
   const dt = Math.min(deltaTime / 1000, 0.05), LIFE = 2.2;
   push(); strokeCap(ROUND); noFill();
   for (let i = birds.length - 1; i >= 0; i--) {
@@ -679,7 +686,7 @@ function drawTargetMarker() {
 }
 function boardClick(mx, my) {
   if (intro) { intro = false; return true; }
-  if (ending) { if (clockT - ending.t > 4) { ending = null; baseNight = 0; nightTarget = 0; } return true; }
+  if (ending) { if (clockT - ending.t > 4.5) { ending = null; baseNight = 0; nightTarget = 0; backWant = false; } return true; }
   return false;
 }
 

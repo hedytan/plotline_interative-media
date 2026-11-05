@@ -602,6 +602,11 @@ const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
 const APPEAR_Z = 36, RISE_T = 2.4;   // lots build when you come this close; rise time in seconds
 let riseK = 1, mouseMoved = false;
+// Looking back (C, and at the end): you turn round on the spot to see the street behind you.
+// backT runs 0 -> 1 over the turn; past halfway the world is drawn mirrored (drawMirrored).
+let backT = 0, backS = 0, backWant = false, mirrorView = false;
+function smogNow() { return typeof smogK === 'number' ? Math.min(1, smogK) : 0; }
+function hazeHex() { return mixHex(mixHex('#ffd79a', '#5a4a70', night), '#a8a49e', smogNow() * 0.65); }
 // Held keys are tracked directly from the browser, so walking works the same in p5.js 1.x and 2.x.
 const keysHeld = new Set();
 window.addEventListener('keydown', e => keysHeld.add(e.code));
@@ -721,10 +726,10 @@ function draw() {
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || nameBox || intro || ending) { target = 0; }
+  else if (turnAnim || nameBox || intro || ending || backT > 0.01) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   // With the camera on, walking or running on the spot moves you down the street at that pace.
-  if (target === 0 && !paused && dashTarget === null && !turnAnim && !nameBox && !intro && !ending && typeof bodySpeed === 'function') { target = bodySpeed(); }
+  if (target === 0 && !paused && dashTarget === null && !turnAnim && !nameBox && !intro && !ending && backT <= 0.01 && typeof bodySpeed === 'function') { target = bodySpeed(); }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.
@@ -742,15 +747,19 @@ function draw() {
   if (facing) { yawAim = facing.side * 0.85; }
   lookYaw = lerp(lookYaw, yawAim, facing ? 0.035 : 0.05);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
+  backT = constrain(backT + (backWant ? 1 : -1) * dt / 1.1, 0, 1); backS = backT * backT * (3 - 2 * backT);
   updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw; cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw + (backS < 0.5 ? backS * PI : 0); cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
   // World state: chunks in view, district changes, landmarks, economy.
   const c0 = Math.floor((z - 6) / CHUNK_LEN), c1 = Math.floor((z + FAR_Z) / CHUNK_LEN);
   for (let c = c0; c <= c1; c++) {chunkAt(c);}
-  for (const [c] of chunks) {if (c < c0 - 1 || c > c1 + 1) {chunks.delete(c);}}
+  // The street behind you is kept (with everything you cut and built) so you can look back at it.
+  const cb = Math.floor((z - FAR_Z * 0.7) / CHUNK_LEN);
+  if (backT > 0) { for (let c = cb; c < c0; c++) {chunkAt(c);} }
+  for (const [c] of chunks) {if (c < cb - 1 || c > c1 + 1) {chunks.delete(c);}}
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
   canvasNode.dataset.year=lifeAge;canvasNode.dataset.vacant=here.lots.filter(l=>l.vacant).length;
   if (here.c !== lastChunk) { if (here.slot % 5 === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); onPassGo(); } lastChunk = here.c; }
@@ -767,9 +776,31 @@ function draw() {
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
   // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
-  try { drawSky(); drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); if (typeof drawStreetLife === 'function') { drawStreetLife(); } } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
+  try { mirrorView = backS >= 0.5; drawSky(); if (mirrorView) { drawMirrored(z); } else { drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); } if (typeof drawStreetLife === 'function') { drawStreetLife(); } } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
   pop();
+  // A quick blink hides the moment the view swaps to the street behind you.
+  const blink = backT > 0 && backT < 1 ? Math.max(0, 1 - Math.abs(backS - 0.5) / 0.14) : 0;
+  if (blink > 0) { ctx.fillStyle = `rgba(20,16,12,${0.75 * blink})`; ctx.fillRect(0, 0, width, height); }
   drawOverlays();
+}
+// The street behind you, drawn by mirroring it so it lies ahead: z' = 2A - z, x' = -x (a half turn).
+// A is a chunk boundary, so mirrored chunks still line up with the 48 m grid. Objects are wrapped
+// with Object.create, so everything else about them (born, cut, grow...) reads through unchanged.
+function drawMirrored(z) {
+  const A = Math.ceil(z / CHUNK_LEN) * CHUNK_LEN, nA = A / CHUNK_LEN;
+  const mz = v => 2 * A - v;
+  const keep = [...chunks.entries()], keepCam = { x: cam.x, z: cam.z, yaw: cam.yaw };
+  chunks.clear();
+  for (const [c, ch] of keep) {
+    const m = Object.create(ch); m.z0 = mz(ch.z0 + CHUNK_LEN); m.mir = true;
+    m.lots = ch.lots.map(L => { const o = Object.create(L); o.z0 = mz(L.z1); o.z1 = mz(L.z0); o.side = -L.side; return o; });
+    m.back = ch.back.map(b => { const o = Object.create(b); o.z0 = mz(b.z1); o.z1 = mz(b.z0); o.side = -b.side; return o; });
+    m.props = ch.props.map(p => { const o = Object.create(p); o.z = mz(p.z); o.x = -p.x; if (p.side) { o.side = -p.side; } return o; });
+    chunks.set(2 * nA - c - 1, m);
+  }
+  cam.z = mz(z); cam.x = -cam.x; cam.yaw = lookYaw + (backS - 1) * PI;
+  try { drawGround(cam.z); drawWorld(cam.z); }
+  finally { chunks.clear(); for (const [k, v] of keep) { chunks.set(k, v); } Object.assign(cam, keepCam); }
 }
 
 // How far a building has risen: 0 = still a plot, 1 = built (with a little overshoot).
@@ -819,7 +850,9 @@ function showCard(kind) {
 /* ---------- Sky and skyline ---------- */
 function skyColors() {
   const dayCols = ['#c9a46e', '#d9c194', '#e8dcbc', '#8a96a6'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
-  return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), '#9a9aa0', crash * 0.45));
+  // Smog: the more you have built, the greyer the sky (smogK, from board.js).
+  const smog = ['#8e8a84', '#a19d95', '#b7b0a3', '#5e6168'], sm = smogNow() * 0.8;
+  return dayCols.map((c, i) => mixHex(mixHex(mixHex(c, dusk[i], night * 0.85), '#9a9aa0', crash * 0.45), smog[i], sm));
 }
 function drawSky() {
   const [low, mid, glow, top] = skyColors(), hy = cam.hy;
@@ -829,8 +862,8 @@ function drawSky() {
   const sx = cam.cx - Math.tan(cam.yaw) * cam.f, sy = hy - height * 0.06;
   // Sun behind the landmark tower and soft volumetric rays.
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55);
-  sg.addColorStop(0, `rgba(255,240,200,${0.5 * (1 - night)})`); sg.addColorStop(0.25, `rgba(255,200,140,${0.16 * (1 - night)})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
+  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55), sunA = (1 - night) * (mirrorView ? 0.15 : 1) * (1 - 0.65 * smogNow());
+  sg.addColorStop(0, `rgba(255,240,200,${0.5 * sunA})`); sg.addColorStop(0.25, `rgba(255,200,140,${0.16 * sunA})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
   ctx.fillStyle = sg; ctx.fillRect(-80, -height * 0.3, width + 160, height * 1.3);
   for (let i = 0; i < 0; i++) {   // the stylised sun rays are off: a softer, more real sky
     const a = -Math.PI / 2 + (i - 4) * 0.28 + Math.sin(clockT * 0.05 + i) * 0.04, len = height * 1.4, w = 0.05 + (i % 3) * 0.02;
@@ -848,7 +881,7 @@ function drawSky() {
     for (let k = 0; k < 11; k++) {
       const u = k / 10, px = (u - 0.5) * s * 1.6, py = -Math.sin(u * PI) * s * 0.45 + Math.sin(k * 2.3 + i) * s * 0.06, rad = s * (0.32 + Math.sin(u * PI) * 0.25);
       const cg = ctx.createRadialGradient(px, py - rad * 0.45, rad * 0.05, px, py, rad);
-      cg.addColorStop(0, rgbaN(mixHex('#fff6e2', '#d8b0d0', night), 0.85)); cg.addColorStop(0.6, rgbaN(mixHex('#ffcf98', '#8a6a9a', night), 0.45)); cg.addColorStop(1, rgbaN('#ffb070', 0));
+      cg.addColorStop(0, rgbaN(mixHex(mixHex('#fff6e2', '#d8b0d0', night), '#b4b1aa', smogNow() * 0.7), 0.85)); cg.addColorStop(0.6, rgbaN(mixHex(mixHex('#ffcf98', '#8a6a9a', night), '#8f8c86', smogNow() * 0.7), 0.45)); cg.addColorStop(1, rgbaN('#ffb070', 0));
       ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(px, py, rad, 0, TWO_PI); ctx.fill();
     }
     ctx.restore();
@@ -885,7 +918,7 @@ function drawSkyline() {
   ctx.restore();
   // Golden haze over the horizon.
   const g = ctx.createLinearGradient(0, hy - H * 0.18, 0, hy + 4);
-  g.addColorStop(0, rgbaN(haze, 0)); g.addColorStop(1, rgbaN(mixHex('#ffd79a', '#7a5a8a', night), 0.75));
+  g.addColorStop(0, rgbaN(haze, 0)); g.addColorStop(1, rgbaN(mixHex(mixHex('#ffd79a', '#7a5a8a', night), '#a8a49e', smogNow() * 0.65), 0.75));
   ctx.fillStyle = g; ctx.fillRect(-80, hy - H * 0.18, width + 160, H * 0.18 + 4);
 }
 
@@ -898,8 +931,8 @@ function drawGround(z, side) {
   for (let i = steps; i > 0; i--) {
     const d0 = NEAR_Z + Math.pow((i - 1) / steps, 2.2) * FAR_Z, d1 = NEAR_Z + Math.pow(i / steps, 2.2) * FAR_Z;
     const za = z + d0, zb = z + d1; if (side && za < side.fromZ) { continue; }
-    const ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = za - ch.z0, crossing = local < CROSS_W;
-    const fog = easeN(d0 / FAR_Z), fogC = mixHex('#ffd79a', '#5a4a70', night);
+    const ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = ch.mir ? ch.z0 + CHUNK_LEN - za : za - ch.z0, crossing = local < CROSS_W;
+    const fog = easeN(d0 / FAR_Z), fogC = hazeHex();
     const f = (hex) => mixHex(mixHex(hex, '#2a2440', night * 0.55), fogC, fog * 0.8);
     // Road.
     polyN([P(-ROAD_W, 0, za), P(ROAD_W, 0, za), P(ROAD_W, 0, zb), P(-ROAD_W, 0, zb)], f(crossing ? '#5a5a62' : mixHex('#4a4a52', '#7a7a80', crash * 0.4)));
@@ -1056,7 +1089,7 @@ function fogFor(zz) { return easeN((zz - cam.z - 40) / (FAR_Z - 40)) * 0.85; }
 function toneN(hexCol, zz, k = 1) {
   let c = mixHex(shadeN(hexCol, k), '#8a8a90', crash * 0.5);
   c = mixHex(c, '#2a2a48', night * 0.5);
-  return mixHex(c, mixHex('#ffd79a', '#5a4a70', night), fogFor(zz));
+  return mixHex(c, hazeHex(), fogFor(zz));
 }
 function drawBack(b) {
   const z0 = clipZ(b.z0), x = b.side * b.x;
@@ -1720,10 +1753,14 @@ function houseLife() {
 /* ---------- Every frame ---------- */
 // How built-up the street around you is, smoothed for the NATURE -> CITY bar (works with the sound off too).
 let devBar = 0;
+// Smog: every building you put up greys the sky a little, wherever you are (0 = clean, 1 = after ~30).
+let smogK = 0, lookHint = false;
 function boardUpdate(z) {
   updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
   const devNow = sound && sound.devK ? sound.devK : 0; devBar += (devNow - devBar) * (1 - Math.exp(-dt * 1.5));
+  smogK += (Math.min(1, builtCount / 30) - smogK) * (1 - Math.exp(-dt * 0.6));
+  if (!lookHint && builtCount >= 6 && !ending) { lookHint = true; sayToast('Press C to look back at what you have done.'); }
   // Time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
   if (!paused && !intro && !ending && walked > 0 && walked < 5) { walkedTotal += walked; lifeAge = START_AGE + Math.floor(walkedTotal / 120); }
@@ -1748,11 +1785,12 @@ function useHere() { if (intro) { intro = false; } }
 function endWalk(kind) {
   if (ending) { return; }
   ending = { kind, t: clockT }; sound.go(); baseNight = 0.25; nightTarget = baseNight;
+  backWant = true;   // turn round and see the street you made, then the card
 }
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   lifeAge = START_AGE; zone = START_ZONE; market = 1; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null;
-  owned = []; walkedTotal = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
+  owned = []; walkedTotal = 0; smogK = 0; lookHint = false; backWant = false; backT = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -2005,7 +2043,7 @@ function drawBoardHud() {
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'built') {
     const lines = [`You cut down ${treesCut} trees.`, `You built ${homesBuilt} homes, ${shopsBuilt} shops and ${towersBuilt} towers.`, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'];
-    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4 ? 'F: keep building   ·   R: start again' : '', easeN((clockT - ending.t - 2) / 1.2), '#2f6a3a');
+    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4.5 ? 'F: keep building   ·   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), '#2f6a3a');
   }
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
@@ -2022,7 +2060,7 @@ function drawOpening() {
   // The three moves.
   const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes'], ['☝ ↑', 'Lift a pointing finger: shops'], ['✊ ↑', 'Lift a fist: towers']];
   rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
-  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use the camera: walk or run on the spot and the street moves with you.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
+  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H for the camera: walk or run on the spot to move.   C: look back.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
@@ -2238,7 +2276,8 @@ function boardKey(e) {
   const code = e.code;
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
-  if (code === 'KeyF') { if (ending) { ending = null; baseNight = 0; nightTarget = 0; } else if (!intro) { endWalk('built'); } return true; }
+  if (code === 'KeyC') { if (!intro && !ending) { backWant = !backWant; } return true; }
+  if (code === 'KeyF') { if (ending) { ending = null; baseNight = 0; nightTarget = 0; backWant = false; } else if (!intro) { endWalk('built'); } return true; }
   if (code === 'KeyH') { startHands(); return true; }
   if (code === 'KeyX' || code === 'ArrowRight' || code === 'KeyD') { chopForest(1); return true; }
   if (code === 'KeyZ' || code === 'ArrowLeft' || code === 'KeyA') { chopForest(-1); return true; }
@@ -2250,6 +2289,7 @@ function boardKey(e) {
 
 /* ---------- What to do next: one line at the top, and a pink arrow in the street ---------- */
 function nextText() {
+  if (backWant && !ending) { return 'Looking back  ·  C to turn round'; }
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
   if (cleared) { return 'Lift a hand to build  (✋ homes · ☝ shops · ✊ towers)'; }
@@ -2274,7 +2314,7 @@ function spawnBirds(L, side) {
   }
 }
 function drawTargetMarker() {
-  if (!birds.length) { return; }
+  if (!birds.length || mirrorView) { return; }
   const dt = Math.min(deltaTime / 1000, 0.05), LIFE = 2.2;
   push(); strokeCap(ROUND); noFill();
   for (let i = birds.length - 1; i >= 0; i--) {
@@ -2291,7 +2331,7 @@ function drawTargetMarker() {
 }
 function boardClick(mx, my) {
   if (intro) { intro = false; return true; }
-  if (ending) { if (clockT - ending.t > 4) { ending = null; baseNight = 0; nightTarget = 0; } return true; }
+  if (ending) { if (clockT - ending.t > 4.5) { ending = null; baseNight = 0; nightTarget = 0; backWant = false; } return true; }
   return false;
 }
 
