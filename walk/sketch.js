@@ -1,25 +1,13 @@
-/* Plotline — walk the board.
- * A first-person, endless board-game main street in p5.js (Canvas 2D). Every building,
- * person, sign and sound is generated in code.
- *
- * The street is a loop of ten blocks. Property value rises the further you walk:
- *   Rusty Row (shacks) -> Maple Terrace (townhouses) -> Gilded Gardens (mansions)
- *   -> Brick & Glass Quarter -> Pinnacle Heights (skyscrapers) -> pass GO -> Rusty Row
- * Each district keeps its layout; redevelopment leaves persistent traces.
- * Chance casinos reshape the street ahead when you walk past them (boom, crash or
- * nightfall). A stone jail sits in Rusty Row: just visiting.
- * The street is not built until you walk toward it: beyond about 55 m each lot is only an
- * outlined plot on the ground. As you approach, its building springs up out of the ground
- * with a puff of dust and a thud, and the lamps, trees and banners pop up with it.
- *
- * The Landlord's Walk (board.js): Lizzie Magie's two rule sets on one street. Rule 1: buy homes
- * anywhere, own 5 to win, and watch the residents leave. Rule 2: the same street with a shared
- * land tax. Pay day comes twice a lap. Turn left to move further out, right to move back in.
- *
- * Controls: hold W / Up / mouse to walk, Shift to hurry, S / Down to step back,
- *   E or Space to buy the plot beside you, Left (further out) / Right (toward the city) to turn,
- *   Enter to stroll on its own, move the mouse to look around,
- *   M sound, P pause, R new town.
+/* Plotline — The Landlord's Walk: the street (camera, generation, buildings, ground and sky).
+ * A first-person, endless street in p5.js (Canvas 2D). Every building, person, sign and sound is
+ * generated in code. Six towns, one for each class, each a loop of ten 48 m blocks seeded by the
+ * block's slot, so a town looks the same each time you come back. A lot is only an outlined plot
+ * until you walk toward it; then its building rises out of the ground.
+ * The game (board.js): Round 1, you are the landlord and buy 3 homes; Round 2, you walk the same
+ * street as the people who lived in the first one. The satire is drawn into the street itself.
+ * Controls: hold Up / W or the mouse to walk, Shift to hurry, Down / S to step back, E / Space
+ *   or a click beside a sign to buy or rent, Left / Right at a corner to change town (Round 1),
+ *   stand still to listen, move the mouse to look around, M sound, P pause, R start again.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
 const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
@@ -362,7 +350,7 @@ function drawGround(z, side) {
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
-    if (ch.slot !== 0) { const sl = typeof roadSlogan === 'function' ? roadSlogan(ch) : null; if (sl) { sl.split(' ').filter(w => w !== '·').forEach((w, i) => paintText(w, 0, ch.z0 + CROSS_W + 14 + i * 2.8, 2.4, '#f4ead0', ROAD_W * 1.7)); } continue; }
+    if (ch.slot !== 0) { const sl = typeof roadSlogan === 'function' ? roadSlogan(ch) : null; if (sl) { sl.split(' ').filter(w => w !== '·').forEach((w, i) => paintText(w, 0, ch.z0 + CROSS_W + 14 + i * 2.8, 2.4, '#ffffff', ROAD_W * 1.7)); } continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
@@ -370,7 +358,7 @@ function paintText(label, x, zz, size, col, maxW) {
   const p = P(x, 0, zz); if (p.rz < 1.5 || p.rz > 120) {return;}
   const k = p.k, squash = cam.eye / p.rz;
   ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, squash); ctx.font = `bold ${size * k * 0.5}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = rgbaN(col, 0.85 * (1 - easeN((p.rz - 60) / 60))); if (maxW) { ctx.fillText(label, 0, 0, maxW * k); } else { ctx.fillText(label, 0, 0); } ctx.restore();
+  ctx.fillStyle = rgbaN(col, 0.95 * (1 - easeN((p.rz - 60) / 60))); if (maxW) { ctx.fillText(label, 0, 0, maxW * k); } else { ctx.fillText(label, 0, 0); } ctx.restore();
 }
 
 /* ---------- Buildings and everything on the street ---------- */
@@ -483,7 +471,7 @@ function drawLot(L) {
   drawWeathering(L, x, z0, z1, H);
   // The artwork's slogan, as a red band across the facade.
   if (typeof satireOnLot === 'function') { satireOnLot(L, x, z0, z1, H); }
-  if (L.art && !L.owned && !L.vacant) { facadeSign(L, x, z0, L.z0 + 0.4, L.z1 - 0.4, H * 0.5, H * 0.5 + Math.min(1.6, H * 0.22), '#e02020', '#ffffff', L.art); }
+  if (L.art && !L.owned && !L.vacant) { facadeSign(L, x, z0, L.z0 + 0.4, L.z1 - 0.4, H * 0.5, H * 0.5 + Math.min(1.6, H * 0.22), '#e02020', '#ffffff', L.art, null, 'italic 900 13px "Helvetica Neue", Arial, sans-serif'); }
   if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
@@ -503,7 +491,7 @@ function facadeWindows(L, x, z0, z1, rows, cols, opt) {
   }}
 }
 // A sign mounted flat on the facade; text is placed with an affine map of the projected corners.
-function facadeSign(L, x, z0, za, zb, ya, yb, bg, fg, text, glow) {
+function facadeSign(L, x, z0, za, zb, ya, yb, bg, fg, text, glow, font) {
   if (zb < z0) {return;} za = Math.max(za, z0);
   const q = wallQuad(x - L.side * 0.1, za, x - L.side * 0.1, zb, ya, yb);
   if (q.some(p => p.rz < CLIP_Z) || Math.abs(q[1].x - q[0].x) < 6) {return;}
@@ -512,7 +500,7 @@ function facadeSign(L, x, z0, za, zb, ya, yb, bg, fg, text, glow) {
   // Text always reads left to right: on the right-hand side the far end is on the left of the screen.
   const o = L.side < 0 ? q[3] : q[2], ex = L.side < 0 ? q[2] : q[3], ey = L.side < 0 ? q[0] : q[1];
   ctx.transform((ex.x - o.x) / w, (ex.y - o.y) / w, (ey.x - o.x) / h, (ey.y - o.y) / h, o.x, o.y);
-  ctx.fillStyle = fg; ctx.font = 'bold 13px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = fg; ctx.font = font || 'bold 13px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 8; }
   ctx.fillText(text, w / 2, h / 2 + 1, w - 8); ctx.restore();
 }

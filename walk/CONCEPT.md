@@ -41,6 +41,13 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Round 2: sound | Plates rattle in your box with each step; your old home echoes once, faintly; each rejection is a phone notification | Memory and loss, heard rather than read |
 | Music | Jazz on rich streets, pop in the middle, an out-of-tune tape on poor streets | You can hear the class of a street |
 
+## What is generated, and how
+- **The street.** Each town is a loop of ten 48 m blocks. A block's buildings, lot sizes, colours, trees, billboards, sandwich boards, tents and slogans come from a random generator seeded by the town and the block's place in the loop, so the same town looks the same each time you come back, and every town is different.
+- **Six towns, one per class.** Each has its own building types (castles, villas, mansions, towers, bungalows, shacks, caravans), prices, rents, skyline and music.
+- **Growth as you walk.** Lots are outlined plots until you approach; then the buildings rise out of the ground. Time is distance walked: every 120 m is a year, and some homes are redeveloped into empty investor towers. Investors buy some homes for sale just before you reach them.
+- **Your actions change it.** Bought homes turn into plastic pieces; the street loses colour and sound as you buy; billboards switch to flattering the landlord; Round 2 is generated from the same seed, keeping what you did.
+- **Sound** is synthesised live (Web Audio): each home's sound, the band, footsteps and effects.
+
 ## Research and influences
 - Lizzie Magie, *The Landlord's Game* (patented 1904), and its two rule sets (monopolist and anti-monopolist, "Prosperity").
 - Henry George's land value tax, which her second rule set is based on.
