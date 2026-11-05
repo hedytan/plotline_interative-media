@@ -35,6 +35,8 @@ class WalkSound extends StreetSound {
     this.lifeFilter = this.context.createBiquadFilter(); this.lifeFilter.type = 'lowpass'; this.lifeFilter.frequency.value = 1100;
     this.lifeGain = this.context.createGain(); this.lifeGain.gain.value = 1; this.lifeFilter.connect(this.lifeGain); this.lifeGain.connect(this.master);
     this.listenK = 0;
+    // The forest before the street: wind in the leaves (birds are added in update).
+    this.wind = this._noiseBed(700, 'bandpass', 0); this.leaves = this._noiseBed(3500, 'highpass', 0); this.devK = this.devK || 0; this.devSmooth = 0;
   }
   // One sound of somebody's home: kids, a dog, a piano, the TV... Returns how long it lasts.
   life(kind, gain, pan, memory) {
@@ -110,8 +112,6 @@ class WalkSound extends StreetSound {
   update(opts = {}) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
     const ctx = this.context, now = ctx.currentTime, tier = opts.tier || 0;
-    // Keep the street hum and the casino bells from StreetSound, without its district arpeggio.
-    this.hum.gain.setTargetAtTime(0.03 + (tier >= 3 ? 0.02 : 0), now, 1);
     // How rich is this street? The town counts most, then the block's district.
     const z = typeof zone === 'number' ? zone : 0;
     this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
@@ -119,9 +119,19 @@ class WalkSound extends StreetSound {
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
     const life = typeof streetLife === 'function' ? streetLife() : 1;
     const listen = this.listenK || 0;
+    // Forest to city: the less built-up the street around you, the more wind and birds; the more
+    // built-up, the more traffic hum and the louder the band.
+    this.devSmooth += ((this.devK || 0) - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = 1 - dev;
+    if (this.wind) { this.wind.gain.setTargetAtTime(0.05 * wild, now, 0.8); this.leaves.gain.setTargetAtTime(0.012 * wild * (0.6 + 0.4 * Math.sin(now * 0.7)), now, 0.5); }
+    this.hum.gain.setTargetAtTime((0.03 + (tier >= 3 ? 0.02 : 0)) * (0.15 + dev * 1.2), now, 1);
+    if (Math.random() < 0.05 * wild * wild && this.mvoices < 30) {
+      // A bird: two to five quick chirps, sliding up.
+      const f0 = 2400 + Math.random() * 2200, n = 2 + Math.floor(Math.random() * 4), p = (Math.random() - 0.5) * 1.6, t0 = now + 0.02;
+      for (let i = 0; i < n; i++) { const o = this.context.createOscillator(), g = this.context.createGain(), pn = this.context.createStereoPanner(); pn.pan.value = p; o.type = 'sine'; o.frequency.setValueAtTime(f0, t0 + i * 0.11); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, t0 + i * 0.11 + 0.07); g.gain.setValueAtTime(0, t0 + i * 0.11); g.gain.linearRampToValueAtTime(0.025 * wild, t0 + i * 0.11 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.11 + 0.09); o.connect(g); g.connect(pn); pn.connect(this.master); o.start(t0 + i * 0.11); o.stop(t0 + i * 0.11 + 0.1); o.onended = () => { o.disconnect(); g.disconnect(); pn.disconnect(); }; }
+    }
     this.muffle.frequency.setTargetAtTime(350 + life * life * 15000, now, 0.8);
     // Stop and listen: the band and the street fade back, the homes beside you come through the wall.
-    this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen), now, 0.4);
+    this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen) * (0.12 + 0.88 * dev * dev), now, 0.4);
     if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
     // The poor tape crackles all the time it plays.
     if (this.style === 'poor' && Math.random() < 0.8) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }

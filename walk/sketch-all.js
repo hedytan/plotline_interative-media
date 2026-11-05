@@ -173,6 +173,8 @@ class WalkSound extends StreetSound {
     this.lifeFilter = this.context.createBiquadFilter(); this.lifeFilter.type = 'lowpass'; this.lifeFilter.frequency.value = 1100;
     this.lifeGain = this.context.createGain(); this.lifeGain.gain.value = 1; this.lifeFilter.connect(this.lifeGain); this.lifeGain.connect(this.master);
     this.listenK = 0;
+    // The forest before the street: wind in the leaves (birds are added in update).
+    this.wind = this._noiseBed(700, 'bandpass', 0); this.leaves = this._noiseBed(3500, 'highpass', 0); this.devK = this.devK || 0; this.devSmooth = 0;
   }
   // One sound of somebody's home: kids, a dog, a piano, the TV... Returns how long it lasts.
   life(kind, gain, pan, memory) {
@@ -248,8 +250,6 @@ class WalkSound extends StreetSound {
   update(opts = {}) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
     const ctx = this.context, now = ctx.currentTime, tier = opts.tier || 0;
-    // Keep the street hum and the casino bells from StreetSound, without its district arpeggio.
-    this.hum.gain.setTargetAtTime(0.03 + (tier >= 3 ? 0.02 : 0), now, 1);
     // How rich is this street? The town counts most, then the block's district.
     const z = typeof zone === 'number' ? zone : 0;
     this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
@@ -257,9 +257,19 @@ class WalkSound extends StreetSound {
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
     const life = typeof streetLife === 'function' ? streetLife() : 1;
     const listen = this.listenK || 0;
+    // Forest to city: the less built-up the street around you, the more wind and birds; the more
+    // built-up, the more traffic hum and the louder the band.
+    this.devSmooth += ((this.devK || 0) - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = 1 - dev;
+    if (this.wind) { this.wind.gain.setTargetAtTime(0.05 * wild, now, 0.8); this.leaves.gain.setTargetAtTime(0.012 * wild * (0.6 + 0.4 * Math.sin(now * 0.7)), now, 0.5); }
+    this.hum.gain.setTargetAtTime((0.03 + (tier >= 3 ? 0.02 : 0)) * (0.15 + dev * 1.2), now, 1);
+    if (Math.random() < 0.05 * wild * wild && this.mvoices < 30) {
+      // A bird: two to five quick chirps, sliding up.
+      const f0 = 2400 + Math.random() * 2200, n = 2 + Math.floor(Math.random() * 4), p = (Math.random() - 0.5) * 1.6, t0 = now + 0.02;
+      for (let i = 0; i < n; i++) { const o = this.context.createOscillator(), g = this.context.createGain(), pn = this.context.createStereoPanner(); pn.pan.value = p; o.type = 'sine'; o.frequency.setValueAtTime(f0, t0 + i * 0.11); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, t0 + i * 0.11 + 0.07); g.gain.setValueAtTime(0, t0 + i * 0.11); g.gain.linearRampToValueAtTime(0.025 * wild, t0 + i * 0.11 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.11 + 0.09); o.connect(g); g.connect(pn); pn.connect(this.master); o.start(t0 + i * 0.11); o.stop(t0 + i * 0.11 + 0.1); o.onended = () => { o.disconnect(); g.disconnect(); pn.disconnect(); }; }
+    }
     this.muffle.frequency.setTargetAtTime(350 + life * life * 15000, now, 0.8);
     // Stop and listen: the band and the street fade back, the homes beside you come through the wall.
-    this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen), now, 0.4);
+    this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen) * (0.12 + 0.88 * dev * dev), now, 0.4);
     if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
     // The poor tape crackles all the time it plays.
     if (this.style === 'poor' && Math.random() < 0.8) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
@@ -607,6 +617,10 @@ function draw() {
   if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
   economy = lerp(economy, economyTarget, 1 - Math.exp(-dt * 0.8)); night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5)); crash = lerp(crash, crashTarget, 1 - Math.exp(-dt * 0.8));
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
+  // How built-up is the street around you? 0 = all forest, 1 = all buildings.
+  let builtN = 0, lotN = 0;
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, riseOf(L.born)); } } }
+  sound.devK = lotN ? builtN / lotN : 0;
   sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
@@ -783,12 +797,19 @@ function drawWorld(z, side) {
   const all = [...chunks.values()], minZ = side ? side.fromZ : -Infinity, minLot = side ? side.minLot : -Infinity;
   // Back row first, then buildings far to near, then pavement life far to near.
   const backs = all.flatMap(ch => ch.back).filter(b => b.z1 > z + NEAR_Z && b.z0 >= minLot).sort((a, b) => b.z0 - a.z0);
-  for (const b of backs) { const g = riseOf(b.born) * (b.sinkK === undefined ? 1 : b.sinkK); if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; } }
+  for (const b of backs) {
+    const g = riseOf(b.born) * (b.sinkK === undefined ? 1 : b.sinkK), fk = 1 - Math.min(1, riseOf(b.born) * 1.4);
+    if (fk > 0.02 && b.sinkK === undefined) { drawForest({ seed: Math.floor(b.z0 * 13) + b.side, z0: b.z0, z1: b.z1, side: b.side, depth: 14, setback: 0, special: null }, fk * 1.0, b.x - EDGE_X - 4); }
+    if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; }
+  }
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
     const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
     if (L.piece) { drawBoardSquare(L); }
-    if (g <= 0.01 && !L.piece) { drawPlot(L); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    // Before it is built, every lot is forest; as the building rises, the trees go down.
+    const forestK = L.piece ? 0 : 1 - Math.min(1, riseOf(L.born) * 1.4);
+    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    if (forestK > 0.02) { drawForest(L, forestK); }
     if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
     if (L.piece) { drawToyPiece(L); }
     if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
@@ -812,12 +833,29 @@ function drawWorld(z, side) {
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {
+  // Land nobody has built on yet: forest floor.
   const z0 = clipZ(L.z0); if (L.z1 <= z0) {return;}
-  const xa = L.side * (EDGE_X + L.setback + 0.3), xb = L.side * (EDGE_X + L.setback + L.depth), col = DISTRICTS[L.tier].stripe[0], mz = (z0 + L.z1) / 2;
-  const q = [P(xa, 0.03, z0), P(xb, 0.03, z0), P(xb, 0.03, L.z1), P(xa, 0.03, L.z1)];
-  ctx.save(); ctx.setLineDash([6, 5]); polyN(q, rgbaN(col, 0.18 * (1 - fogFor(mz))), rgbaN(col, 0.6 * (1 - fogFor(mz))), 1.5); ctx.restore();
-  // A small corner stake, so the plot reads as land waiting to be built on.
-  const s0 = P(xa, 0, L.z0 + 0.3); if (s0.rz > 1) { ctx.fillStyle = rgbaN(col, 0.8 * (1 - fogFor(mz))); ctx.fillRect(s0.x - 0.04 * s0.k, s0.y - 0.7 * s0.k, Math.max(1, 0.08 * s0.k), 0.7 * s0.k); }
+  const xa = L.side * (EDGE_X + 0.2), xb = L.side * (EDGE_X + L.setback + L.depth + 2), mz = (z0 + L.z1) / 2;
+  polyN([P(xa, 0.03, z0), P(xb, 0.03, z0), P(xb, 0.03, L.z1), P(xa, 0.03, L.z1)], toneN('#3f5a32', mz));
+}
+// The forest that stood here before the street was built: a stand of trees on every lot,
+// sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
+function drawForest(L, k, back = 0) {
+  if (k <= 0.02 || L.special) { return; }
+  const r = rngN(L.seed + 77), len = L.z1 - L.z0, n = Math.max(2, Math.round(len / 2.4)), rows = 3, list = [];
+  for (let row = rows - 1; row >= 0; row--) {
+    for (let i = 0; i < n; i++) {
+      const z = L.z0 + (i + 0.2 + r() * 0.6) * len / n, x = L.side * (EDGE_X + back + 1.4 + row * 4.5 + r() * 2);
+      list.push({ x, z, h: mixN(7, 12, r()), tone: r() });
+    }
+  }
+  list.sort((a, b) => b.z - a.z);
+  for (const t of list) {
+    if (t.z < cam.z + NEAR_Z + 1) { continue; }
+    const q = P(t.x, 0, t.z); if (q.rz < 1.5 || q.rz > FAR_Z) { continue; }
+    ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.min(1, 0.5 + k * 0.5), k); ctx.translate(-q.x, -q.y);
+    drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore();
+  }
 }
 // Dust kicked up while a building rises.
 function drawDust(L, age) {
