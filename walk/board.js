@@ -212,6 +212,54 @@ function addGarden(ch, L, fresh) {
   }
 }
 
+/* ---------- Life, as a board game ---------- */
+// The squares of a life, painted on the road like spaces on a board: graduate, get a job, marry,
+// buy a house, have a baby... As the landlord you land on every one and the game cheers.
+// As the tenant the same squares are crossed out, each with the reason.
+const LIFE = ['GRADUATE', 'GET A JOB', 'GET MARRIED', 'BUY A HOUSE', 'HAVE A BABY', 'BUY ANOTHER HOUSE', 'BUY THEIR HOUSE', 'RETIRE AT 40'];
+const LIFE_NO = ['$60k of debt', '1h 35m away', 'can’t afford the wedding', '0 results in your price range', '“No kids,” says the lease', 'ha ha', 'they are you', 'keep working'];
+const LIFE_COL = ['#3f8fd6', '#2e9e47', '#e06a9a', '#d4a017', '#f28c28', '#8a4a9a', '#c8322a', '#1a1a1a'];
+let lifeHit = new Set();
+function lifeSquares(ch) {
+  // Two squares a block; the count runs on from block to block, also into a side street.
+  if (ch.c < 1) { return []; }
+  return [0, 1].map(j => ({ i: (ch.c - 1) * 2 + j, z: ch.z0 + CROSS_W + (j ? 28 : 2) })).filter(q => q.i < LIFE.length);
+}
+function drawLifeSquares(ch) {
+  for (const q of lifeSquares(ch)) {
+    const z0 = Math.max(q.z, cam.z + 0.8), z1 = q.z + 3.4; if (z1 <= z0) { continue; }
+    const hit = lifeHit.has(q.i), no = rules === 2, col = no ? '#6a6460' : LIFE_COL[q.i], w = ROAD_W * 0.82;
+    polyN([P(-w, 0.015, z0), P(w, 0.015, z0), P(w, 0.015, z1), P(-w, 0.015, z1)], rgbaN(col, hit && !no ? 0.95 : 0.75), 'rgba(255,255,255,0.85)', 2);
+    if (hit && !no) { polyN([P(-w, 0.016, z0), P(w, 0.016, z0), P(w, 0.016, Math.min(z1, z0 + 0.4)), P(-w, 0.016, Math.min(z1, z0 + 0.4))], 'rgba(255,215,60,0.9)'); }
+    paintText((no ? '' : hit ? '✓ ' : '') + LIFE[q.i], 0, q.z + 1.2, 1.15, '#ffffff', ROAD_W * 1.5);
+    if (no) {
+      const sz = q.z + 1.2; polyN([P(-w * 0.85, 0.02, sz - 0.12), P(w * 0.85, 0.02, sz - 0.12), P(w * 0.85, 0.02, sz + 0.12), P(-w * 0.85, 0.02, sz + 0.12)], 'rgba(224,32,32,0.95)');
+      paintText(LIFE_NO[q.i], 0, q.z + 2.5, 0.8, '#ffd0c8', ROAD_W * 1.5);
+    }
+  }
+}
+function lifeUpdate() {
+  if (intro || ending || turnAnim) { return; }
+  for (const ch of chunks.values()) {
+    for (const q of lifeSquares(ch)) {
+      if (lifeHit.has(q.i) || distanceWalked < q.z || distanceWalked > q.z + 3.4) { continue; }
+      lifeHit.add(q.i);
+      if (rules === 1) { sayToast(`✓ ${LIFE[q.i]}! The game loves you.`); if (sound && sound._note && sound.context) { const t = sound.context.currentTime; [72, 76, 79].forEach((n, k) => sound._note(MIDI(n), t + k * 0.08, 0.25, 'triangle', 0.04)); } }
+      else { sayToast(`✗ ${LIFE[q.i]}: ${LIFE_NO[q.i]}.`); if (sound && sound._note && sound.context) { const t = sound.context.currentTime; sound._note(150, t, 0.35, 'square', 0.03); sound._note(110, t + 0.18, 0.4, 'square', 0.03); } }
+    }
+  }
+}
+// The same life, as a row of squares in the corner: filled as the landlord, crossed out as the tenant.
+function drawLifePath(x, y, w) {
+  const n = LIFE.length, s = Math.min(18, (w - 58 - (n - 1) * 4) / n);
+  for (let i = 0; i < n; i++) {
+    const sx = x + i * (s + 4), hit = lifeHit.has(i);
+    noStroke(); fill(hit ? (rules === 1 ? color(LIFE_COL[i]) : color(120, 112, 106)) : color(225, 215, 200)); rect(sx, y, s, s, 3);
+    if (hit) { fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(s * 0.7); text(rules === 1 ? '✓' : '✗', sx + s / 2, y + s / 2 + 1); textStyle(NORMAL); }
+  }
+  fill(150, 130, 120); textSize(9); textAlign(LEFT, TOP); text('YOUR LIFE', x + n * (s + 4) + 2, y + s * 0.25);
+}
+
 /* ---------- The sound of the homes ---------- */
 // Every lived-in home has its own sound: kids, a dog, a piano, the TV. Walk past and you hear it
 // through the wall; stand still and it comes through clearly. Buy it and it goes quiet for good.
@@ -246,7 +294,7 @@ function houseLife() {
 
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
-  updateTurn(); houseLife();
+  updateTurn(); houseLife(); lifeUpdate();
   const dt = Math.min(deltaTime / 1000, 0.05);
   // Prices rise with time, and time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
@@ -395,7 +443,7 @@ function endWalkNow(kind) { ending = { kind, t: clockT }; sound.go(); baseNight 
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   wallet = START_SAVINGS; lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
-  owned = []; loans = 0; equityUsed = 0; rentIn = 0; movedOut = 0; newNeighbours = 0; taxShared = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0;
+  owned = []; loans = 0; equityUsed = 0; rentIn = 0; movedOut = 0; newNeighbours = 0; taxShared = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0; lifeHit = new Set();
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0; moneyPops.length = 0; soldBeat = null;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -853,7 +901,7 @@ function drawBoardHud() {
   if (!intro && !ending) {
     if (rules === 2) { drawCarryBox(); }
     // Who you are and what you have done, top left.
-    const x = 16, y = 16, w = Math.min(270, width * 0.42), h = rules === 1 ? 96 : 74;
+    const x = 16, y = 16, w = Math.min(270, width * 0.42), h = rules === 1 ? 124 : 102;
     noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
     fill(rules === 1 ? '#c8322a' : '#3f6fa8'); rect(x, y, 6, h, 8, 0, 0, 8);
     fill(40, 30, 24); textStyle(BOLD); textSize(16); textAlign(LEFT, TOP);
@@ -870,6 +918,7 @@ function drawBoardHud() {
       fill(120, 100, 90); textSize(10); textAlign(RIGHT, TOP); text('YOU CAN PAY', wx + ww - 14, y + 10);
       fill(40, 30, 24); textStyle(BOLD); textSize(22); text(`${money(RENT_BUDGET)} a week`, wx + ww - 14, y + 27); textStyle(NORMAL);
     }
+    drawLifePath(x + 16, y + h - 26, w - 32);
     const beat = soldBeat && clockT - soldBeat.t < 2.4;
     for (let i = toasts.length - 1; i >= 0; i--) {
       const t = toasts[i], a2 = clockT - t.t; if (a2 > 4.2) { toasts.splice(i, 1); continue; }
@@ -1037,7 +1086,7 @@ function nextText() {
 }
 function drawNextBar() {
   const t = nextText(); push(); textFont('Georgia'); textStyle(BOLD); textSize(17);
-  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(270, width * 0.42) + 8 || x + w > width - 16 - 190 - 8, y = crowded ? 124 : 16;
+  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(270, width * 0.42) + 8 || x + w > width - 16 - 190 - 8, y = crowded ? 152 : 16;
   noStroke(); fill(0, 60); rect(x + 3, y + 4, w, 40, 20); fill(42, 30, 24); rect(x, y, w, 40, 20);
   fill('#ffd23f'); rect(x + 10, y + 11, 52, 18, 9); fill(42, 30, 24); textSize(10); textAlign(CENTER, CENTER); text('NEXT', x + 36, y + 20.5);
   fill(255, 236, 190); textSize(17); textAlign(LEFT, CENTER); text(t, x + 72, y + 21);
