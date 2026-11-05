@@ -1669,8 +1669,7 @@ function buyLot(L) {
     }
     landlordMode = owned.length >= 2;
     evicted.push(familyOf(L)); lastBuyZ = Math.max(lastBuyZ, L.z1);
-    const cheers = ['Congratulations! You’re a landlord!', 'Another one! The city thanks you.', 'Winner! The street is yours.'];
-    soldBeat = { t: clockT, stamp: 'SOLD', col: [200, 50, 40], l1: cheers[Math.min(owned.length - 1, 2)], l2: 'Their memories are included in the price.' };
+    soldBeat = { t: clockT, stamp: 'SOLD', col: [200, 50, 40], l1: 'You won a home. A family lost theirs.', l2: 'The city congratulates you.' };
     if (sound.evict) { setTimeout(() => sound.evict(), 350); }
   }
   preserveLot(L);
@@ -2056,24 +2055,29 @@ function drawBoardHud() {
   push(); textFont('Georgia');
   if (!intro && !ending) {
     if (rules === 2) { drawCarryBox(); }
-    // Who you are and what you have done, top left.
-    const x = 16, y = 16, w = Math.min(270, width * 0.42), h = rules === 1 ? 96 : 74;
-    noStroke(); fill(0, 50); rect(x + 3, y + 4, w, h, 8); fill(255, 250, 238); rect(x, y, w, h, 8);
-    fill(rules === 1 ? '#c8322a' : '#3f6fa8'); rect(x, y, 6, h, 8, 0, 0, 8);
-    fill(40, 30, 24); textStyle(BOLD); textSize(16); textAlign(LEFT, TOP);
-    if (rules === 1) {
-      text('YOU · THE LANDLORD', x + 16, y + 10); textStyle(NORMAL);
-      for (let i = 0; i < Math.max(OWN_GOAL, owned.length); i++) { houseIcon(x + 16 + i * 22, y + 38, 17, i < owned.length ? color(OWNER_COL) : color(190, 175, 160), i < owned.length); }
-      fill(150, 130, 120); textSize(11); textStyle(ITALIC); text(['The city believes in your money.', 'The city is proud of your money.', 'The city loves your money.', 'The city is your money.'][Math.min(owned.length, 3)], x + 16, y + 68); textStyle(NORMAL);
+    // The scoreboard, top left: who you are, and what your moves do, side by side.
+    const x = 16, y = 16, w = Math.min(400, width * 0.5), h = 112, r1 = rules === 1, accent = r1 ? '#c8322a' : '#3f6fa8';
+    noStroke(); fill(0, 55); rect(x + 3, y + 4, w, h, 10); fill(255, 250, 238); rect(x, y, w, h, 10);
+    fill(accent); rect(x, y, w, 26, 10, 10, 0, 0);
+    fill(255); textStyle(BOLD); textSize(12); textAlign(LEFT, CENTER); text(r1 ? 'ROUND 1 OF 2  ·  YOU ARE THE LANDLORD' : 'ROUND 2 OF 2  ·  YOU ARE THE TENANT', x + 14, y + 13);
+    const half = (w - 28) / 2, ax = x + 14, bx = x + 14 + half + 8;
+    let a, aLabel, aCol, b, bLabel, bCol, goal;
+    if (r1) {
+      a = owned.length; aLabel = a === 1 ? 'HOME YOU WON' : 'HOMES YOU WON'; aCol = color(OWNER_COL);
+      b = evicted.length; bLabel = b === 1 ? 'FAMILY LOST THEIR HOME' : 'FAMILIES LOST THEIR HOME'; bCol = color(200, 50, 40);
+      goal = `Goal: win ${OWN_GOAL} homes.  Every one you win, a family loses.`;
     } else {
-      text('YOU · THE TENANT', x + 16, y + 10, w - 24);
-      textStyle(NORMAL); textSize(12); fill(150, 120, 100); text('Looking for a home. Any home.', x + 16, y + 32);
-      textStyle(BOLD); fill(40, 30, 24); textSize(13); text(ZONE_NAMES[zone], x + 16, y + 52); textStyle(NORMAL); fill(150, 120, 100); textAlign(RIGHT, TOP); textSize(11); text(commuteShort(zone), x + w - 12, y + 54);
-      const ww = 170, wx = width - ww - 16;
-      fill(0, 50); rect(wx + 3, y + 4, ww, 62, 8); fill(255, 250, 238); rect(wx, y, ww, 62, 8);
-      fill(120, 100, 90); textSize(10); textAlign(RIGHT, TOP); text('YOU CAN PAY', wx + ww - 14, y + 10);
-      fill(40, 30, 24); textStyle(BOLD); textSize(22); text(`${money(RENT_BUDGET)} a week`, wx + ww - 14, y + 27); textStyle(NORMAL);
+      let can = 0; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.forSale && rentAsk(L) <= RENT_BUDGET) { can++; } } }
+      a = can; aLabel = can === 1 ? 'HOME YOU CAN AFFORD HERE' : 'HOMES YOU CAN AFFORD HERE'; aCol = can ? color(63, 111, 168) : color(200, 50, 40);
+      b = commuteMin(zone); bLabel = 'MINUTES TO WORK'; bCol = color(40, 30, 24);
+      goal = `Goal: find a home for ${money(RENT_BUDGET)} a week.  You are in ${ZONE_NAMES[zone]}.`;
     }
+    textAlign(LEFT, TOP); textStyle(BOLD); textSize(34); fill(aCol); text(a, ax, y + 32); const aw = textWidth(String(a)) + 8;
+    textSize(11); fill(60, 45, 36); text(aLabel, ax + aw, y + 38, half - aw);
+    textSize(34); fill(bCol); text(b, bx, y + 32); const bw = (textSize(34), textWidth(String(b))) + 8;
+    textSize(11); fill(60, 45, 36); text(bLabel, bx + bw, y + 38, half - bw);
+    stroke(220, 205, 190); strokeWeight(1); line(x + 14 + half + 2, y + 34, x + 14 + half + 2, y + 74); noStroke();
+    textStyle(ITALIC); textSize(11); fill(120, 100, 90); text(goal, x + 14, y + 86, w - 28); textStyle(NORMAL);
     const beat = soldBeat && clockT - soldBeat.t < 2.4;
     for (let i = toasts.length - 1; i >= 0; i--) {
       const t = toasts[i], a2 = clockT - t.t; if (a2 > 4.2) { toasts.splice(i, 1); continue; }
@@ -2337,7 +2341,7 @@ function nextText() {
 }
 function drawNextBar() {
   const t = nextText(); push(); textFont('Georgia'); textStyle(BOLD); textSize(17);
-  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(270, width * 0.42) + 8 || x + w > width - 16 - 190 - 8, y = crowded ? 124 : 16;
+  const w = textWidth(t) + 90, x = width / 2 - w / 2, crowded = x < 16 + Math.min(400, width * 0.5) + 8 || x + w > width - 16 - 190 - 8, y = crowded ? 142 : 16;
   noStroke(); fill(0, 60); rect(x + 3, y + 4, w, 40, 20); fill(42, 30, 24); rect(x, y, w, 40, 20);
   fill('#ffd23f'); rect(x + 10, y + 11, 52, 18, 9); fill(42, 30, 24); textSize(10); textAlign(CENTER, CENTER); text('NEXT', x + 36, y + 20.5);
   fill(255, 236, 190); textSize(17); textAlign(LEFT, CENTER); text(t, x + 72, y + 21);
