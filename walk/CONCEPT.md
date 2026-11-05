@@ -37,14 +37,12 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Investor towers | "THE PINNACLE · 300 LUXURY APARTMENTS" with a red neon "0 AFFORDABLE · MOSTLY EMPTY" | Apartments built by the rich, not affordable housing |
 | Round 1: corners (← / →) | You choose: a poorer town or a richer one, and buy wherever you like | The winner has every choice |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
-| A harsher street | Every home swings a shop price tag ("$722k and rising"); empty investor towers wear a giant top hat and a VACANT neon; tents with cardboard signs ("WAS A RENTER") sit under the luxury billboards; the sky is smog | Homes treated as goods; wealth and homelessness side by side |
-| The artwork's voice | Posters and bands across buildings in red bars of white type: "YOUR HOME IS OUR PORTFOLIO", "LOCATION LOCATION EVICTION", "PASS GO. COLLECT EVERYTHING." | The street itself becomes the artwork's statement |
+| A harsher street | Empty investor towers wear a giant top hat and a red neon "0 AFFORDABLE · MOSTLY EMPTY"; the sky is smog | Wealth built for investors, not for people |
+| Slogans painted on the walls | One wall a block carries a slogan painted by hand in red: "300 HOMES. 0 YOU CAN AFFORD.", "LUXURY APARTMENTS. AFFORDABLE TO NOBODY.", "CAN'T AFFORD THE CITY? MOVE TO THE EDGE." | The street itself speaks the artwork's message, with nothing else in the way |
 | Endings, from above | The camera rises out of the street: in Round 1 the whole city is a grey board with SOLD on every square and only your pieces in colour (POPULATION: YOU); in Round 2 a dashed red line runs from the suburbs to The Fringe, where your box is | The city as the game sees it |
-| Satire on every surface | Agents' sandwich boards ("BID NOW · CRY LATER"), council banners on lamp posts ("COMMUNITY (SOLD)"), words painted on the road ("MIND THE WEALTH GAP"), riders on the signs ("KIDS NOT INCLUDED"), empty towers called "NOBODY HOME"; the game cheers every purchase ("Congratulations! You're a landlord!") | The city sells homes as a game and celebrates the winner |
-| Satirical billboards | They change with you: "Light-filled! (One window.)", "Landlord of the Year: YOU", "No pets. No kids. No chance." | The city's advertising flatters whoever has the money |
 | The sound of homes | Every lived-in home has its own sound through the wall: kids, a dog, a piano, the TV. Stand still and it comes through clearly. Buy it and it goes silent | A home is somebody's life; buying it takes that life off the street |
 | Round 2: sound | Plates rattle in your box with each step; your old home echoes once, faintly; each rejection is a phone notification | Memory and loss, heard rather than read |
-| Music | Jazz on rich streets, pop in the middle, an out-of-tune tape on poor streets | You can hear the class of a street |
+| Music | One clear style per class of town: strings and a harp for the rich, a house beat in the city, pop in the suburbs, a slow broken piano with no beat out on the poor edge | You can hear who a street is for |
 
 ## What is generated, and how
 - **The street.** Each town is a loop of ten 48 m blocks. A block's buildings, lot sizes, colours, trees, billboards, sandwich boards, tents and slogans come from a random generator seeded by the town and the block's place in the loop, so the same town looks the same each time you come back, and every town is different.

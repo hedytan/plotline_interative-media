@@ -352,7 +352,7 @@ function drawGround(z, side) {
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
-    if (ch.slot !== 0) { const sl = typeof roadSlogan === 'function' ? roadSlogan(ch) : null; if (sl) { sl.split(' ').filter(w => w !== '·').forEach((w, i) => paintText(w, 0, ch.z0 + CROSS_W + 14 + i * 2.8, 2.4, '#ffffff', ROAD_W * 1.7)); } continue; }
+    if (ch.slot !== 0) { continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
@@ -390,7 +390,7 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'aframe') {drawAFrame(it.q, it.p);} else if (it.kind === 'tent') {drawTent(it.q, it.p);} else if (it.kind === 'junk') {drawJunk(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'junk') {drawJunk(it.q, it.p);}
     ctx.restore();
   }
   if (!side) {drawTargetMarker();}
@@ -471,9 +471,8 @@ function drawLot(L) {
   drawMaterial(L, x, z0, z1, H);
   if (L.style) { drawStyled(L, x, z0, z1, H); } else { [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H); }
   drawWeathering(L, x, z0, z1, H);
-  // The artwork's slogan, as a red band across the facade.
-  if (typeof satireOnLot === 'function') { satireOnLot(L, x, z0, z1, H); }
-  if (L.art && !L.owned && !L.vacant) { facadeSign(L, x, z0, L.z0 + 0.4, L.z1 - 0.4, H * 0.5, H * 0.5 + Math.min(1.6, H * 0.22), '#e02020', '#ffffff', L.art, null, 'italic 900 13px "Helvetica Neue", Arial, sans-serif'); }
+  // The artwork's slogan, painted on the wall.
+  if (typeof paintSlogan === 'function') { paintSlogan(L, x, z0, H); }
   if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.
@@ -884,7 +883,6 @@ function drawCasino(L, x, z0, z1, H) {
 /* ---------- Pavement life ---------- */
 function drawLamp(q, p) {
   const k = q.k, h = 4.2, glow = night > 0.2 || p.flick < 0.3;
-  if (p.slogan && typeof drawPoleBanner === 'function') { drawPoleBanner(q, p); }
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(q.x - 0.06 * k, q.y - h * k, 0.12 * k, h * k);
   const lx = q.x, ly = q.y - h * k;
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(lx - 0.18 * k, ly - 0.55 * k, 0.36 * k, 0.12 * k);

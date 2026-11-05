@@ -77,47 +77,9 @@ function rentOf(o) { return valueOf(o) * RENT_YIELD[rules - 1]; }
 function paydayIn() { const half = CHUNK_LEN * LAP_LEN / 2; return Math.round(half - modN(distanceWalked, half)); }
 
 /* ---------- Generated billboards ---------- */
-// Sentence templates; {tokens} are filled with live numbers from the street around you.
-const SIGNS = {
-  0: ['Cosy! (Tiny.)', 'Rent {rent}/wk. Mould is a feature.', 'Fixer-upper. You fix it, we raise the rent.', 'Walk to everything you can’t afford.', '6 housemates. 1 bathroom. Endless vibes.'],
-  1: ['{people} people at today’s inspection. Bring snacks. And a CV.', 'Light-filled! (One window.)', 'Renovated: we painted it grey and doubled the rent.', 'Just {deposit} deposit. Just 9 years of saving.', 'Sorry, this suburb is for investors.'],
-  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s third.', 'Live where your barista can’t.', 'Heritage charm. Heritage wages not included.', 'Coming soon: 40 luxury units where this house was.'],
-  3: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'Rooftop pool for owners. A view of it for renters.', 'Invest in bricks. Live in a shoebox.', 'Prices up {growth}%. Wages up 3%. Smile!', 'Affordable housing: 0 of 300 units.'],
-  4: ['Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
-  out: ['New estate! Only {commute} to the city. Each way.', 'Paddock to palace. Shops coming 2041.', 'Priced out? Welcome! Homes from {price}.', 'The bus comes twice a day. Enjoy the space!', 'The city is that way. Forever.'],
-  // Once you own homes, the city starts flattering you.
-  landlord: ['LANDLORD OF THE YEAR: YOU', 'Fewer neighbours. More equity.', 'Raise the rent! Everyone else is.', 'Negative gearing: the tax office helps you buy their home.', 'You are the market now. Congratulations!', 'Thank you for your investment. — The City', 'Another one? You deserve it.'],
-  luxury: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'From {price}. Bought by people who won’t live here.', 'Coming soon: 300 homes nobody here can afford.', 'Invest in bricks. Live in a shoebox.'],
-  empty: ['Ghost street. Prime location.', 'Nobody lives here now. Great investment!', 'For lease. For lease. For lease.', 'Quiet neighbourhood. Very quiet.'],
-  // Round 2: the street as a renter reads it.
-  renting: ['{people} people at today’s inspection. Good luck!', 'Rent {rent}/wk. Applications close in 10 minutes.', 'No pets. No kids. No chance.', 'LANDLORD OF THE YEAR: (not you)', 'Can’t afford it here? Try further out!', 'Rent going up? So is our profit!']
-};
-// Satire everywhere else on the street: sandwich boards, lamp-post banners, the road itself, riders on the signs.
-const AFRAME = ['OFF THE PLAN · LUXURY · FROM $2.4M', 'NEW ESTATE · ONLY 1h 35m TO WORK', 'INVESTORS WELCOME · RESIDENTS OPTIONAL', 'HURRY! ONLY 300 LEFT · ALL EMPTY', 'AFFORDABLE HOUSING · SEE OTHER CITY', 'BID NOW · CRY LATER'];
-const POLE = ['A GREAT PLACE TO INVEST', 'COMMUNITY (SOLD)', 'LIVE · WORK · COMMUTE', 'YOUR CITY · OUR PROFIT', 'GROWING OUTWARDS'];
-const ROAD = ['MIND THE WEALTH GAP', 'SLOW · PRICES RISING', 'CAUTION · GENTRIFICATION AHEAD', 'END OF AFFORDABLE HOUSING', 'CITY THIS WAY · NOT FOR YOU', 'HOMES FURTHER OUT · KEEP GOING'];
-const RIDER_SALE = ['INVESTOR SPECIAL', 'SOLD OVER ASKING!', 'DEVELOPMENT SITE', 'KNOCK DOWN · BUILD 40 UNITS', '47 OFFERS', 'TENANTED · 8% YIELD'];
-const RIDER_RENT = ['50 APPLIED', 'NO KIDS', 'RENT BIDDING', '3 PAYSLIPS', 'NO PETS', 'VIEWING: 3 MIN'];
 // The artwork's own slogans, in red bars of white type, on billboards and across the buildings.
 const ART = ['LUXURY APARTMENTS. AFFORDABLE TO NOBODY.', '300 HOMES. 0 YOU CAN AFFORD.', 'BUILT FOR INVESTORS. NOT FOR PEOPLE.', 'THE CITY IS FULL. OF EMPTY APARTMENTS.', 'CAN’T AFFORD THE CITY? MOVE TO THE EDGE.', 'EVERY YEAR THE CITY MOVES FURTHER AWAY.', 'YOUR HOME IS OUR PORTFOLIO', 'NOBODY LIVES HERE. EVERYBODY PROFITS.', 'LOCATION LOCATION EVICTION', 'PASS GO. COLLECT EVERYTHING.'];
 const VOID_NAMES = ['THE PINNACLE · 300 LUXURY APARTMENTS', 'SKY RESIDENCES · FROM $2.4M', 'ONE PERCENT TOWER', 'THE INVESTOR · 280 UNITS EMPTY', 'PRESTIGE HEIGHTS · 0 AFFORDABLE'];
-function fillSign(text, tier, n = 0) {
-  const L = { tier, priceK: 1 };
-  return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + (n % 15))
-    .replace('{price}', moneyK(priceOf(L))).replace('{deposit}', moneyK(priceOf(L) * DEPOSIT))
-    .replace('{growth}', GROWTH[0]).replace(/{commute}/g, commuteText());
-}
-// Which voice the city speaks in right now: it changes as you change the street.
-function signPool(tier) {
-  if (rules === 2) { return zone >= 4 ? SIGNS.out : SIGNS.renting; }
-  if (movedOut >= 8) { return SIGNS.empty; }
-  if (owned.length) { return SIGNS.landlord; }
-  if (zone >= 4) { return SIGNS.out; }
-  if (tier >= 3) { return SIGNS.luxury; }
-  return SIGNS[tier];
-}
-function signText(p) { if (p.fixed || p.idx === undefined) { return p.text || ""; } const pool = signPool(p.tier); return fillSign(pool[p.idx % pool.length], p.tier, p.idx); }
-function pickSign(tier, r) { return fillSign(SIGNS[tier][Math.floor(r() * SIGNS[tier].length)], tier); }
 
 
 /* ---------- Called from chunkAt() ---------- */
@@ -166,23 +128,10 @@ function plotsForChunk(ch, r) {
     if (ch.style === 'caravan') { b.h = mixN(2.5, 4, r()); b.color = pickN(r, ['#9a9080', '#8a8a7a']); }
     if (ch.style === 'castle' || ch.style === 'villa') { b.h = mixN(12, 18, r()); b.color = pickN(r, ['#5a8a4a', '#4a7a42', '#6a9a52']); }
   }
-  // Satire: a sandwich board or two on the pavement, banners on some lamp posts, a slogan painted on the road.
-  for (let i = 0; i < 1; i++) { if (r() < 0.4) { continue; } const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'aframe', x: side * (EDGE_X - 0.5), z: ch.z0 + CROSS_W + 4 + r() * (CHUNK_LEN - CROSS_W - 8), side, text: pickN(r, AFRAME) }); }
-  for (const p of ch.props) { if (p.kind === 'lamp' && r() < 0.25) { p.slogan = pickN(r, POLE); p.scol = pickN(r, ['#c8322a', '#3f6fa8', '#d4a017', '#2e9e47']); } }
-  ch.road = ch.slot === 0 || r() < 0.4 ? null : pickN(r, ROAD);
-  for (const L of ch.lots) { if (L.forSale) { L.rider = Math.floor(r() * 6); } }
-  for (const side of [-1, 1]) { const tall = ch.lots.filter(L => L.side === side && !L.forSale && L.H > 6.5); if (tall.length && r() < 0.7) { pickN(r, tall).art = pickN(r, ART); } }
+  // One slogan per side of the block, painted by hand straight onto a wall.
+  for (const side of [-1, 1]) { const walls = ch.lots.filter(L => L.side === side && !L.forSale && !L.special && L.H > 3 && L.z1 - L.z0 > 6); if (walls.length && r() < 0.85) { pickN(r, walls).art = ART[(ch.slot * 2 + (side > 0 ? 1 : 0) + zone * 3) % ART.length]; } }
   // A signpost at the crossing: which way is cheaper, which way is richer.
   ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
-  // Billboards on the pavement, written from the prices on this block.
-  for (let i = 0; i < 2; i++) {
-    if (r() < 0.45) { continue; }
-    const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
-    const idx = Math.floor(r() * 1000);
-    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, tier: ch.tier, idx, col: DISTRICTS[ch.tier].stripe[0], art: r() < 0.45 ? ART[idx % ART.length] : null });
-    // Someone sleeping rough under the luxury ad.
-    if (r() < (ch.tier >= 2 ? 0.6 : 0.3)) { ch.props.push({ kind: 'tent', x: side * (ROAD_W + 2.1), z: z + 1.2, side, tone: r(), cardboard: pickN(r, ['I USED TO LIVE ON THIS STREET', 'WAS A RENTER', 'ON THE LIST 6 YRS', 'RENT WENT UP. I WENT OUT.']) }); }
-  }
   // An open home with a queue down the pavement, in the cheaper districts.
   if (ch.tier <= 2 && zone >= 2 && r() < 0.55) {
     const L = ch.lots.find(l => !l.special && !l.forSale && l.tier <= 2);
@@ -250,8 +199,7 @@ function boardUpdate(z) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
         Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], sign: true });
         preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
-        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor! Coming soon: luxury apartments. Affordable: 0.', fixed: true, col: '#c8322a', born: clockT });
-        sound.jail(); if (!toasts.some(t => t.text.startsWith('An investor') && clockT - t.t < 3)) { sayToast('An investor got there first. Congratulations to them.'); }
+        sound.jail(); if (!toasts.some(t => t.text.startsWith('An investor') && clockT - t.t < 3)) { sayToast('An investor got there first: luxury apartments, 0 affordable.'); }
       }
     }
   }
@@ -488,11 +436,6 @@ function drawForSale(L) {
     ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText(r2 ? 'FOR RENT' : 'FOR SALE', base.x, top - h * 0.2 + h * 0.17);
     ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(r2 ? `${money(rentAsk(L))}/wk` : moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
     ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(r2 ? (L.applicants ? `${L.applicants} applied` : 'apply now') : 'a lovely family home', base.x, top - h * 0.2 + h * 0.8);
-    // A rider stuck across the corner, the way agents do.
-    const rid = (r2 ? RIDER_RENT : RIDER_SALE)[(L.rider || 0) % 6];
-    const rh = h * 0.3, ry = top - h * 0.2 - rh - h * 0.04;
-    ctx.fillStyle = '#ffd23f'; ctx.fillRect(base.x - w * 0.46, ry, w * 0.92, rh); ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.04 * k); ctx.strokeRect(base.x - w * 0.46, ry, w * 0.92, rh);
-    ctx.fillStyle = '#c8322a'; ctx.font = `bold ${rh * 0.55}px Georgia, serif`; ctx.fillText(rid, base.x, ry + rh / 2 + 1, w * 0.86);
   }
   ctx.restore();
 }
@@ -511,47 +454,6 @@ function drawTurnSign(q, p) {
   if (inn) { plate(top + h * 1.2, `${inn} · ${commuteShort(zone - 1)}`, '#c8322a', false); }
   ctx.restore();
 }
-// A big roadside billboard; the text is generated from the street's own prices.
-function drawBillboard(q, p) {
-  const k = q.k; if (k < 2) { return; }
-  const w = 4.6 * k, h = 2.3 * k, top = q.y - 4.6 * k, x = q.x;
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
-  ctx.fillStyle = '#2a2a30'; ctx.fillRect(x - w * 0.36, top, 0.12 * k, 4.6 * k); ctx.fillRect(x + w * 0.36 - 0.12 * k, top, 0.12 * k, 4.6 * k);
-  drawArtPoster(x, top - h, w, h, (p.art || signText(p)).toUpperCase(), k); ctx.restore(); return;
-  ctx.fillStyle = '#fffaf0'; ctx.fillRect(x - w / 2, top - h, w, h);
-  ctx.fillStyle = p.col; ctx.fillRect(x - w / 2, top - h, w, h * 0.12); ctx.fillRect(x - w / 2, top - h * 0.12, w, h * 0.12);
-  ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x - w / 2, top - h, w, h);
-  if (w > 50) {
-    ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const size = Math.max(7, h * 0.16); ctx.font = `bold ${size}px Georgia, serif`;
-    const words = signText(p).split(' '), lines = []; let line = '';
-    for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.86 && line) { lines.push(line); line = wd; } else { line = t; } }
-    lines.push(line);
-    const lh = size * 1.15, y0 = top - h / 2 - (lines.length - 1) * lh / 2;
-    lines.slice(0, 4).forEach((ln, i) => ctx.fillText(ln, x, y0 + i * lh));
-  }
-  ctx.restore();
-}
-// A poster in the artwork's own voice: a grey, grainy picture of a house, and white words on red bars.
-function drawArtPoster(cx, y, w, h, slogan, k) {
-  const x = cx - w / 2, g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, '#9a9792'); g.addColorStop(1, '#4a4846');
-  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
-  // A house, in silhouette, like a cut-out photograph.
-  ctx.fillStyle = 'rgba(20,20,20,0.55)'; ctx.beginPath(); ctx.moveTo(x + w * 0.58, y + h); ctx.lineTo(x + w * 0.58, y + h * 0.5); ctx.lineTo(x + w * 0.76, y + h * 0.26); ctx.lineTo(x + w * 0.94, y + h * 0.5); ctx.lineTo(x + w * 0.94, y + h); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(235,230,220,0.5)'; ctx.fillRect(x + w * 0.66, y + h * 0.62, w * 0.08, h * 0.14); ctx.fillRect(x + w * 0.79, y + h * 0.62, w * 0.08, h * 0.14);
-  ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x, y, w, h);
-  if (w < 50) { ctx.fillStyle = '#e02020'; ctx.fillRect(x + w * 0.06, y + h * 0.3, w * 0.6, h * 0.14); return; }
-  // Fit the words: shrink the type until the slogan takes at most four bars.
-  let size = h * 0.15, lines = [];
-  for (let tries = 0; tries < 6; tries++) {
-    ctx.font = `italic 900 ${size}px "Helvetica Neue", Futura, Arial, sans-serif`; lines = []; let line = '';
-    for (const wd of slogan.split(' ')) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.62 && line) { lines.push(line); line = wd; } else { line = t; } }
-    lines.push(line); if (lines.length <= 4) { break; } size *= 0.86;
-  }
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  const n = Math.min(4, lines.length), lh = size * 1.32, y0 = y + h * 0.5 - (n - 1) * lh / 2;
-  lines.slice(0, n).forEach((ln, i) => { const tw = ctx.measureText(ln).width, bx = x + w * 0.05; ctx.fillStyle = '#e02020'; ctx.fillRect(bx, y0 + i * lh - size * 0.62, tw + size * 0.5, size * 1.24); ctx.fillStyle = '#fff'; ctx.fillText(ln, bx + size * 0.25, y0 + i * lh + 1); });
-}
 // The satire drawn onto the buildings themselves (called from drawLot, inside the rise scope).
 // Every lived-in home wears a price tag on a string, like goods in a shop; empty investor towers
 // get a tycoon's top hat and a VACANT sign in red neon.
@@ -569,62 +471,8 @@ function satireOnLot(L, x, z0, z1, H) {
     ctx.restore();
     return;
   }
-  if (L.owned || L.H > 16) { return; }
-  const len = L.z1 - L.z0, az = L.z0 + len * 0.78; if (az < z0 + 0.3) { return; }
-  const a = P(x - L.side * 0.05, H * 0.95, az); if (a.rz < 2.5 || a.rz > 70) { return; }
-  const k = a.k, sw = Math.sin(clockT * 1.4 + L.seed % 7) * 0.12, tw = 1.9 * k, th = 1.05 * k, drop = 0.9 * k;
-  const pk = L.priceK || (0.8 + (Math.abs(L.seed) % 47) / 100), label = rules === 2 ? `${money(Math.round(TOWNS[zone].rent * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * pk / 5) * 5)}/wk` : moneyK(TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * pk);
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(az) * 0.8; ctx.translate(a.x, a.y); ctx.rotate(sw);
-  ctx.strokeStyle = '#f4f0e6'; ctx.lineWidth = Math.max(1, 0.03 * k); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, drop); ctx.stroke();
-  ctx.translate(0, drop); ctx.rotate(0.18);
-  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-tw / 2 + 0.06 * k, 0.08 * k, tw, th);
-  ctx.fillStyle = '#fffdf6'; ctx.beginPath(); ctx.moveTo(-tw / 2 + th * 0.3, 0); ctx.lineTo(tw / 2, 0); ctx.lineTo(tw / 2, th); ctx.lineTo(-tw / 2 + th * 0.3, th); ctx.lineTo(-tw / 2, th / 2); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = '#2a1e18'; ctx.stroke();
-  ctx.fillStyle = '#2a1e18'; ctx.beginPath(); ctx.arc(-tw / 2 + th * 0.32, th / 2, th * 0.08, 0, TWO_PI); ctx.fill();
-  if (k > 9) { ctx.fillStyle = '#e02020'; ctx.font = `900 ${th * 0.42}px "Helvetica Neue", Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, th * 0.25, th * 0.42, tw * 0.72); ctx.fillStyle = '#2a1e18'; ctx.font = `italic ${th * 0.2}px Georgia, serif`; ctx.fillText(rules === 2 ? 'per week, for now' : 'and rising', th * 0.25, th * 0.78, tw * 0.72); }
-  ctx.restore();
+  // (Homes no longer wear price tags: the street had too much on it.)
 }
-// Sleeping rough under a billboard: a small tent, a sleeping bag, a cardboard sign.
-function drawTent(q, p) {
-  const k = q.k; if (k < 3) { return; }
-  const w = 1.9 * k, h = 1.05 * k, col = ['#4a6a8a', '#6a7a5a', '#8a5a4a'][Math.floor(p.tone * 3)];
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
-  ctx.fillStyle = 'rgba(20,14,10,0.25)'; ctx.beginPath(); ctx.ellipse(q.x, q.y, w * 0.6, 0.12 * k, 0, 0, TWO_PI); ctx.fill();
-  ctx.fillStyle = toneN(col, p.z); ctx.beginPath(); ctx.moveTo(q.x - w / 2, q.y); ctx.quadraticCurveTo(q.x - w * 0.4, q.y - h * 1.2, q.x, q.y - h); ctx.quadraticCurveTo(q.x + w * 0.4, q.y - h * 1.2, q.x + w / 2, q.y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.moveTo(q.x - w * 0.12, q.y); ctx.lineTo(q.x, q.y - h * 0.75); ctx.lineTo(q.x + w * 0.12, q.y); ctx.closePath(); ctx.fill();
-  // The cardboard sign leaning on it.
-  const cx = q.x + w * 0.5 * (p.side < 0 ? 1 : -1), cw = 1.15 * k, chh = 0.72 * k;
-  ctx.fillStyle = toneN('#b8915a', p.z); ctx.fillRect(cx - cw / 2, q.y - chh, cw, chh);
-  if (k > 9) { ctx.fillStyle = '#2a1e18'; ctx.font = `bold ${chh * 0.24}px "Marker Felt", "Comic Sans MS", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.cardboard, cx, q.y - chh / 2, cw * 0.9); }
-  ctx.restore();
-}
-// An agent's sandwich board on the pavement.
-function drawAFrame(q, p) {
-  const k = q.k; if (k < 3) { return; }
-  const w = 1.4 * k, h = 1.6 * k, top = q.y - h;
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
-  ctx.fillStyle = '#3a2a20'; ctx.beginPath(); ctx.moveTo(q.x - w * 0.5, q.y); ctx.lineTo(q.x - w * 0.42, top); ctx.lineTo(q.x + w * 0.42, top); ctx.lineTo(q.x + w * 0.5, q.y); ctx.lineTo(q.x + w * 0.4, q.y); ctx.lineTo(q.x, top + h * 0.2); ctx.lineTo(q.x - w * 0.4, q.y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#fffaee'; ctx.fillRect(q.x - w * 0.42, top, w * 0.84, h * 0.8); ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - w * 0.42, top, w * 0.84, h * 0.16);
-  if (k > 16) {
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `bold ${h * 0.09}px Georgia, serif`; ctx.fillText('★ AGENT ★', q.x, top + h * 0.08);
-    ctx.fillStyle = '#2a1e18'; const size = h * 0.1; ctx.font = `bold ${size}px Georgia, serif`;
-    const words = p.text.split(' '), lines = []; let line = '';
-    for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.74 && line) { lines.push(line); line = wd; } else { line = t; } }
-    lines.push(line); lines.slice(0, 5).forEach((ln, i) => ctx.fillText(ln, q.x, top + h * 0.48 - (Math.min(5, lines.length) - 1) * size * 0.6 + i * size * 1.2));
-  }
-  ctx.restore();
-}
-// A council banner hanging from a lamp post, cheerful and empty.
-function drawPoleBanner(q, p) {
-  const k = q.k; if (k < 3) { return; }
-  const dir = p.x < 0 ? 1 : -1, bw = 0.55 * k, bh = 1.9 * k, bx = q.x + dir * 0.06 * k + (dir < 0 ? -bw : 0), by = q.y - 3.9 * k;
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
-  ctx.fillStyle = toneN(p.scol, p.z); ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(bx, by + bh * 0.04, bw, bh * 0.02); ctx.fillRect(bx, by + bh * 0.94, bw, bh * 0.02);
-  if (k > 14) { ctx.translate(bx + bw / 2, by + bh / 2); ctx.rotate(-HALF_PI); ctx.fillStyle = '#fff'; ctx.font = `bold ${bw * 0.34}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.slogan, 0, 1, bh * 0.86); }
-  ctx.restore();
-}
-// A slogan painted on the road, read as you walk over it.
-function roadSlogan(ch) { return ch.road || null; }
 // People queueing for an open home.
 function drawOpenHome(q, p) {
   const k = q.k; if (k < 2 || emptyK < 0.7 || (rules === 1 && movedOut >= 6)) { return; }
@@ -632,6 +480,35 @@ function drawOpenHome(q, p) {
   ctx.fillStyle = '#2a2a30'; ctx.fillRect(q.x - 0.05 * k, q.y - 2.6 * k, 0.1 * k, 2.6 * k);
   ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - 1 * k, q.y - 2.6 * k, 2 * k, 0.8 * k);
   if (k > 14) { ctx.fillStyle = '#fff'; ctx.font = `bold ${0.32 * k}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OPEN HOME', q.x, q.y - 2.32 * k); ctx.font = `${0.2 * k}px Georgia, serif`; ctx.fillText(`${p.n * 4} registered`, q.x, q.y - 2.02 * k); }
+  ctx.restore();
+}
+// A slogan painted straight onto a wall by hand, in red, with drips: the artwork talking.
+function paintSlogan(L, x, z0, H) {
+  if (!L.art || L.owned || L.vacant || L.piece) { return; }
+  const za = Math.max(L.z0 + 0.4, z0), zb = L.z1 - 0.4; if (zb <= za + 1.5) { return; }
+  const ya = Math.max(0.6, H * 0.28), yb = Math.min(H * 0.92, ya + Math.max(1.5, Math.min(4, (zb - za) * 0.3)));
+  const q = wallQuad(x - L.side * 0.06, za, x - L.side * 0.06, zb, ya, yb);
+  if (q.some(p => p.rz < CLIP_Z) || Math.abs(q[1].x - q[0].x) < 10) { return; }
+  const h = 60, w = h * (zb - za) / (yb - ya);
+  ctx.save(); ctx.globalAlpha = 1 - fogFor((za + zb) / 2) * 0.75;
+  const o = L.side < 0 ? q[3] : q[2], ex = L.side < 0 ? q[2] : q[3], ey = L.side < 0 ? q[0] : q[1];
+  ctx.transform((ex.x - o.x) / w, (ex.y - o.y) / w, (ey.x - o.x) / h, (ey.y - o.y) / h, o.x, o.y);
+  // Fit the words into one or two painted lines.
+  let size = 30, lines = [];
+  for (let tries = 0; tries < 8; tries++) {
+    ctx.font = `bold ${size}px "Marker Felt", "Permanent Marker", Impact, sans-serif`; lines = []; let line = '';
+    for (const wd of L.art.split(' ')) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.9 && line) { lines.push(line); line = wd; } else { line = t; } }
+    lines.push(line); if (lines.length <= 2) { break; } size *= 0.85;
+  }
+  const r = rngN(L.seed + 41), lh = size * 1.05, y0 = h / 2 - (lines.length - 1) * lh / 2;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  lines.forEach((ln, i) => {
+    const ly = y0 + i * lh, tw = ctx.measureText(ln).width;
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = size * 0.16; ctx.strokeText(ln, w / 2, ly);
+    ctx.fillStyle = '#d81e1e'; ctx.fillText(ln, w / 2, ly);
+    // Paint running down from the letters.
+    for (let d = 0; d < 6; d++) { const dx = w / 2 - tw / 2 + r() * tw, dl = size * (0.15 + r() * 0.5); ctx.fillRect(dx, ly + size * 0.32, size * 0.05, dl); }
+  });
   ctx.restore();
 }
 // Monopoly's view of a home: a plastic piece on a coloured square. The real house sinks first.
@@ -684,7 +561,7 @@ function noticeYou(q, p) {
   if (p.mover || p.arrive || p.talked || intro || ending || turnAnim) { return; }
   const dz = p.z - distanceWalked; if (dz < 1.5 || dz > 8 || q.k < 3 || q.x < 40 || q.x > width - 40) { return; }
   if (clockT - talkT < 3.2) { return; }
-  p.talked = true; if (!p.lotRef && Math.random() < 0.35) { return; }
+  p.talked = true; if (!p.lotRef) { return; }
   const pool = p.lotRef ? SAY.family1 : SAY[moodN()];
   p.say = pool[Math.floor(Math.random() * pool.length)]; p.sayT = clockT; p.mood = p.lotRef ? (rules === 1 ? 'sad' : 'warm') : moodN(); talkT = clockT;
   if (sound && sound.enabled && sound.context && sound._note) { const t = sound.context.currentTime, warm = p.mood === 'shared' || p.mood === 'renter' || p.mood === 'warm' || p.mood === 'moving'; sound._note(warm ? 620 : 300, t, 0.12, 'triangle', 0.03); sound._note(warm ? 780 : 260, t + 0.1, 0.16, 'triangle', 0.03); }
@@ -818,7 +695,7 @@ function drawBoardHud() {
     // What the street sounds like, bottom left.
     if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
       const on = sound.enabled && sound.context && sound.context.state === 'running', label = on ? `♪  ${MUSIC_NAME[sound.style]}` : '♪  Click for sound';
-      textStyle(BOLD); textSize(12); const lw = textWidth(label) + 24; noStroke(); fill(0, 60); rect(16 + 2, height - 46 + 3, lw, 26, 13); fill(sound.style === 'rich' ? color(212, 160, 23) : sound.style === 'poor' ? color(110, 100, 96) : color(63, 143, 214)); rect(16, height - 46, lw, 26, 13);
+      textStyle(BOLD); textSize(12); const lw = textWidth(label) + 24; noStroke(); fill(0, 60); rect(16 + 2, height - 46 + 3, lw, 26, 13); fill(sound.style === 'rich' ? color(212, 160, 23) : sound.style === 'poor' ? color(110, 100, 96) : sound.style === 'city' ? color(200, 40, 120) : color(63, 143, 214)); rect(16, height - 46, lw, 26, 13);
       fill(255); textAlign(LEFT, CENTER); text(label, 28, height - 33); textStyle(NORMAL);
     }
   }

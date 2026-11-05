@@ -1,22 +1,23 @@
 /* WalkSound — the Landlord's Walk soundscape: StreetSound's footsteps, street hum and effects,
  * with music that sounds like the money on the street you are walking down.
- *   Rich (inner city, the dear blocks): a lounge-jazz trio. Electric piano on maj9 chords,
- *     walking upright bass, brushed swing drums, and now and then a clink of glasses.
- *   Middle: bright pop. Plucked chords, a bouncing bass, shaker and soft claps.
- *   Poor (out on the estates, the cheap blocks): a slow minor tune on an out-of-tune piano,
- *     warped like an old cassette, with record crackle and a cheap drum machine.
- * Wealth comes from the town (zone) and the district of the block you are on. When it
- * changes, the music fades over to the new style at the next bar. Native Web Audio, no files.
+ *   The rich (Castle Hill, Mansion Row): strings and a harp, slow and lush, celesta, champagne glasses.
+ *   The City: a house beat, kick on every beat, off-beat hi-hats, claps, a jumping synth bass.
+ *   The suburbs (Leafy Suburbs): bright pop, plucked chords and a bouncing bass.
+ *   The poor edge (Working Town, The Fringe): a slow, broken, out-of-tune piano, record crackle,
+ *     no beat at all, and now and then a lonely whistle.
+ * The style is set by the town you are in; on a turn the music changes at the next bar.
+ * Native Web Audio, no files.
  */
 // The band's volume, well above the street hum so it is clearly heard.
 const MUSIC_VOL = 6;
-const MUSIC_NAME = { rich: 'Jazz · a rich street', mid: 'Pop · a middle street', poor: 'Old tape · a poor street' };
+const MUSIC_NAME = { rich: 'Strings & harp · the rich', city: 'House beat · the city', mid: 'Pop · the suburbs', poor: 'Broken old piano · the poor edge' };
 const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 const STYLES = {
-  // chords as MIDI notes, one bar each; bass walks through the chord tones
-  rich: { bpm: 92, swing: 0.62, chords: [[48, 52, 55, 59, 62], [45, 48, 52, 55, 59], [50, 53, 57, 60, 64], [43, 47, 50, 53, 57]], gain: 0.9 },
+  // chords as MIDI notes, one bar each
+  rich: { bpm: 72, swing: 0.5, chords: [[48, 55, 59, 64, 67], [45, 52, 57, 60, 64], [41, 48, 53, 57, 64], [43, 50, 55, 59, 62]], gain: 0.95 },
+  city: { bpm: 122, swing: 0.5, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 59], [40, 47, 52, 55]], gain: 0.75 },
   mid: { bpm: 108, swing: 0.5, chords: [[48, 55, 60, 64], [43, 50, 55, 59], [45, 52, 57, 60], [41, 48, 53, 57]], gain: 0.8 },
-  poor: { bpm: 72, swing: 0.5, chords: [[45, 52, 57, 60], [40, 47, 52, 55], [41, 48, 53, 57], [40, 47, 52, 56]], gain: 0.85 }
+  poor: { bpm: 60, swing: 0.5, chords: [[45, 52, 57, 60], [40, 47, 52, 55], [41, 48, 53, 57], [40, 47, 52, 56]], gain: 0.9 }
 };
 
 class WalkSound extends StreetSound {
@@ -114,7 +115,7 @@ class WalkSound extends StreetSound {
     // How rich is this street? The town counts most, then the block's district.
     const z = typeof zone === 'number' ? zone : 0;
     this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
-    this.nextStyle = this.wealth > 0.62 ? 'rich' : this.wealth < 0.3 ? 'poor' : 'mid';
+    this.nextStyle = ['rich', 'rich', 'city', 'mid', 'poor', 'poor'][z] || 'mid';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
     const life = typeof streetLife === 'function' ? streetLife() : 1;
     const listen = this.listenK || 0;
@@ -123,7 +124,7 @@ class WalkSound extends StreetSound {
     this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen), now, 0.4);
     if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
     // The poor tape crackles all the time it plays.
-    if (this.style === 'poor' && Math.random() < 0.5) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
+    if (this.style === 'poor' && Math.random() < 0.8) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
     // Schedule the band a little ahead, an eighth note at a time.
     while (this.nextAt < now + 0.15) { this._play(this.nextAt); }
   }
@@ -163,17 +164,23 @@ class WalkSound extends StreetSound {
     const len = beat8 % 2 === 0 ? eighth * 2 * S.swing : eighth * 2 * (1 - S.swing);
     const chord = S.chords[bar], pan = () => (Math.random() - 0.5) * 0.6;
     if (this.style === 'rich') {
-      // Electric piano comping on 1 and the and-of-2, soft and warm, with a little tremolo shimmer.
-      if (beat8 === 0 || beat8 === 3) { chord.slice(1).forEach((n, i) => { this._m(MIDI(n + 12), t + i * 0.012, 1.8, 'sine', 0.022, 2600, -0.3 + i * 0.15); this._m(MIDI(n + 24), t + i * 0.012, 0.5, 'triangle', 0.004, 4000); }); }
-      // Walking bass on every beat.
-      if (beat8 % 2 === 0) { const walk = [chord[0], chord[0] + 4, chord[0] + 7, chord[0] + 9 - (bar % 2) * 2]; this._m(MIDI(walk[beat8 / 2] - 12), t, 0.5, 'sine', 0.11, 600, 0, 0.005); }
-      // Brushes: a ride tick on every eighth, a swish on 2 and 4.
-      this._hit(t, 0.05, 7000, beat8 % 2 ? 0.012 : 0.02);
-      if (beat8 === 2 || beat8 === 6) { this._hit(t, 0.22, 2500, 0.03, 'bandpass', 0.6); }
-      // A clink of champagne glasses now and then.
-      if (step === 0 && Math.random() < 0.5) { const f = 2093 + Math.random() * 300; this._m(f, t + 0.6, 1.2, 'sine', 0.012, 9000, pan()); this._m(f * 1.5, t + 0.63, 0.9, 'sine', 0.008, 9000, pan()); }
-      // A harp run up at the end of the turnaround.
-      if (step === 28 && Math.random() < 0.6) { chord.forEach((n, i) => this._m(MIDI(n + 24), t + i * 0.06, 0.8, 'triangle', 0.012, 6000, -0.5 + i * 0.25)); }
+      // A string section and a harp: slow, lush, expensive. Long bowed chords that swell in each bar...
+      const barLen = eighth * 8;
+      if (beat8 === 0) { chord.forEach((n, i) => { this._m(MIDI(n + 12), t, barLen * 1.1, 'sawtooth', 0.007, 1500, -0.4 + i * 0.2, barLen * 0.35); this._m(MIDI(n + 12) * 1.004, t, barLen * 1.1, 'sawtooth', 0.006, 1300, 0.4 - i * 0.2, barLen * 0.35); }); this._m(MIDI(chord[0] - 12), t, barLen, 'sawtooth', 0.03, 420, 0, 0.15); }
+      // ...a harp rippling up the chord on every eighth...
+      this._m(MIDI(chord[(beat8 % chord.length)] + 24), t, 0.9, 'triangle', 0.024, 5200, -0.3 + beat8 * 0.08);
+      // ...a celesta tune on top, and the clink of champagne glasses.
+      if ((beat8 === 2 || beat8 === 6) && Math.random() < 0.7) { const top = [72, 74, 76, 79, 81, 84], f = MIDI(top[Math.floor(Math.random() * top.length)] + 12); this._m(f, t, 1.4, 'sine', 0.02, 9000); this._m(f * 2, t, 0.6, 'sine', 0.006, 9000); }
+      if (step === 0 && Math.random() < 0.6) { const f = 2093 + Math.random() * 300; this._m(f, t + 0.6, 1.2, 'sine', 0.012, 9000, pan()); this._m(f * 1.5, t + 0.63, 0.9, 'sine', 0.008, 9000, pan()); }
+    } else if (this.style === 'city') {
+      // The city: a house beat. Kick on every beat, open hi-hat on the off-beats, claps on 2 and 4...
+      if (beat8 % 2 === 0) { this._kick(t, 0.2); }
+      if (beat8 % 2 === 1) { this._hit(t, 0.09, 8000, 0.035); }
+      this._hit(t, 0.03, 10000, 0.012);
+      if (beat8 === 2 || beat8 === 6) { this._hit(t, 0.14, 1400, 0.06, 'bandpass', 1.4); this._hit(t + 0.012, 0.12, 1700, 0.04, 'bandpass', 1.4); }
+      // ...an off-beat synth bass jumping octaves, and short synth stabs.
+      if (beat8 % 2 === 1) { this._m(MIDI(chord[0] - 12 + (beat8 % 4 === 3 ? 12 : 0)), t, 0.2, 'sawtooth', 0.05, 800); }
+      if (beat8 === 3 || beat8 === 7) { chord.forEach((n, i) => this._m(MIDI(n + 12), t, 0.16, 'sawtooth', 0.012, 2800, -0.3 + i * 0.2)); }
     } else if (this.style === 'mid') {
       // Plucked chord, broken over the bar.
       const n = chord[(beat8 + Math.floor(beat8 / 4)) % chord.length]; this._m(MIDI(n + 12), t, 0.35, 'triangle', 0.035, 3200, pan());
@@ -190,9 +197,8 @@ class WalkSound extends StreetSound {
       // A sparse, sad tune in A minor pentatonic.
       if ((beat8 === 3 || beat8 === 6) && Math.random() < 0.55) { const scale = [69, 72, 74, 76, 79, 81], f = MIDI(scale[Math.floor(Math.random() * scale.length)]) * wobble; this._m(f, t, 1.2, 'triangle', 0.03, 1800, pan()); this._m(f * 0.995, t, 1.2, 'triangle', 0.012, 1500); }
       if (beat8 === 0) { this._m(MIDI(chord[0] - 12) * wobble, t, 1.6, 'sine', 0.09, 400, 0, 0.02); }
-      // Cheap drum machine: kick on 1 and 3, a thin rimshot on 2 and 4.
-      if (beat8 === 0 || beat8 === 4) { this._kick(t, 0.1); }
-      if (beat8 === 2 || beat8 === 6) { this._hit(t, 0.05, 1800, 0.025, 'bandpass', 3); }
+      // No band, no beat: now and then a lonely whistled note, sliding flat.
+      if (beat8 === 4 && Math.random() < 0.35) { const f = MIDI([76, 79, 81, 74][Math.floor(Math.random() * 4)]); const o = this._m(f, t, 1.6, 'sine', 0.02, 4000, pan(), 0.15); if (o) { o.frequency.setValueAtTime(f, t + 0.6); o.frequency.exponentialRampToValueAtTime(f * 0.94, t + 1.5); } }
     }
     this.nextAt += len; this.step++;
     // Change style at the end of a bar: dip the band, swap, and bring it back.
