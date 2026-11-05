@@ -186,6 +186,8 @@ function plotsForChunk(ch, r) {
     const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
     const idx = Math.floor(r() * 1000);
     ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, tier: ch.tier, idx, col: DISTRICTS[ch.tier].stripe[0], art: r() < 0.45 ? ART[idx % ART.length] : null });
+    // Someone sleeping rough under the luxury ad.
+    if (r() < (ch.tier >= 2 ? 0.6 : 0.3)) { ch.props.push({ kind: 'tent', x: side * (ROAD_W + 2.1), z: z + 1.2, side, tone: r(), cardboard: pickN(r, ['ANYTHING HELPS', 'WAS A RENTER', 'ON THE LIST 6 YRS', 'SORRY']) }); }
   }
   // An open home with a queue down the pavement, in the cheaper districts.
   if (ch.tier <= 2 && zone >= 2 && r() < 0.55) {
@@ -591,6 +593,52 @@ function drawArtPoster(cx, y, w, h, slogan, k) {
   const n = Math.min(4, lines.length), lh = size * 1.32, y0 = y + h * 0.5 - (n - 1) * lh / 2;
   lines.slice(0, n).forEach((ln, i) => { const tw = ctx.measureText(ln).width, bx = x + w * 0.05; ctx.fillStyle = '#e02020'; ctx.fillRect(bx, y0 + i * lh - size * 0.62, tw + size * 0.5, size * 1.24); ctx.fillStyle = '#fff'; ctx.fillText(ln, bx + size * 0.25, y0 + i * lh + 1); });
 }
+// The satire drawn onto the buildings themselves (called from drawLot, inside the rise scope).
+// Every lived-in home wears a price tag on a string, like goods in a shop; empty investor towers
+// get a tycoon's top hat and a VACANT sign in red neon.
+function satireOnLot(L, x, z0, z1, H) {
+  if (L.special || L.piece || intro) { return; }
+  if (L.vacant) {
+    const on = Math.sin(clockT * 3 + L.seed) > -0.6;
+    facadeSign(L, x, z0, L.z0 + (L.z1 - L.z0) * 0.25, L.z1 - (L.z1 - L.z0) * 0.25, H * 0.3, H * 0.3 + 1.6, on ? '#2a0a0a' : '#1a1414', on ? '#ff4a3a' : '#5a2a2a', 'VACANT', on ? '#ff3020' : null);
+    const xm = x + L.side * L.depth / 2, top = P(xm, H, (L.z0 + L.z1) / 2); if (top.rz < 3) { return; }
+    const k = top.k, bw = L.depth * 1.1 * k, cw = L.depth * 0.62 * k, ch = L.depth * 0.75 * k;
+    ctx.save(); ctx.globalAlpha = 1 - fogFor((L.z0 + L.z1) / 2) * 0.7;
+    ctx.fillStyle = '#141414'; ctx.beginPath(); ctx.ellipse(top.x, top.y, bw / 2, bw * 0.12, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillRect(top.x - cw / 2, top.y - ch, cw, ch); ctx.beginPath(); ctx.ellipse(top.x, top.y - ch, cw / 2, cw * 0.12, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#d4a017'; ctx.fillRect(top.x - cw / 2, top.y - ch * 0.32, cw, ch * 0.14);
+    ctx.restore();
+    return;
+  }
+  if (L.owned || L.H > 16) { return; }
+  const len = L.z1 - L.z0, az = L.z0 + len * 0.78; if (az < z0 + 0.3) { return; }
+  const a = P(x - L.side * 0.05, H * 0.95, az); if (a.rz < 2.5 || a.rz > 70) { return; }
+  const k = a.k, sw = Math.sin(clockT * 1.4 + L.seed % 7) * 0.12, tw = 1.9 * k, th = 1.05 * k, drop = 0.9 * k;
+  const pk = L.priceK || (0.8 + (Math.abs(L.seed) % 47) / 100), label = rules === 2 ? `${money(Math.round(TOWNS[zone].rent * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * pk / 5) * 5)}/wk` : moneyK(TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * pk);
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(az) * 0.8; ctx.translate(a.x, a.y); ctx.rotate(sw);
+  ctx.strokeStyle = '#f4f0e6'; ctx.lineWidth = Math.max(1, 0.03 * k); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, drop); ctx.stroke();
+  ctx.translate(0, drop); ctx.rotate(0.18);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-tw / 2 + 0.06 * k, 0.08 * k, tw, th);
+  ctx.fillStyle = '#fffdf6'; ctx.beginPath(); ctx.moveTo(-tw / 2 + th * 0.3, 0); ctx.lineTo(tw / 2, 0); ctx.lineTo(tw / 2, th); ctx.lineTo(-tw / 2 + th * 0.3, th); ctx.lineTo(-tw / 2, th / 2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#2a1e18'; ctx.stroke();
+  ctx.fillStyle = '#2a1e18'; ctx.beginPath(); ctx.arc(-tw / 2 + th * 0.32, th / 2, th * 0.08, 0, TWO_PI); ctx.fill();
+  if (k > 9) { ctx.fillStyle = '#e02020'; ctx.font = `900 ${th * 0.42}px "Helvetica Neue", Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, th * 0.25, th * 0.42, tw * 0.72); ctx.fillStyle = '#2a1e18'; ctx.font = `italic ${th * 0.2}px Georgia, serif`; ctx.fillText(rules === 2 ? 'per week, for now' : 'and rising', th * 0.25, th * 0.78, tw * 0.72); }
+  ctx.restore();
+}
+// Sleeping rough under a billboard: a small tent, a sleeping bag, a cardboard sign.
+function drawTent(q, p) {
+  const k = q.k; if (k < 3) { return; }
+  const w = 1.9 * k, h = 1.05 * k, col = ['#4a6a8a', '#6a7a5a', '#8a5a4a'][Math.floor(p.tone * 3)];
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
+  ctx.fillStyle = 'rgba(20,14,10,0.25)'; ctx.beginPath(); ctx.ellipse(q.x, q.y, w * 0.6, 0.12 * k, 0, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = toneN(col, p.z); ctx.beginPath(); ctx.moveTo(q.x - w / 2, q.y); ctx.quadraticCurveTo(q.x - w * 0.4, q.y - h * 1.2, q.x, q.y - h); ctx.quadraticCurveTo(q.x + w * 0.4, q.y - h * 1.2, q.x + w / 2, q.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.moveTo(q.x - w * 0.12, q.y); ctx.lineTo(q.x, q.y - h * 0.75); ctx.lineTo(q.x + w * 0.12, q.y); ctx.closePath(); ctx.fill();
+  // The cardboard sign leaning on it.
+  const cx = q.x + w * 0.42 * (p.side < 0 ? 1 : -1), cw = 0.8 * k, chh = 0.5 * k;
+  ctx.fillStyle = toneN('#b8915a', p.z); ctx.fillRect(cx - cw / 2, q.y - chh, cw, chh);
+  if (k > 14) { ctx.fillStyle = '#2a1e18'; ctx.font = `bold ${chh * 0.26}px "Marker Felt", "Comic Sans MS", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.cardboard, cx, q.y - chh / 2, cw * 0.9); }
+  ctx.restore();
+}
 // An agent's sandwich board on the pavement.
 function drawAFrame(q, p) {
   const k = q.k; if (k < 3) { return; }
@@ -751,7 +799,7 @@ function speechBubble(x, y, txt, a, col) {
 }
 // Rule 1: the street loses its colour as its families are moved out.
 function drawStreetLife() {
-  const a = 0.12 + (1 - streetLife()) * 0.8;
+  const a = 0.3 + (1 - streetLife()) * 0.8;
   ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = a; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
 }
 // Small icons for the HUD and the opening card.

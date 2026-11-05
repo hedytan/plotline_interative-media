@@ -259,7 +259,7 @@ function showCard(kind) {
 
 /* ---------- Sky and skyline ---------- */
 function skyColors() {
-  const dayCols = ['#ffb36b', '#ffd79a', '#fff0c4', '#7aa7d8'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
+  const dayCols = ['#c9a46e', '#d9c194', '#e8dcbc', '#8a96a6'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
   return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), '#9a9aa0', crash * 0.45));
 }
 function drawSky() {
@@ -400,7 +400,7 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'aframe') {drawAFrame(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'aframe') {drawAFrame(it.q, it.p);} else if (it.kind === 'tent') {drawTent(it.q, it.p);}
     ctx.restore();
   }
   if (!side) {drawTargetMarker();}
@@ -482,6 +482,7 @@ function drawLot(L) {
   if (L.style) { drawStyled(L, x, z0, z1, H); } else { [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H); }
   drawWeathering(L, x, z0, z1, H);
   // The artwork's slogan, as a red band across the facade.
+  if (typeof satireOnLot === 'function') { satireOnLot(L, x, z0, z1, H); }
   if (L.art && !L.owned && !L.vacant) { facadeSign(L, x, z0, L.z0 + 0.4, L.z1 - 0.4, H * 0.5, H * 0.5 + Math.min(1.6, H * 0.22), '#e02020', '#ffffff', L.art); }
   if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
