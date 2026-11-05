@@ -91,6 +91,18 @@ class WalkSound extends StreetSound {
     // The crash of branches and the trunk hitting the ground.
     burst(t + 0.95, 1.3, 1800, 0.6, 'lowpass'); burst(t + 0.95, 0.5, 5000, 0.25, 'highpass'); thump(t + 1.0, 95, 1.0, 0.6); thump(t + 1.12, 70, 0.6, 0.5);
   }
+  // Birds leaving: a quick flutter of wings and a few alarm calls.
+  flutter(side) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime + 0.08, p = ctx.createStereoPanner(), out = ctx.createGain(); p.pan.value = side * 0.6; out.gain.value = 0.9; p.connect(out); out.connect(this.master);
+    for (let i = 0; i < 14; i++) {
+      const when = t + i * 0.035 + Math.random() * 0.015, s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s2.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 900 + Math.random() * 1400; f.Q.value = 2;
+      g.gain.setValueAtTime(0.35 * (1 - i / 16), when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
+      s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + 0.04);
+    }
+    for (let i = 0; i < 3; i++) { this._m(2600 + Math.random() * 1200, t + 0.1 + i * 0.12, 0.07, 'sine', 0.05, 9000, side * 0.6); }
+  }
   // Building up, floor by floor: a heavy "dun" for every floor, a little higher each time.
   floorUp(i, n, side = 0) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }

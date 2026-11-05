@@ -229,6 +229,18 @@ class WalkSound extends StreetSound {
     // The crash of branches and the trunk hitting the ground.
     burst(t + 0.95, 1.3, 1800, 0.6, 'lowpass'); burst(t + 0.95, 0.5, 5000, 0.25, 'highpass'); thump(t + 1.0, 95, 1.0, 0.6); thump(t + 1.12, 70, 0.6, 0.5);
   }
+  // Birds leaving: a quick flutter of wings and a few alarm calls.
+  flutter(side) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime + 0.08, p = ctx.createStereoPanner(), out = ctx.createGain(); p.pan.value = side * 0.6; out.gain.value = 0.9; p.connect(out); out.connect(this.master);
+    for (let i = 0; i < 14; i++) {
+      const when = t + i * 0.035 + Math.random() * 0.015, s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s2.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 900 + Math.random() * 1400; f.Q.value = 2;
+      g.gain.setValueAtTime(0.35 * (1 - i / 16), when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
+      s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + 0.04);
+    }
+    for (let i = 0; i < 3; i++) { this._m(2600 + Math.random() * 1200, t + 0.1 + i * 0.12, 0.07, 'sine', 0.05, 9000, side * 0.6); }
+  }
   // Building up, floor by floor: a heavy "dun" for every floor, a little higher each time.
   floorUp(i, n, side = 0) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
@@ -1605,13 +1617,8 @@ function windowResized() { resizeCanvas(windowWidth, windowHeight); }
  * street turns into a city: traffic instead of birds, music instead of wind. Build enough and the
  * last bird stops singing, and the card counts what it cost.
  */
-const START_AGE = 24, OWN_GOAL = 3;
+const START_AGE = 24;
 const RENT_WEEK = 380;     // the base weekly rent that town rents are scaled from
-const BASE_PRICE = [520000, 780000, 1600000, 2400000, 4800000];  // by district tier, inner city
-const ZONE_PRICE = 0.8, DEPOSIT = 0.1;                     // prices fall 20% per town out
-const GROWTH = [8, 3];                                      // % price rise per year (a year = half a lap walked), by rule
-const RENT_YIELD = [0.09, 0.05];   // tenants pay this share of a home's value a year
-const MOVED = [4, 3, 2, 2, 1];                              // households living in a lot, by tier
 // Six towns, one for each class. ← turns to a poorer town, → to a richer one. You start in the middle.
 // Each block of a town is a building type: a number is a district tier (0 shacks, 1 shops and
 // terraces, 2 mansions, 3 brick and glass, 4 towers); a word is a town's own type.
@@ -1633,46 +1640,24 @@ const STYLES_LOT = {
 };
 function townSlot(slot) { return TOWNS[zone].slots[slot]; }
 function chunkStyle(slot) { const v = townSlot(slot); return typeof v === 'string' ? v : null; }
-function deedName(L) { return L.style ? STYLES_LOT[L.style].name : DISTRICTS[L.tier].name; }
-function deedCol(L) { return L.style ? STYLES_LOT[L.style].col[0] : DISTRICTS[L.tier].stripe[0]; }
-function movedFrom(L) { return L.style ? STYLES_LOT[L.style].moved : MOVED[L.tier]; }
-const OWNER_COL = '#d4a017', HOUSE_COL = '#2e9e47', SHARE_COL = '#3f9e6a';
+const SHARE_COL = '#3f9e6a';
 
-let lifeAge = START_AGE, zone = START_ZONE, market = 1, rentPaid = 0, rentWeek = TOWNS[START_ZONE].rent, rentBase = RENT_WEEK;
+let lifeAge = START_AGE, zone = START_ZONE, market = 1, rentWeek = TOWNS[START_ZONE].rent, rentBase = RENT_WEEK;
 let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
-let ownedFromC = Infinity, home = null, ending = null, intro = true, landlordMode = false, lapStartT = 0;
-let rules = 1, firstRun = null, startSeed = null, emptyK = 1;
-let owned = [], rentIn = 0, movedOut = 0, walkedTotal = 0;
+let ownedFromC = Infinity, home = null, ending = null, intro = true;
+let rules = 1;   // always 1 in this world (the old two-round game is gone)
+let owned = [], walkedTotal = 0;
 const toasts = [];
-let soldBeat = null;   // the moment after you buy: who had to leave
-let evicted = [], lastBuyZ = 0, rentedAt = 0;   // Round 1's families, for Round 2
-const RENT_BUDGET = 230;   // what the evicted family can pay a week
-function meName() { return (firstRun && firstRun.me) || 'The Nguyens'; }
-function rentAsk(L) { return Math.round(TOWNS[zone].rent * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * L.priceK / 5) * 5; }
-function familyOf(L) { return FAMILIES[Math.abs(L.seed) % FAMILIES.length]; }
-const FAMILIES = ['The Nguyens', 'The Kellys', 'Mrs Brown', 'The Patels', 'The Wongs', 'The Okafors', 'Tom and Ana', 'The Russos', 'Old Mr Lee', 'The Haddads', 'Jess and her mum', 'The Murphys'];
-const LEAVING = ['We’ve lived here eleven years.', 'Where do we go now?', 'The kids’ school is just there.', 'We couldn’t match the price.', 'Two hours from work, now.', 'My mum is next door.', 'The landlord sold it.'];
-const ARRIVING = ['We can finally stay!', 'Hello, neighbour!', 'The kids can walk to school.', 'Ten minutes from work.'];
-// How alive the street still is: 1 = full of people, falling as families are moved out (Rule 1).
-function streetLife() { return rules === 2 ? 1 : Math.max(0.12, 1 - movedOut / 14) * emptyK; }
+// How alive the street is (1 = full of people); nothing empties it in this world.
+function streetLife() { return 1; }
 const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
-const moneyK = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(v >= 1e7 ? 1 : 2) + 'M' : '$' + Math.round(v / 1000) + 'k';
 const COMMUTE = [15, 20, 10, 35, 55, 95];   // minutes to work in the city, by town
-function commuteMin(zn = zone) { return COMMUTE[zn]; }
 function commuteShort(zn) { const m = COMMUTE[zn]; return m < 60 ? `${m} min to work` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} to work`; }
-function commuteText() { const m = commuteMin(); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; }
 function sayToast(text) { toasts.push({ text, t: clockT }); }
-// Under her rules the land tax keeps land prices down (Henry George), so homes cost less.
-function priceOf(L) { return TOWNS[zone].price * (L.style ? STYLES_LOT[L.style].priceK : 0.85 + L.tier * 0.1) * market * L.priceK; }
 function chunkTier(slot) { const v = townSlot(slot); return typeof v === 'string' ? STYLES_LOT[v].tier : v; }
 function rentFor(zn) { return Math.round(TOWNS[zn].rent * rentBase / RENT_WEEK); }
-// What a home you own is worth now, and what the bank will still lend you against them all.
-function valueOf(o) { return o.price * (market / o.mBuy) * o.lift; }
-function totalValue() { return owned.reduce((s, o) => s + valueOf(o), 0); }
-function rentOf(o) { return valueOf(o) * RENT_YIELD[rules - 1]; }
-function paydayIn() { const half = CHUNK_LEN * LAP_LEN / 2; return Math.round(half - modN(distanceWalked, half)); }
 
 /* ---------- Generated billboards ---------- */
 // The artwork's own slogans, in red bars of white type, on billboards and across the buildings.
@@ -1720,8 +1705,6 @@ function houseLife() {
     for (const L of ch.lots) {
       const mid = (L.z0 + L.z1) / 2, d = Math.hypot(mid - distanceWalked, EDGE_X + L.setback + 2); if (d > 24) { continue; }
       if (L.lifeAt === undefined) { L.lifeAt = clockT + Math.random() * 2.5; }
-      // Round 2: your old home. For a moment you hear it as it was.
-      if (rules === 2 && L.home && L.owned && !L.memDone && Math.abs(mid - distanceWalked) < 10) { L.memDone = true; const q = P(L.side * (EDGE_X + L.setback + 2), 1.5, mid); sound.life(lifeKind(L), 1.2, q.rx / (Math.abs(q.rz) + 4), true); }
       if (!ending && lived(L)) { near.push({ L, d, mid }); }
     }
   }
@@ -1735,13 +1718,15 @@ function houseLife() {
 }
 
 /* ---------- Every frame ---------- */
+// How built-up the street around you is, smoothed for the NATURE -> CITY bar (works with the sound off too).
+let devBar = 0;
 function boardUpdate(z) {
   updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
-  // Prices rise with time, and time is the walk: standing still, nothing changes.
+  const devNow = sound && sound.devK ? sound.devK : 0; devBar += (devNow - devBar) * (1 - Math.exp(-dt * 1.5));
+  // Time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
-  if (!paused && !intro && !ending && walked > 0 && walked < 5) { walkedTotal += walked; lifeAge = START_AGE + Math.floor(walkedTotal / 120); market *= 1 + GROWTH[rules - 1] / 100 * walked / YEAR_M; }
-  if (ending && ending.kind === 'rule1') { emptyK = Math.max(0.06, 1 - (clockT - ending.t) / 3); }
+  if (!paused && !intro && !ending && walked > 0 && walked < 5) { walkedTotal += walked; lifeAge = START_AGE + Math.floor(walkedTotal / 120); }
   for (const ch of chunks.values()) {
     evolveStreet(ch);
     // People carrying their boxes away, and new neighbours walking in.
@@ -1751,131 +1736,32 @@ function boardUpdate(z) {
       else if (p.arrive) { if (p.z > p.tz) { p.z = Math.max(p.tz, p.z - 1.3 * dt); p.ph += dt * 4; } else { p.arrive = false; } }
     }
   }
-  // Rule 1: investors buy plots out from under you, and leave them empty.
-  for (const ch of chunks.values()) {
-    for (const L of ch.lots) {
-      if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
-        const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
-        Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], sign: true });
-        preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
-        sound.jail(); if (!toasts.some(t => t.text.startsWith('An investor') && clockT - t.t < 3)) { sayToast('An investor got there first: luxury apartments, 0 affordable.'); }
-      }
-    }
-  }
-  if (!ending && rules === 1 && owned.length >= OWN_GOAL && clockT - owned[owned.length - 1].t > 4) { endWalk('rule1'); }
   if (builtCount >= nextThought) { sayToast(THOUGHTS[Math.floor(nextThought / 10 - 1) % THOUGHTS.length]); nextThought += 10; }
-  // Round 2: nothing here is affordable, so at the next corner you are turned further out.
-  // On the old street that happens only after you have walked past every home you bought.
-  if (rules === 2 && !ending && !intro && !turnAnim && !sideSt && !rentedAt && zone < ZONE_NAMES.length - 1) {
-    const c = Math.floor(distanceWalked / CHUNK_LEN) + 1, zc = c * CHUNK_LEN + CROSS_W / 2, passZ = firstRun && zone === firstRun.zone ? firstRun.passZ : -Infinity;
-    if (zc - distanceWalked < 26 && zc > passZ) { queuedTurn = -1; makeSide(-1, c); sayToast(`Nothing you can pay for here. Further out: ${ZONE_NAMES[zone + 1]}.`); }
-  }
 }
-// Pay day: twice a lap, a year each time.
-function onPassGo() { }   // no pay days: the walk is about who lives where, not about money
-function onChance(kind) {
-  if (kind === 'boom') { market *= 1.08; sayToast('Interest rates cut! Everything for sale just went up 8%.'); }
-  if (kind === 'crash') { rentWeek += 40; sayToast(`Rates rise. Your landlord passes it on: rent ${money(rentWeek)}/wk.`); }
-}
+// Hooks the sketch calls on GO and Chance squares: nothing happens on them in this world.
+function onPassGo() { }
+function onChance(kind) { }
 
 /* ---------- The plot beside you ---------- */
-function plotHere(z) {
-  if (turnAnim || intro || ending) { return null; }
-  let best = null;
-  for (const ch of chunks.values()) {
-    for (const L of ch.lots) {
-      if (!L.forSale) { continue; }
-      const d = Math.abs((L.z0 + L.z1) / 2 - z);
-      if (d < 10 && (!best || d < best.d)) { best = { L, d }; }
-    }
-  }
-  return best ? best.L : null;
-}
-function actionFor(L) {
-  if (!L) { return null; }
-  if (rules === 1) { return { label: 'E  ·  Buy it', ok: true }; }
-  if (rules === 2) { const a = rentAsk(L); return { label: `${money(a)} a week`, ok: a <= RENT_BUDGET }; }
-  return null;
-}
+function plotHere(z) { return null; }   // no plots for sale: nothing to turn and face
 function useHere() { if (intro) { intro = false; } }
-function buyLot(L) {
-  const price = priceOf(L);
-  const first = !home, ch = chunks.get(Math.floor(L.z0 / CHUNK_LEN)), mid = (L.z0 + L.z1) / 2, n = movedFrom(L);
-  const o = { key: L.memoryKey, price, mBuy: market, lift: 1, tier: L.tier, zone, home: first, t: clockT };
-  owned.push(o);
-  if (first) { home = { price, t: clockT, commute: commuteText(), zone, lifeAge }; }
-  Object.assign(L, { forSale: false, owned: true, home: first, investorAt: -1, thud: false });
-  // Your own home stays a real house and rises again as yours. Under Rule 1 every other home you buy
-  // stops being a home: it sinks, and a plastic board-game piece drops onto the lot.
-  if (rules === 1 && !first) { L.piece = { t0: clockT + 0.5, t: clockT + 1.25, kind: owned.length >= OWN_GOAL ? 'hotel' : 'house', loud: true }; }
-  else { L.born = clockT + 0.3; }
-  if (ch && rules === 1) { ch.props = ch.props.filter(p => p.lotRef !== L); }
-  if (rules === 1) {
-    if (!first) { L.color = mixHex(L.color, OWNER_COL, 0.5); }
-    // The people who lived here pack up and walk away down the street.
-    movedOut += n;
-    if (ch) {
-      const r = rngN(L.seed + 11);
-      const say = pickN(r, LEAVING);
-      for (let k = 0; k < n + 1; k++) { ch.props.push({ kind: 'person', mover: true, box: k % 3 !== 2, x: L.side * (EDGE_X - 0.9 - (k % 2) * 0.45), z: mid - 1.5 + k * 0.9, tone: r(), h: mixN(1.5, 1.85, r()), ph: r() * 6, residentRank: 0, born: clockT - 5, until: clockT + 25, say: k === 0 ? say : null, sayT: clockT + 0.6 }); }
-      // Everything else for sale on this block jumps in price, and the homes you own here are worth more.
-      for (const M of ch.lots) { if (M.forSale) { M.priceK *= 1.15; } }
-      // ...including the homes you own here, the one you just bought too: the bank will lend you more against them.
-      for (const q of owned) { if (q.key && q.key.split(':')[1] === String(ch.slot) && q.zone === zone) { q.lift *= 1.07; } }
-    }
-    landlordMode = owned.length >= 2;
-    evicted.push(familyOf(L)); lastBuyZ = Math.max(lastBuyZ, L.z1);
-    soldBeat = { t: clockT, stamp: 'SOLD', col: [200, 50, 40], l1: 'You won a home. A family lost theirs.', l2: 'The city congratulates you.' };
-    if (sound.evict) { setTimeout(() => sound.evict(), 350); }
-  }
-  preserveLot(L);
-}
 function endWalk(kind) {
   if (ending) { return; }
   ending = { kind, t: clockT }; sound.go(); baseNight = 0.25; nightTarget = baseNight;
 }
-function endWalkNow(kind) { ending = { kind, t: clockT }; sound.go(); baseNight = kind === 'rule1' ? 0.6 : 0.15; nightTarget = baseNight; }
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
-  lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
-  owned = []; rentIn = 0; movedOut = 0; walkedTotal = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0; boardT0 = clockT; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
-  baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0; soldBeat = null;
+  lifeAge = START_AGE; zone = START_ZONE; market = 1; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null;
+  owned = []; walkedTotal = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
+  baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
-function restartWalk() { rules = 1; firstRun = null; seed += 97; startSeed = seed; resetLife(); }
-// Her other rules, on the very same street.
-function startRule2() {
-  // The homes you bought, and the investors' towers, are still there in Round 2.
-  const keep = [...streetMemory.entries()].filter(([, v]) => v.owned || v.sold);
-  // Round 2 starts in the town of the first home you bought, and walks you past every home you bought there.
-  const z0 = owned.length && owned[0].zone < ZONE_NAMES.length - 2 ? owned[0].zone : START_ZONE, slots = owned.filter(o => o.zone === z0 && o.key).map(o => Number(o.key.split(':')[1]));
-  firstRun = { owned: owned.length, moved: movedOut, evicted: evicted.slice(), me: evicted[0] || 'The Nguyens', zone: z0, passZ: slots.length ? (Math.max(...slots) + 1) * CHUNK_LEN - 20 : -Infinity };
-  rules = 2; if (startSeed !== null) { seed = startSeed; } resetLife(); night = 0; nightTarget = 0;
-  zone = z0; rentWeek = rentFor(zone); buildSkyline();
-  for (const [k, v] of keep) { streetMemory.set(k, v); }
-}
+function restartWalk() { seed += 97; resetLife(); }
 
-/* ---------- Turning: left to a cheaper town further out, right to a richer one closer in ---------- */
-function nextCrossing(z) { const local = modN(z, CHUNK_LEN); return local < CROSS_W - 1 ? 0 : CHUNK_LEN - local + 2; }
-function atCrossing(z) { const local = modN(z, CHUNK_LEN); return local > 0.5 && local < CROSS_W - 0.5; }
-// Pressing ← or → picks the next corner. From then on the town you are turning into is
-// already there down the cross street. At the corner you turn on the spot, with no cut: the
-// old town's corner buildings sink away while the new town's rise, and you walk on.
+/* ---------- Side streets ---------- */
+// The sketch draws a side street when one exists. In this world you never turn (← / → chop), so
+// sideSt stays null and these return early; they are kept because the sketch calls them.
 let sideSt = null;   // the side street: { chunks, zone, dir, zc (its crossing in this street), s0 (that crossing in its own street), c }
-function tryTurn(dir) {
-  if (turnAnim || intro || ending || nameBox) { return; }
-  if (dir > 0 && zone === 0) { sayToast('Nowhere richer than this.'); return; }
-  if (dir < 0 && zone === ZONE_NAMES.length - 1) { sayToast('Nowhere poorer than this.'); return; }
-  const c = Math.floor(distanceWalked / CHUNK_LEN) + (modN(distanceWalked, CHUNK_LEN) < CROSS_W / 2 + 1 ? 0 : 1);
-  queuedTurn = dir; makeSide(dir, c);
-  const ahead = Math.max(0, c * CHUNK_LEN + CROSS_W / 2 - distanceWalked);
-  sayToast(`${dir < 0 ? '←' : '→'} ${ZONE_NAMES[zone - dir]}`);
-}
-function makeSide(dir, c) {
-  const zc = c * CHUNK_LEN + CROSS_W / 2;
-  if (sideSt && sideSt.dir === dir && sideSt.c === c) { return; }
-  sideSt = { chunks: new Map(), zone: zone - dir, dir, zc, s0: zc, c, t: clockT, turning: false, fromZ: zc + CROSS_W / 2 - 0.5, minLot: zc + 34 };
-}
 // The camera, seen from inside the side street's own coordinates.
 function camInSide(w) {
   const dz = cam.z - w.zc;
@@ -1953,67 +1839,11 @@ function finishTurn() {
   stepSpeed = 0; dashTarget = null; streetT = clockT - 5; buildSkyline();
   sayToast(`${ZONE_NAMES[zone]} · ${TOWNS[zone].cls} · ${commuteShort(zone)}`);
 }
-function newStreet() {
-  const c = Math.floor(distanceWalked / CHUNK_LEN);
-  chunks.clear(); firedCasinos.clear(); visitedJails.clear(); sideSt = null;
-  distanceWalked = c * CHUNK_LEN + 3; lastChunk = c; lastTier = -1; ownedFromC = c + 1;
-  stepSpeed = 0; dashTarget = null; streetT = clockT; buildSkyline();
-}
 
 /* ---------- Drawing on the street ---------- */
-function drawForSale(L) {
-  const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
-  if (base.rz < 1.5 || base.rz > FAR_Z * 0.8) { return; }
-  const k = base.k, w = 3.4 * k, h = 1.9 * k, top = base.y - 3 * k;
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(mid) * 0.8;
-  ctx.fillStyle = '#5a4030'; ctx.fillRect(base.x - 0.07 * k, top, 0.14 * k, 3 * k);
-  ctx.fillStyle = '#fffaee'; ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.06 * k);
-  ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
-  ctx.fillStyle = rules === 2 && rentAsk(L) <= RENT_BUDGET ? '#3f6fa8' : '#c8322a'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h * 0.34);
-  if (w > 26) {
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const r2 = rules === 2;
-    ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText(r2 ? 'FOR RENT' : 'FOR SALE', base.x, top - h * 0.2 + h * 0.17);
-    ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(r2 ? `${money(rentAsk(L))}/wk` : moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
-    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(r2 ? (L.applicants ? `${L.applicants} applied` : 'apply now') : 'a lovely family home', base.x, top - h * 0.2 + h * 0.8);
-  }
-  ctx.restore();
-}
-// A street sign at each crossing: left to a cheaper town, right to a richer one.
-function drawTurnSign(q, p) {
-  const k = q.k; if (k < 3) { return; }
-  const w = 3.4 * k, h = 0.55 * k, top = q.y - 3.4 * k, out = zone < ZONE_NAMES.length - 1 ? ZONE_NAMES[zone + 1] : null, inn = zone > 0 ? ZONE_NAMES[zone - 1] : null;
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
-  ctx.fillStyle = '#3a4a3a'; ctx.fillRect(q.x - 0.06 * k, top - 0.2 * k, 0.12 * k, 3.6 * k);
-  const plate = (y, text, col, left) => {
-    ctx.fillStyle = col; ctx.beginPath(); const x0 = left ? q.x - w : q.x, tip = left ? x0 : x0 + w;
-    ctx.moveTo(left ? x0 + h * 0.5 : x0, y); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y); ctx.lineTo(left ? x0 + w : tip, y + h / 2); ctx.lineTo(left ? x0 + w : x0 + w - h * 0.5, y + h); ctx.lineTo(left ? x0 + h * 0.5 : x0, y + h); ctx.lineTo(left ? tip : x0, y + h / 2); ctx.closePath(); ctx.fill();
-    if (k > 8) { ctx.fillStyle = '#fff'; ctx.font = `bold ${h * 0.42}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, left ? q.x - w / 2 + h * 0.2 : q.x + w / 2 - h * 0.2, y + h / 2 + 1, w * 0.85); }
-  };
-  if (out) { plate(top, `${out} · ${commuteShort(zone + 1)}`, '#3f8fd6', true); }
-  if (inn) { plate(top + h * 1.2, `${inn} · ${commuteShort(zone - 1)}`, '#c8322a', false); }
-  ctx.restore();
-}
-// The satire drawn onto the buildings themselves (called from drawLot, inside the rise scope).
-// Empty investor towers get a red neon sign: 0 AFFORDABLE.
-function satireOnLot(L, x, z0, z1, H) {
-  if (L.special || L.piece || intro) { return; }
-  if (L.vacant) {
-    const on = Math.sin(clockT * 3 + L.seed) > -0.6;
-    facadeSign(L, x, z0, L.z0 + (L.z1 - L.z0) * 0.25, L.z1 - (L.z1 - L.z0) * 0.25, H * 0.3, H * 0.3 + 1.6, on ? '#2a0a0a' : '#1a1414', on ? '#ff4a3a' : '#5a2a2a', 'FORMERLY: FOREST', on ? '#ff3020' : null);
-    return;
-  }
-  // (Homes no longer wear price tags: the street had too much on it.)
-}
-// People queueing for an open home.
-function drawOpenHome(q, p) {
-  const k = q.k; if (k < 2 || emptyK < 0.7 || (rules === 1 && movedOut >= 6)) { return; }
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
-  ctx.fillStyle = '#2a2a30'; ctx.fillRect(q.x - 0.05 * k, q.y - 2.6 * k, 0.1 * k, 2.6 * k);
-  ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - 1 * k, q.y - 2.6 * k, 2 * k, 0.8 * k);
-  if (k > 14) { ctx.fillStyle = '#fff'; ctx.font = `bold ${0.32 * k}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OPEN HOME', q.x, q.y - 2.32 * k); ctx.font = `${0.2 * k}px Georgia, serif`; ctx.fillText(`${p.n * 4} registered`, q.x, q.y - 2.02 * k); }
-  ctx.restore();
-}
+function drawForSale(L) { }
+function drawTurnSign(q, p) { }
+function drawOpenHome(q, p) { }
 // A slogan painted straight onto a wall by hand, in red, with drips: the artwork talking.
 function paintSlogan(L, x, z0, H) {
   if (!L.art || L.owned || L.vacant || L.piece) { return; }
@@ -2043,36 +1873,10 @@ function paintSlogan(L, x, z0, H) {
   });
   ctx.restore();
 }
-// Monopoly's view of a home: a plastic piece on a coloured square. The real house sinks first.
-const PIECE_COL = { house: '#1fb04a', hotel: '#e0302a', grey: '#a29d94' };
-function toyTone(col, z, k) { return mixHex(toneN(col, z, k), shadeN(col, k), 0.6); }   // plastic keeps its colour through the haze
-function pieceSink(L) { const pc = L.piece; return pc ? 1 - easeN((clockT - pc.t0) / 0.7) : 1; }
-function drawBoardSquare(L) {
-  const pc = L.piece, a = easeN((clockT - pc.t0) / 0.5); if (a <= 0) { return; }
-  const z0 = clipZ(L.z0 + 0.3), z1 = L.z1 - 0.3; if (z1 <= z0) { return; }
-  const xa = L.side * (EDGE_X + 0.2), xb = L.side * (EDGE_X + Math.max(6, L.setback + L.depth * 0.95)), xs = L.side * (EDGE_X + 1.6), mz = midN(z0, z1);
-  polyN([P(xa, 0.06, z0), P(xb, 0.06, z0), P(xb, 0.06, z1), P(xa, 0.06, z1)], rgbaN(mixHex('#e9efe0', '#3a3448', night * 0.5), a * (1 - fogFor(mz) * 0.7)), rgbaN('#2a2420', 0.6 * a), 1.5);
-  polyN([P(xa, 0.07, z0), P(xs, 0.07, z0), P(xs, 0.07, z1), P(xa, 0.07, z1)], rgbaN(pc.kind === 'grey' ? '#8a857e' : deedCol(L), a * (1 - fogFor(mz) * 0.7)), rgbaN('#2a2420', 0.6 * a), 1.5);
-}
-function drawToyPiece(L) {
-  const pc = L.piece; if (clockT < pc.t - 0.55 || (L.sinkK !== undefined && L.sinkK < 0.5)) { return; }
-  const u = constrain((clockT - pc.t + 0.55) / 0.55, 0, 1), land = clockT - pc.t;
-  if (land >= 0 && !pc.hit) { pc.hit = true; if (pc.loud && sound.clack) { sound.clack(pc.kind); } }
-  const squash = land > 0 && land < 0.3 ? 1 - Math.sin(land / 0.3 * PI) * 0.16 : 1, y0 = (1 - u * u) * 24;
-  const hotel = pc.kind === 'hotel', len = L.z1 - L.z0;
-  const pl = Math.min(len * 0.85, hotel ? 18 : 10), d = hotel ? 9 : 8.5, mid = (L.z0 + L.z1) / 2, za = mid - pl / 2, zb = mid + pl / 2;
-  const x = L.side * (EDGE_X + 2.4), xo = x + L.side * d, xm = (x + xo) / 2;
-  const hb = (hotel ? 9 : 7) * squash, apex = hb + (hotel ? 3 : 5) * squash, z0 = clipZ(za); if (zb <= z0) { return; }
-  const col = PIECE_COL[pc.kind], edge = 'rgba(20,14,10,0.45)', mz = midN(z0, zb);
-  if (u > 0.2) { const sh = 0.4 * u; polyN([P(x, 0.08, z0), P(xo + L.side * 1.2, 0.08, z0), P(xo + L.side * 1.2, 0.08, zb + 1), P(x, 0.08, zb + 1)], `rgba(20,14,10,${sh * (1 - fogFor(mz))})`); }
-  polyN(wallQuad(x, z0, x, zb, y0, y0 + hb), toyTone(col, mz, 0.95), edge, 1.2);
-  polyN(wallQuad(x - L.side * 0.03, z0, x - L.side * 0.03, zb, y0, y0 + hb * 0.12), 'rgba(0,0,0,0.18)');
-  polyN(wallQuad(x - L.side * 0.03, z0, x - L.side * 0.03, zb, y0 + hb * 0.74, y0 + hb * 0.84), 'rgba(255,255,255,0.3)');
-  if (za > cam.z + NEAR_Z) { polyN([P(x, y0, za), P(xo, y0, za), P(xo, y0 + hb, za), P(xm, y0 + apex, za), P(x, y0 + hb, za)], toyTone(col, za, 0.62), edge, 1.2); }
-  polyN([P(x, y0 + hb, z0), P(x, y0 + hb, zb), P(xm, y0 + apex, zb), P(xm, y0 + apex, z0)], toyTone(col, mz, 1.2), edge, 1.2);
-  const ra = 0.5, rb = 0.68, hx = (t) => mixN(x, xm, t), hy = (t) => y0 + mixN(hb, apex, t);
-  polyN([P(hx(ra), hy(ra), z0), P(hx(ra), hy(ra), zb), P(hx(rb), hy(rb), zb), P(hx(rb), hy(rb), z0)], 'rgba(255,255,255,0.32)');
-}
+// Hooks the sketch calls for game pieces and kerbside things: none in this world.
+function pieceSink(L) { return 1; }
+function drawBoardSquare(L) { }
+function drawToyPiece(L) { }
 
 
 // People on the pavement: residents, queues, people moving out with their boxes, new neighbours.
@@ -2088,7 +1892,7 @@ const SAY = {
   moving: ['Priced out too?', 'Forty people at the last inspection.', 'Our landlord sold up as well.', 'Try further out. That’s what we did.', 'Need a hand with that box?'],
   shared: ['Morning, neighbour!', 'The kids play outside again.', 'Nice to have you here.', 'The land tax fixed the park.']
 };
-function moodN() { return rules === 2 ? 'moving' : owned.length === 0 ? 'renter' : owned.length < 3 ? 'wary' : 'cold'; }
+function moodN() { return owned.length === 0 ? 'renter' : owned.length < 3 ? 'wary' : 'cold'; }
 function noticeYou(q, p) {
   if (p.mover || p.arrive || p.talked || intro || ending || turnAnim) { return; }
   const dz = p.z - distanceWalked; if (dz < 1.5 || dz > 8 || q.k < 3 || q.x < 40 || q.x > width - 40) { return; }
@@ -2143,24 +1947,11 @@ function speechBubble(x, y, txt, a, col) {
   ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
   ctx.restore();
 }
-// Rule 1: the street loses its colour as its families are moved out.
+// A light grey wash over the street (streetLife() is always 1 here).
 function drawStreetLife() {
   const a = 0.3 + (1 - streetLife()) * 0.8;
   ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = a; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
 }
-// Small icons for the HUD and the opening card.
-function houseIcon(x, y, sz, col, filled) {
-  push(); stroke(col); strokeWeight(Math.max(1.5, sz * 0.09)); if (filled) { fill(col); } else { noFill(); }
-  beginShape(); vertex(x, y + sz); vertex(x, y + sz * 0.45); vertex(x + sz * 0.5, y); vertex(x + sz, y + sz * 0.45); vertex(x + sz, y + sz); endShape(CLOSE);
-  if (filled) { noStroke(); fill(255, 250, 238); rect(x + sz * 0.38, y + sz * 0.62, sz * 0.24, sz * 0.38); }
-  pop();
-}
-function personIcon(x, y, sz, col, box) {
-  push(); noStroke(); fill(col); circle(x + sz * 0.5, y + sz * 0.18, sz * 0.36); rect(x + sz * 0.22, y + sz * 0.4, sz * 0.56, sz * 0.6, sz * 0.15);
-  if (box) { fill('#c09060'); rect(x + sz * 0.05, y + sz * 0.5, sz * 0.9, sz * 0.4); }
-  pop();
-}
-function iconRow(x, y, n, max, sz, drawOne) { let i = 0; for (; i < Math.min(n, max); i++) { drawOne(x + i * (sz + 4), y); } if (n > max) { fill(200, 50, 40); textSize(12); textAlign(LEFT, CENTER); text(`+${n - max}`, x + i * (sz + 4) + 2, y + sz / 2); } }
 // A bed of flowers in front of a shared-street home.
 function drawFlowers(q, p) {
   const k = q.k; if (k < 2) { return; }
@@ -2174,23 +1965,7 @@ function drawFlowers(q, p) {
   }
   ctx.restore();
 }
-// The sign outside a home you own and rent out.
-function drawYours(L) {
-  if (!L.owned) { return; }
-  const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X + 1.4), base = P(x, 0, mid);
-  if (base.rz < 1.5 || base.rz > FAR_Z * 0.8) { return; }
-  const k = base.k, w = 3.4 * k, h = 1.6 * k, top = base.y - 3 * k, o = owned.find(q => q.key === L.memoryKey);
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(mid) * 0.8;
-  ctx.fillStyle = '#5a4030'; ctx.fillRect(base.x - 0.07 * k, top, 0.14 * k, 3 * k);
-  ctx.fillStyle = '#2a1e18'; ctx.fillRect(base.x - w / 2, top - h * 0.2, w, h);
-  ctx.strokeStyle = rules === 1 ? OWNER_COL : '#c8322a'; ctx.lineWidth = Math.max(1, 0.08 * k); ctx.strokeRect(base.x - w / 2, top - h * 0.2, w, h);
-  if (w > 26) {
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${h * 0.26}px Georgia, serif`; ctx.fillStyle = rules === 1 ? '#ffe9a8' : '#ffc8c0'; ctx.fillText(rules === 2 ? 'OWNED BY YOU' : L.home ? 'YOUR HOME' : 'YOURS · LET', base.x, top - h * 0.2 + h * 0.3);
-    if (o && !L.home && rules === 1) { ctx.font = `${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#e8dcc8'; ctx.fillText(`tenant pays ${money(rentOf(o) / 52)}/wk`, base.x, top - h * 0.2 + h * 0.66, w * 0.9); }
-  }
-  ctx.restore();
-}
+function drawYours(L) { }
 
 /* ---------- HUD ---------- */
 function drawBoardHud() {
@@ -2209,17 +1984,16 @@ function drawBoardHud() {
     textSize(11); fill(60, 45, 36); text('BUILDINGS YOU BUILT', bx + bw, y + 38, half - bw);
     stroke(220, 205, 190); strokeWeight(1); line(x + 14 + half + 2, y + 34, x + 14 + half + 2, y + 74); noStroke();
     // Nature to city, as a bar: how built-up the street around you is.
-    const dev = sound && sound.devSmooth !== undefined ? sound.devSmooth : 0, by = y + 86, bw2 = w - 28;
+    const dev = Math.max(0, Math.min(1, devBar)), by = y + 86, bw2 = w - 28;
     fill('#3f7a3a'); rect(x + 14, by, bw2, 8, 4); fill(90, 90, 100); rect(x + 14 + bw2 * (1 - dev), by, bw2 * dev, 8, 0, 4, 4, 0);
     textSize(9); textStyle(BOLD); fill(63, 122, 58); text('NATURE', x + 14, by + 11); textAlign(RIGHT, TOP); fill(90, 90, 100); text('CITY', x + 14 + bw2, by + 11); textStyle(NORMAL);
-    const beat = soldBeat && clockT - soldBeat.t < 2.4;
     for (let i = toasts.length - 1; i >= 0; i--) {
       const t = toasts[i], a2 = clockT - t.t; if (a2 > 4.2) { toasts.splice(i, 1); continue; }
       drawingContext.globalAlpha = easeN(a2 / 0.3) * (1 - easeN((a2 - 3.6) / 0.6));
       textStyle(ITALIC); textSize(16); fill(255); stroke(0, 140); strokeWeight(3); textAlign(CENTER, CENTER); text(t.text, width / 2, height - 146 - (toasts.length - 1 - i) * 26);
       noStroke(); drawingContext.globalAlpha = 1; textStyle(NORMAL);
     }
-    if (!beat) { drawNextBar(); }
+    drawNextBar();
     // What the street sounds like, bottom left.
     if (sound && sound.style && typeof MUSIC_NAME !== 'undefined') {
       const on = sound.enabled && sound.context && sound.context.state === 'running', label = on ? `♪  ${MUSIC_NAME[sound.style]}` : '♪  Click for sound';
@@ -2227,7 +2001,6 @@ function drawBoardHud() {
       fill(255); textAlign(LEFT, CENTER); text(label, 28, height - 33); textStyle(NORMAL);
     }
   }
-  if (!intro && !ending) { drawSoldBeat(); }
   if (!intro) { drawHandPanel(); }
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'built') {
@@ -2253,39 +2026,8 @@ function drawOpening() {
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
-// Round 2: you carry your things in a moving box, in front of you as you walk.
-function drawCarryBox() {
-  const w = Math.min(340, width * 0.38), h = w * 0.55, walk = Math.min(1, Math.abs(stepSpeed));
-  const bob = Math.abs(Math.sin(stepPhase)) * 7 * walk, x = width / 2 - w / 2 + Math.sin(stepPhase * 0.5) * 4 * walk, y = height - h * 0.8 + bob;
-  push(); noStroke();
-  fill(0, 45); rect(x + 10, y + 12, w, h, 4);
-  fill('#c39565'); rect(x, y, w, h, 4);
-  fill('#a8784a'); rect(x, y, w, h * 0.14, 4, 4, 0, 0);
-  fill('#e8d8b0'); rect(x, y + h * 0.14, w, h * 0.08);
-  // Written on the box in marker: whose things these are.
-  fill(70, 45, 30); textFont('Georgia'); textStyle(BOLD); textAlign(CENTER, CENTER);
-  const label = 'EVERYTHING WE OWN'; textSize(w * 0.08); textSize(Math.min(w * 0.08, w * 0.08 * (w * 0.78) / textWidth(label))); text(label, x + w / 2, y + h * 0.36);
-  textStyle(NORMAL); textSize(w * 0.05); text('this side up', x + w / 2, y + h * 0.5);
-  fill('#d9a882'); ellipse(x + w * 0.03, y + h * 0.4, w * 0.12, w * 0.19); ellipse(x + w * 0.97, y + h * 0.4, w * 0.12, w * 0.19);
-  pop();
-}
-// Just after you buy: a stamp, and the name of who had to leave (or who moved in).
-// Your homes go up in value every second, so the bank will lend you more: coins fly from each
-// home you own to your money, and the number ticks up while you stand there.
-const YEAR_M = 240; let lastWalkZ = 0;   // half a lap (48 m x 10 / 2) is a year
-function drawSoldBeat() {
-  if (!soldBeat) { return; }
-  const dur = soldBeat.dur || 4, age = clockT - soldBeat.t; if (age > dur) { soldBeat = null; return; }
-  const a = Math.min(1, age / 0.15, (dur - age) / 0.6), pop0 = 1 + Math.max(0, 0.4 - age) * 1.5, cx = width / 2, cy = height * 0.36;
-  push(); drawingContext.globalAlpha = a; translate(cx, cy); rotate(-0.08); scale(pop0);
-  const col = color(...soldBeat.col); textFont('Georgia'); textStyle(BOLD); textSize(46); const sw = textWidth(soldBeat.stamp) + 60;
-  noFill(); stroke(col); strokeWeight(5); rect(-sw / 2, -36, sw, 72, 8);
-  noStroke(); fill(col); textAlign(CENTER, CENTER); text(soldBeat.stamp, 0, 2);
-  pop(); push(); drawingContext.globalAlpha = a; textFont('Georgia'); textAlign(CENTER, CENTER);
-  textStyle(BOLD); textSize(20); const tw = Math.max(textWidth(soldBeat.l1), (textSize(14), textWidth(soldBeat.l2))) + 40; textSize(20);
-  noStroke(); fill(30, 20, 16, 200); rect(cx - tw / 2, cy + 52, tw, 58, 10); fill(255); text(soldBeat.l1, cx, cy + 70); textStyle(ITALIC); textSize(14); fill(255, 220, 200); text(soldBeat.l2, cx, cy + 94);
-  pop();
-}
+let lastWalkZ = 0;   // distance at the last frame: time passes only as you walk
+// A centred card: the opening and the ending.
 function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
   if (a <= 0.001) { return; }
   push(); drawingContext.globalAlpha = a; noStroke();
@@ -2302,121 +2044,7 @@ function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
 }
 
 
-/* ---------- The board: the opening dive, and the city seen from above at the end ---------- */
-// A board of 40 squares in the order of the towns, cheap to dear from GO. The opening starts
-// above it and dives into the Leafy Suburbs square, which becomes the street. At the end the
-// camera rises out of the street and the whole city is a board again.
-const BOARD_ZONE_COL = ['#8a4a9a', '#2e9e47', '#d4a017', '#3f8fd6', '#e06a9a', '#8b5a2b'];
-const BOARD_CELLS = [
-  'GO', 5, 5, 'RENT UP', 5, 5, 'LEASE ENDS', 4, 4, 4,
-  'PUSHED OUT', 4, 'INSPECTION', 3, 3, 'RENT UP', 3, 3, 3, 'NO KIDS',
-  'WAITING LIST', 2, 2, 'RENT UP', 2, 2, 1, 1, 'BIDDING WAR', 1,
-  'EVICTED', 0, 0, 'INVESTOR', 0, 'VACANT', 'VACANT', 'INVESTOR', 'VACANT', 'VACANT'
-];
-let boardT0 = 0;   // when the opening dive started
-function cellXY(i) {
-  // Board units: the board is 1100 x 1100, each square 100. GO is the bottom-right corner, play runs clockwise.
-  if (i <= 10) { return [1000 - i * 100, 1000]; }
-  if (i <= 20) { return [0, 1000 - (i - 10) * 100]; }
-  if (i <= 30) { return [(i - 20) * 100, 0]; }
-  return [1000, (i - 30) * 100];
-}
-function firstCell(zn) { return BOARD_CELLS.indexOf(zn); }
-function boardIntroOn() { return false; }
-// mode: 'intro' (colourful, homes on every square), 'won' (grey, sold, only your pieces), 'out' (your path out to The Fringe)
-function drawBoardScene(mode, zoomK, alpha) {
-  if (alpha <= 0.001) { return; }
-  const target = mode === 'won' && owned.length ? firstCell(owned[0].zone) : mode === 'out' ? firstCell(5) : firstCell(START_ZONE);
-  const [tx0, ty0] = cellXY(target), tx = tx0 + 50, ty = ty0 + 50;
-  const full = Math.min(width, height) * 0.86 / 1100, close = Math.max(width, height) * 1.25 / 100;
-  const e = zoomK, sc = Math.exp(mixN(Math.log(full), Math.log(close), e));
-  const keep = full * (1 - e) / sc, cx = tx - (tx - 550) * keep, cy = ty - (ty - 550) * keep, tilt = mixN(0.62, 1, e), rot = mixN(-0.32, 0, e);
-  const grey = mode === 'won';
-  ctx.save(); ctx.globalAlpha = alpha;
-  ctx.fillStyle = grey ? '#2a2a2c' : '#2f3a34'; ctx.fillRect(0, 0, width, height);
-  ctx.translate(width / 2, height / 2); ctx.scale(sc, sc * tilt); ctx.rotate(rot); ctx.translate(-cx, -cy);
-  // The board itself, with a shadow under it.
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(18, 26, 1100, 1100);
-  ctx.fillStyle = grey ? '#c9c7c2' : '#d8ead2'; ctx.fillRect(0, 0, 1100, 1100);
-  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, 1100, 1100); ctx.strokeRect(100, 100, 900, 900);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const mine = owned.map(o => o.zone); let placed = 0;
-  for (let i = 0; i < 40; i++) {
-    const [x, y] = cellXY(i), v = BOARD_CELLS[i], corner = i % 10 === 0;
-    ctx.fillStyle = grey ? '#d6d3cc' : '#f2f6ea'; ctx.fillRect(x, y, 100, 100); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, 100, 100);
-    if (typeof v === 'number') {
-      // A town's square: its colour bar on the inner edge, its name and price.
-      const col = grey ? '#8a8680' : BOARD_ZONE_COL[v], side = i < 10 ? 0 : i < 20 ? 1 : i < 30 ? 2 : 3;
-      ctx.fillStyle = col;
-      if (side === 0) { ctx.fillRect(x, y, 100, 24); } else if (side === 1) { ctx.fillRect(x + 76, y, 24, 100); } else if (side === 2) { ctx.fillRect(x, y + 76, 100, 24); } else { ctx.fillRect(x, y, 24, 100); }
-      ctx.fillStyle = '#1a1a1a'; ctx.font = 'bold 11px Georgia, serif'; ctx.fillText(ZONE_NAMES[v].toUpperCase(), x + 50, y + 46, 70);
-      ctx.font = '11px Georgia, serif'; ctx.fillText(moneyK(TOWNS[v].price), x + 50, y + 62, 70);
-      const k = mine.indexOf(v);
-      if (mode === 'won' && k >= 0) {
-        // Your pieces: the only colour left on the board.
-        mine.splice(k, 1); placed++; ctx.fillStyle = placed >= 3 ? '#e0302a' : '#1fb04a';
-        ctx.beginPath(); ctx.moveTo(x + 36, y + 96); ctx.lineTo(x + 36, y + 84); ctx.lineTo(x + 50, y + 73); ctx.lineTo(x + 64, y + 84); ctx.lineTo(x + 64, y + 96); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.5; ctx.stroke();
-      } else if (mode === 'won') {
-        ctx.save(); ctx.translate(x + 50, y + 82); ctx.rotate(-0.25); ctx.strokeStyle = '#c8322a'; ctx.lineWidth = 2; ctx.strokeRect(-26, -9, 52, 18); ctx.fillStyle = '#c8322a'; ctx.font = 'bold 12px Georgia, serif'; ctx.fillText('SOLD', 0, 1); ctx.restore();
-      } else {
-        // Somebody's home on every square.
-        ctx.fillStyle = '#3f9e5a'; for (let h = 0; h < 2; h++) { const hx = x + 30 + h * 24, hy = y + 80; ctx.beginPath(); ctx.moveTo(hx - 8, hy + 10); ctx.lineTo(hx - 8, hy); ctx.lineTo(hx, hy - 7); ctx.lineTo(hx + 8, hy); ctx.lineTo(hx + 8, hy + 10); ctx.closePath(); ctx.fill(); }
-      }
-    } else {
-      ctx.fillStyle = v === 'VACANT' || v === 'INVESTOR' ? (grey ? '#3a3a3a' : '#2a2a2a') : '#1a1a1a';
-      if (v === 'VACANT' || v === 'INVESTOR') { ctx.fillRect(x + 6, y + 6, 88, 88); ctx.fillStyle = v === 'VACANT' ? '#ff4a3a' : '#d4a017'; }
-      ctx.font = `bold ${corner ? 15 : 12}px Georgia, serif`; ctx.fillText(v, x + 50, y + 50, 88);
-      if (v === 'GO') { ctx.fillStyle = '#c8322a'; ctx.font = 'bold 30px Georgia, serif'; ctx.fillText('←', x + 50, y + 76); }
-    }
-  }
-  // The middle of the board.
-  ctx.save(); ctx.translate(550, 550); ctx.rotate(-Math.PI / 4);
-  ctx.fillStyle = grey ? '#5a5652' : '#c8322a'; ctx.fillRect(-330, -50, 660, 100);
-  ctx.fillStyle = '#fff'; ctx.font = 'italic 900 50px "Helvetica Neue", Arial, sans-serif'; ctx.fillText(grey ? 'POPULATION: YOU' : mode === 'out' ? 'FURTHER OUT' : 'THE LANDLORD’S WALK', 0, 3, 620);
-  ctx.restore();
-  // Round 2: the way you were pushed, from the suburbs to The Fringe.
-  if (mode === 'out') {
-    const pts = []; for (let i = firstCell(START_ZONE); i >= firstCell(5); i--) { const [x, y] = cellXY(i); pts.push([x + 50, y + 50]); }
-    ctx.strokeStyle = '#c8322a'; ctx.lineWidth = 12; ctx.setLineDash([22, 14]); ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
-    const [ex, ey] = pts[pts.length - 1]; ctx.fillStyle = '#c39565'; ctx.fillRect(ex - 30, ey - 22, 60, 44); ctx.strokeStyle = '#5a3a20'; ctx.lineWidth = 3; ctx.strokeRect(ex - 30, ey - 22, 60, 44); ctx.fillStyle = '#e8d8b0'; ctx.fillRect(ex - 30, ey - 16, 60, 6);
-  }
-  ctx.restore();
-}
-// Round 2: the family's things, left out on the kerb in front of the home you bought from them.
-function addKerbside(ch, L) {
-  if (L.kerbDone) { return; } L.kerbDone = true;
-  const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X - 0.7);
-  ['mattress', 'bike', 'frame', 'box', 'teddy', 'free'].forEach((item, i) => ch.props.push({ kind: 'junk', item, x: x + L.side * (i % 2) * 0.35, z: mid - 3 + i * 1.1, side: L.side }));
-}
-function drawJunk(q, p) {
-  const k = q.k; if (k < 3) { return; }
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85; ctx.lineCap = 'round';
-  const x = q.x, y = q.y;
-  if (p.item === 'mattress') {
-    ctx.translate(x, y); ctx.rotate(p.side * 0.12); ctx.fillStyle = toneN('#e8e4dc', p.z); ctx.fillRect(-0.45 * k, -1.9 * k, 0.9 * k, 1.9 * k);
-    ctx.fillStyle = toneN('#8aa0c0', p.z); for (let i = 0; i < 6; i++) { ctx.fillRect(-0.45 * k, (-1.8 + i * 0.32) * k, 0.9 * k, 0.08 * k); }
-    ctx.fillStyle = 'rgba(120,90,40,0.35)'; ctx.beginPath(); ctx.ellipse(0.1 * k, -0.7 * k, 0.22 * k, 0.15 * k, 0, 0, TWO_PI); ctx.fill();
-  } else if (p.item === 'bike') {
-    ctx.strokeStyle = toneN('#d03a3a', p.z); ctx.lineWidth = Math.max(1, 0.05 * k);
-    ctx.beginPath(); ctx.arc(x - 0.3 * k, y - 0.22 * k, 0.22 * k, 0, TWO_PI); ctx.arc(x + 0.3 * k, y - 0.22 * k, 0.22 * k, 0, TWO_PI); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x - 0.3 * k, y - 0.22 * k); ctx.lineTo(x - 0.05 * k, y - 0.55 * k); ctx.lineTo(x + 0.3 * k, y - 0.22 * k); ctx.lineTo(x + 0.2 * k, y - 0.6 * k); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.fillRect(x + 0.12 * k, y - 0.66 * k, 0.18 * k, 0.05 * k);
-  } else if (p.item === 'frame') {
-    // A family photo, face up to the sky.
-    ctx.translate(x, y); ctx.rotate(-0.25); ctx.fillStyle = toneN('#b8902a', p.z); ctx.fillRect(-0.28 * k, -0.62 * k, 0.56 * k, 0.62 * k);
-    ctx.fillStyle = toneN('#e8dcc0', p.z); ctx.fillRect(-0.22 * k, -0.56 * k, 0.44 * k, 0.5 * k);
-    ctx.fillStyle = toneN('#6a5a4a', p.z); [-0.11, 0, 0.11].forEach((dx, i) => { const r = i === 1 ? 0.04 : 0.05; ctx.beginPath(); ctx.arc(dx * k, -0.38 * k, r * k, 0, TWO_PI); ctx.fill(); ctx.fillRect((dx - r) * k, -0.33 * k, r * 2 * k, 0.2 * k); });
-  } else if (p.item === 'box') {
-    ctx.fillStyle = toneN('#c39565', p.z); ctx.fillRect(x - 0.3 * k, y - 0.5 * k, 0.6 * k, 0.5 * k); ctx.fillStyle = toneN('#e8d8b0', p.z); ctx.fillRect(x - 0.3 * k, y - 0.46 * k, 0.6 * k, 0.07 * k);
-    if (k > 20) { ctx.fillStyle = '#3a2a1a'; ctx.font = `bold ${0.1 * k}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('KIDS’ TOYS', x, y - 0.2 * k); }
-  } else if (p.item === 'teddy') {
-    ctx.fillStyle = toneN('#a8743a', p.z); ctx.beginPath(); ctx.arc(x, y - 0.18 * k, 0.16 * k, 0, TWO_PI); ctx.arc(x, y - 0.42 * k, 0.11 * k, 0, TWO_PI); ctx.arc(x - 0.08 * k, y - 0.52 * k, 0.04 * k, 0, TWO_PI); ctx.arc(x + 0.08 * k, y - 0.52 * k, 0.04 * k, 0, TWO_PI); ctx.fill();
-  } else if (p.item === 'free') {
-    ctx.fillStyle = '#5a4030'; ctx.fillRect(x - 0.03 * k, y - 0.9 * k, 0.06 * k, 0.9 * k); ctx.fillStyle = toneN('#b8915a', p.z); ctx.fillRect(x - 0.35 * k, y - 1.2 * k, 0.7 * k, 0.4 * k);
-    if (k > 10) { ctx.fillStyle = '#2a1e18'; ctx.font = `bold ${0.24 * k}px "Marker Felt", "Comic Sans MS", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('FREE', x, y - 1.0 * k); }
-  }
-  ctx.restore();
-}
+function drawJunk(q, p) { }
 
 
 /* ---------- Your hands: chop the forest, raise the city (webcam + ml5 handPose) ---------- */
@@ -2426,18 +2054,16 @@ function drawJunk(q, p) {
 //   fist, lift up        -> build luxury towers for investors (they stay empty: 0 AFFORDABLE)
 // Only lifting builds; a hand held still does nothing, so you chop first and build after.
 // Without a camera: ← / → chop... (X chops the right, Z the left), hold B for homes, N for towers.
-// Only in Round 1: the tenant owns no land to build on.
 let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0, shopsBuilt = 0;
 let nextThought = 10;
 const THOUGHTS = ['Every city was a forest once.', 'Listen. Fewer birds now.', 'We build our world the way we want it.', 'Nobody asks the forest.', 'How much is enough?'];
-let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9, liftK = 0;
+let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9;
 // Two hands, one for each side of the street. In the mirrored picture your left hand is on the left.
 const newHand = () => ({ ok: false, x: 0.5, y: 0.6, fist: false, t: 0, seen: -9, chopT: -9, trail: [], lift: 0 });
 const hands = { [-1]: newHand(), [1]: newHand() };
-const handState = hands[1];   // kept for old callers
 function startHands() {
   if (handMode) { handMode = false; handStatus = ''; return; }
-  handMode = true; handStatus = 'Starting the camera…';
+  handMode = true; handStatus = 'Starting the camera…'; calibState = 'wait'; motionBase = 0; motionPrev = null;
   if (handModel) { handStatus = 'Show your hand to the camera'; return; }
   const go = () => {
     try {
@@ -2501,10 +2127,10 @@ function chopForest(side) {
   const L = pick(side); if (!L) { return; }
   L.cutT = clockT; L.grow = 0; treesCut += treesOn(L);
   const L2 = pick(side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; treesCut += treesOn(L2); }   // one swing clears a stretch of two lots
-  if (sound.chop) { sound.chop(side); }
+  spawnBirds(L, side); if (L2) { spawnBirds(L2, side); }
+  if (sound.chop) { sound.chop(side); } if (sound.flutter) { sound.flutter(side); }
   if (clockT - chopHintT > 10) { chopHintT = clockT; sayToast('The forest is gone. Lift an open hand for homes, a fist for towers.'); }
 }
-// A cleared lot becomes an investor's tower when a fist builds it.
 // What a cleared lot becomes. Each kind of hand builds a different family of buildings, picked at
 // random so the street never repeats: homes (bungalows, terraces, cottages, caravans, villas,
 // mansions), shops (corner shops, high-street shops, brick offices) or towers (brick and glass,
@@ -2520,7 +2146,6 @@ function makeBuilt(L, kind) {
   if (how === 'style') { styleLot(L, v, r); }
   if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, formerName: 'FOREST', name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
 }
-function makeTower(L) { makeBuilt(L, 'tower'); }
 function handUpdate(dt) {
   const now = performance.now() / 1000; sampleMotion();
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
@@ -2565,6 +2190,9 @@ function drawHandPanel() {
   const s = { ok: hands[-1].ok || hands[1].ok };
   fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
   textSize(10); text(s.ok || !handStatus ? 'Swing L / R hand: cut that side\nLift ✋ homes · ☝ shops · ✊ towers\nStep or run on the spot to move' : handStatus, x, y - 46, w + 4);
+  // Calibration message over the picture.
+  const tNow = performance.now() / 1000, calibMsg = calibState === 'run' ? `Stand still for 2 seconds… ${Math.max(0, 2 - (tNow - calibT0)).toFixed(1)}` : calibState === 'done' && tNow - calibDoneT < 1.8 ? 'Calibrated ✓' : '';
+  if (calibMsg) { fill(0, 170); rect(x, y + h / 2 - 16, w, 32); fill(calibState === 'run' ? '#ffd23f' : '#7fdc8a'); textSize(15); textAlign(CENTER, CENTER); text(calibMsg, x + w / 2, y + h / 2); }
   pop();
 }
 
@@ -2573,6 +2201,9 @@ function drawHandPanel() {
 // compared frame to frame. Standing still stops; stepping on the spot walks; running on the spot runs.
 // [ and ] make it less or more sensitive.
 let motionCanvas = null, motionPrev = null, motionK = 0, motionT = 0, motionGain = 1;
+// Calibration: when the camera starts you stand still for 2 seconds; the movement measured then
+// (camera noise, flicker, a fan behind you) is the baseline, and only movement above it counts.
+let calibState = 'wait', calibT0 = 0, calibSum = 0, calibN = 0, calibDoneT = -9, motionBase = 0;
 function sampleMotion() {
   if (!handMode || !handVideo || !handVideo.elt || handVideo.elt.readyState < 2) { motionK *= 0.9; return; }
   const now = performance.now(); if (now - motionT < 66) { return; } motionT = now;
@@ -2584,7 +2215,15 @@ function sampleMotion() {
   let changed = 0, n = 0;
   if (motionPrev) { for (let y = 0; y < H; y++) { for (let x = 15; x < 33; x++) { const i = y * W + x; n++; if (Math.abs(cur[i] - motionPrev[i]) > 20) { changed++; } } } }
   motionPrev = cur;
-  if (n) { motionK = mixN(motionK, Math.min(1, changed / n * motionGain), 0.35); }
+  if (!n) { return; }
+  const raw = changed / n, t = now / 1000;
+  if (calibState === 'wait') { calibState = 'run'; calibT0 = t; calibSum = 0; calibN = 0; }
+  if (calibState === 'run') {
+    calibSum += raw; calibN++; motionK = 0;
+    if (t - calibT0 >= 2) { motionBase = calibSum / calibN; calibState = 'done'; calibDoneT = t; }
+    return;
+  }
+  motionK = mixN(motionK, Math.min(1, Math.max(0, raw - motionBase * 1.5) * motionGain), 0.35);
 }
 // The walking speed your body asks for, in metres per second.
 function bodySpeed() {
@@ -2610,11 +2249,6 @@ function boardKey(e) {
 }
 
 /* ---------- What to do next: one line at the top, and a pink arrow in the street ---------- */
-function nextForSale() {
-  let best = null; const z = distanceWalked;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (!L.forSale) { continue; } const m = (L.z0 + L.z1) / 2; if (m - z > -6 && m - z < 90 && (!best || m < best.m)) { best = { L, m }; } } }
-  return best;
-}
 function nextText() {
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
@@ -2630,18 +2264,37 @@ function drawNextBar() {
   fill(255, 236, 190); textSize(17); textAlign(LEFT, CENTER); text(t, x + 72, y + 21);
   pop();
 }
-function drawTargetMarker() { }
+// Birds that flee the forest when you chop it: they burst out of the cut lots and fly up and away.
+const birds = [], BIRD_MAX = 40;
+function spawnBirds(L, side) {
+  const n = 6 + Math.floor(Math.random() * 7);
+  for (let i = 0; i < n && birds.length < BIRD_MAX; i++) {
+    birds.push({ x: side * (EDGE_X + 2 + Math.random() * 8), y: 3 + Math.random() * 4, z: mixN(L.z0, L.z1, Math.random()),
+      vx: side * (2 + Math.random() * 3), vy: 2.5 + Math.random() * 2.5, vz: -1 + Math.random() * 5, t0: clockT + Math.random() * 0.25, ph: Math.random() * 6.28 });
+  }
+}
+function drawTargetMarker() {
+  if (!birds.length) { return; }
+  const dt = Math.min(deltaTime / 1000, 0.05), LIFE = 2.2;
+  push(); strokeCap(ROUND); noFill();
+  for (let i = birds.length - 1; i >= 0; i--) {
+    const b = birds[i], age = clockT - b.t0;
+    if (age > LIFE) { birds.splice(i, 1); continue; }
+    if (age < 0) { continue; }
+    b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.vy += 1.2 * dt;
+    const q = P(b.x, b.y, b.z); if (q.rz < 0.5) { continue; }
+    const span = Math.max(5, 0.75 * q.k), flap = Math.sin(age * 22 + b.ph) * 0.9, fade = Math.min(1, (LIFE - age) / 0.5);
+    stroke(30, 26, 24, 240 * fade); strokeWeight(Math.max(2.2, span * 0.2));
+    line(q.x - span, q.y - span * flap * 0.6, q.x, q.y); line(q.x, q.y, q.x + span, q.y - span * flap * 0.6);
+  }
+  pop();
+}
 function boardClick(mx, my) {
   if (intro) { intro = false; return true; }
   if (ending) { if (clockT - ending.t > 4) { ending = null; baseNight = 0; nightTarget = 0; } return true; }
   return false;
 }
 
-// Persistent plot identities are independent of the lap and absolute camera distance.
-function preserveLot(L) {
-  if (!L.memoryKey) { return; }
-  streetMemory.set(L.memoryKey, { H: L.H, tier: L.tier, color: L.color, depth: L.depth, crown: L.crown, spire: L.spire, glass: L.glass, name: L.name, sign: L.sign, forSale: L.forSale, investorAt: L.investorAt, sold: L.sold, owned: L.owned, home: L.home, piece: L.piece, vacant: L.vacant, formerName: L.formerName, changedYear: L.changedYear });
-}
 function rememberStreet(ch) {
   ch.zoneId = zone;
   ch.lots.forEach((L, i) => {
@@ -2650,7 +2303,6 @@ function rememberStreet(ch) {
     L.redevelopYear = L.seed % 3 === 0 ? Infinity : START_AGE + 2 + (Math.abs(L.seed) % 5);
     const saved = streetMemory.get(L.memoryKey);
     if (saved) { Object.assign(L, saved); }
-    if (rules === 2 && L.owned && L.home) { addKerbside(ch, L); }
   });
   // Ordinary residents, rather than only open-home queues, make the loss visible.
   const rr = rngN(seed + ch.slot * 83 + zone * 761);
@@ -2658,6 +2310,5 @@ function rememberStreet(ch) {
   ch.props.filter(p => p.kind === 'person').forEach((p, i) => { if (p.residentRank === undefined) { p.residentRank = (i % 12 + 1) / 13; } });
   evolveStreet(ch);
 }
-// Rule 1: as the years pass, homes become empty investments, and every home you let out
-// means fewer of the old neighbours. Rule 2: nobody is pushed out.
+// Nothing is redeveloped on its own here: only your hands change the street.
 function evolveStreet(ch) { ch.residentShare = 1; }
