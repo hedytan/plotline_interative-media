@@ -80,11 +80,11 @@ function paydayIn() { const half = CHUNK_LEN * LAP_LEN / 2; return Math.round(ha
 // Sentence templates; {tokens} are filled with live numbers from the street around you.
 const SIGNS = {
   0: ['Cosy! (Tiny.)', 'Rent {rent}/wk. Mould is a feature.', 'Fixer-upper. You fix it, we raise the rent.', 'Walk to everything you can’t afford.', '6 housemates. 1 bathroom. Endless vibes.'],
-  1: ['{people} people at today’s inspection. Bring snacks. And a CV.', 'Light-filled! (One window.)', 'Renovated: we painted it grey and doubled the rent.', 'Just {deposit} deposit. Just 9 years of saving.', 'Pet friendly. People unfriendly.'],
-  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s third.', 'Live where your barista can’t.', 'Heritage charm. Heritage wages not included.', 'Why own one home when you can own theirs?'],
-  3: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'Rooftop pool for owners. A view of it for renters.', 'Invest in bricks. Live in a shoebox.', 'Prices up {growth}%. Wages up 3%. Smile!'],
+  1: ['{people} people at today’s inspection. Bring snacks. And a CV.', 'Light-filled! (One window.)', 'Renovated: we painted it grey and doubled the rent.', 'Just {deposit} deposit. Just 9 years of saving.', 'Sorry, this suburb is for investors.'],
+  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s third.', 'Live where your barista can’t.', 'Heritage charm. Heritage wages not included.', 'Coming soon: 40 luxury units where this house was.'],
+  3: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'Rooftop pool for owners. A view of it for renters.', 'Invest in bricks. Live in a shoebox.', 'Prices up {growth}%. Wages up 3%. Smile!', 'Affordable housing: 0 of 300 units.'],
   4: ['Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
-  out: ['New estate! Only {commute} to the city. Each way.', 'Paddock to palace. Shops coming 2041.', 'Priced out? Welcome! Homes from {price}.', 'The bus comes twice a day. Enjoy the space!', 'Space to breathe. Nothing else.'],
+  out: ['New estate! Only {commute} to the city. Each way.', 'Paddock to palace. Shops coming 2041.', 'Priced out? Welcome! Homes from {price}.', 'The bus comes twice a day. Enjoy the space!', 'The city is that way. Forever.'],
   // Once you own homes, the city starts flattering you.
   landlord: ['LANDLORD OF THE YEAR: YOU', 'Fewer neighbours. More equity.', 'Raise the rent! Everyone else is.', 'Negative gearing: the tax office helps you buy their home.', 'You are the market now. Congratulations!', 'Thank you for your investment. — The City', 'Another one? You deserve it.'],
   luxury: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'From {price}. Bought by people who won’t live here.', 'Coming soon: 300 homes nobody here can afford.', 'Invest in bricks. Live in a shoebox.'],
@@ -93,14 +93,14 @@ const SIGNS = {
   renting: ['{people} people at today’s inspection. Good luck!', 'Rent {rent}/wk. Applications close in 10 minutes.', 'No pets. No kids. No chance.', 'LANDLORD OF THE YEAR: (not you)', 'Can’t afford it here? Try further out!', 'Rent going up? So is our profit!']
 };
 // Satire everywhere else on the street: sandwich boards, lamp-post banners, the road itself, riders on the signs.
-const AFRAME = ['OPEN HOME · 200 people · 1 bathroom', 'HURRY! Only your life savings', 'BID NOW · CRY LATER', 'NEW! Same old box, new price', 'APPLY HERE · 3 payslips and a kidney', 'NO PETS · NO KIDS · NO PROBLEM', 'TODAY ONLY: everything', 'DREAM HOME · terms & conditions apply'];
-const POLE = ['LIVE · WORK · PAY', 'COMMUNITY (SOLD)', 'A GREAT PLACE TO INVEST', 'NEIGHBOURHOOD (FORMERLY)', 'YOUR CITY · OUR PROFIT', 'WELCOME HOME* *conditions'];
-const ROAD = ['MIND THE WEALTH GAP', 'SLOW · PRICES RISING', 'NO STANDING UNLESS YOU OWN', 'KEEP WALKING · YOU CAN’T AFFORD TO STOP', 'BUY LANE ONLY', 'CAUTION · GENTRIFICATION AHEAD'];
-const RIDER_SALE = ['SOLD OVER ASKING!', 'INVESTOR SPECIAL', '47 OFFERS', 'BE QUICK!', 'KIDS NOT INCLUDED', 'TENANTED · 8% YIELD'];
+const AFRAME = ['OFF THE PLAN · LUXURY · FROM $2.4M', 'NEW ESTATE · ONLY 1h 35m TO WORK', 'INVESTORS WELCOME · RESIDENTS OPTIONAL', 'HURRY! ONLY 300 LEFT · ALL EMPTY', 'AFFORDABLE HOUSING · SEE OTHER CITY', 'BID NOW · CRY LATER'];
+const POLE = ['A GREAT PLACE TO INVEST', 'COMMUNITY (SOLD)', 'LIVE · WORK · COMMUTE', 'YOUR CITY · OUR PROFIT', 'GROWING OUTWARDS'];
+const ROAD = ['MIND THE WEALTH GAP', 'SLOW · PRICES RISING', 'CAUTION · GENTRIFICATION AHEAD', 'END OF AFFORDABLE HOUSING', 'CITY THIS WAY · NOT FOR YOU', 'HOMES FURTHER OUT · KEEP GOING'];
+const RIDER_SALE = ['INVESTOR SPECIAL', 'SOLD OVER ASKING!', 'DEVELOPMENT SITE', 'KNOCK DOWN · BUILD 40 UNITS', '47 OFFERS', 'TENANTED · 8% YIELD'];
 const RIDER_RENT = ['50 APPLIED', 'NO KIDS', 'RENT BIDDING', '3 PAYSLIPS', 'NO PETS', 'VIEWING: 3 MIN'];
 // The artwork's own slogans, in red bars of white type, on billboards and across the buildings.
-const ART = ['YOUR HOME IS OUR PORTFOLIO', 'LOCATION LOCATION EVICTION', 'HOME IS WHERE THE YIELD IS', 'BUY LOW. EVICT HIGH.', 'OWN NOTHING. RENT EVERYTHING.', 'NOBODY LIVES HERE. EVERYBODY PROFITS.', 'THIS COULD HAVE BEEN YOURS', 'WE SOLD YOUR STREET', 'YOU ARE NOT THE CUSTOMER. YOUR RENT IS.', 'THE MARKET LOVES YOU (NOT)', 'PASS GO. COLLECT EVERYTHING.', 'ROLL THE DICE. LOSE THE HOUSE.'];
-const VOID_NAMES = ['NOBODY HOME', 'LUXURY VOIDS', 'THE EMPTY', 'INVESTMENT · NOT FOR LIVING', 'SOLD OUT · LIGHTS OFF'];
+const ART = ['LUXURY APARTMENTS. AFFORDABLE TO NOBODY.', '300 HOMES. 0 YOU CAN AFFORD.', 'BUILT FOR INVESTORS. NOT FOR PEOPLE.', 'THE CITY IS FULL. OF EMPTY APARTMENTS.', 'CAN’T AFFORD THE CITY? MOVE TO THE EDGE.', 'EVERY YEAR THE CITY MOVES FURTHER AWAY.', 'YOUR HOME IS OUR PORTFOLIO', 'NOBODY LIVES HERE. EVERYBODY PROFITS.', 'LOCATION LOCATION EVICTION', 'PASS GO. COLLECT EVERYTHING.'];
+const VOID_NAMES = ['THE PINNACLE · 300 LUXURY APARTMENTS', 'SKY RESIDENCES · FROM $2.4M', 'ONE PERCENT TOWER', 'THE INVESTOR · 280 UNITS EMPTY', 'PRESTIGE HEIGHTS · 0 AFFORDABLE'];
 function fillSign(text, tier, n = 0) {
   const L = { tier, priceK: 1 };
   return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + (n % 15))
@@ -250,7 +250,7 @@ function boardUpdate(z) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
         Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], sign: true });
         preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
-        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor! Will sit empty. Congratulations, everyone.', fixed: true, col: '#c8322a', born: clockT });
+        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor! Coming soon: luxury apartments. Affordable: 0.', fixed: true, col: '#c8322a', born: clockT });
         sound.jail(); if (!toasts.some(t => t.text.startsWith('An investor') && clockT - t.t < 3)) { sayToast('An investor got there first. Congratulations to them.'); }
       }
     }
@@ -559,7 +559,7 @@ function satireOnLot(L, x, z0, z1, H) {
   if (L.special || L.piece || intro) { return; }
   if (L.vacant) {
     const on = Math.sin(clockT * 3 + L.seed) > -0.6;
-    facadeSign(L, x, z0, L.z0 + (L.z1 - L.z0) * 0.25, L.z1 - (L.z1 - L.z0) * 0.25, H * 0.3, H * 0.3 + 1.6, on ? '#2a0a0a' : '#1a1414', on ? '#ff4a3a' : '#5a2a2a', 'VACANT', on ? '#ff3020' : null);
+    facadeSign(L, x, z0, L.z0 + (L.z1 - L.z0) * 0.25, L.z1 - (L.z1 - L.z0) * 0.25, H * 0.3, H * 0.3 + 1.6, on ? '#2a0a0a' : '#1a1414', on ? '#ff4a3a' : '#5a2a2a', '0 AFFORDABLE · MOSTLY EMPTY', on ? '#ff3020' : null);
     const xm = x + L.side * L.depth / 2, top = P(xm, H, (L.z0 + L.z1) / 2); if (top.rz < 3) { return; }
     const k = top.k, bw = L.depth * 1.1 * k, cw = L.depth * 0.62 * k, ch = L.depth * 0.75 * k;
     ctx.save(); ctx.globalAlpha = 1 - fogFor((L.z0 + L.z1) / 2) * 0.7;

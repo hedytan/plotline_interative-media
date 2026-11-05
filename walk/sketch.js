@@ -287,8 +287,10 @@ function drawSky() {
 function drawSkyline() {
   // Distant city at the end of the street, always out of reach, with the landmark tower in the middle.
   const hy = cam.hy, H = height, haze = skyColors()[0];
+  // Urban sprawl: the further out the town, the smaller and further away the city you work in.
+  const ck = typeof zone === 'number' ? [1.15, 1.1, 1.3, 1, 0.55, 0.3][zone] : 1;
   for (const b of skyline) {
-    const x = cam.cx + Math.tan(b.a - cam.yaw) * cam.f, w = b.w * H, h = b.h * H;
+    const x = cam.cx + Math.tan(b.a * Math.min(1, ck + 0.2) - cam.yaw) * cam.f, w = b.w * H * ck, h = b.h * H * ck;
     const g = ctx.createLinearGradient(0, hy - h, 0, hy);
     g.addColorStop(0, mixHex(mixHex('#e8b27a', '#3a3060', night), haze, 0.3 + b.tone * 0.3)); g.addColorStop(1, mixHex('#f6c88a', '#2a2448', night));
     ctx.fillStyle = g; ctx.fillRect(x - w / 2, hy - h, w, h + 2);
@@ -297,7 +299,7 @@ function drawSkyline() {
     for (let y = hy - h + 4; y < hy - 3; y += 5) {if ((y * 7 + b.a * 1000) % 3 < 1.2) {ctx.fillRect(x - w * 0.35, y, w * 0.7, 1);}}
   }
   // The landmark: a stepped art-deco tower with a glowing crown.
-  const x = cam.cx - Math.tan(cam.yaw) * cam.f, s = H / 800 * 0.55;
+  const x = cam.cx - Math.tan(cam.yaw) * cam.f, s = H / 800 * 0.55 * ck;
   const tiers = [[60, 120], [46, 200], [34, 270], [22, 320], [12, 350]];
   ctx.save();
   for (const [w, h] of tiers) {

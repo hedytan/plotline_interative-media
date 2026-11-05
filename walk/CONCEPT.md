@@ -33,6 +33,8 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Round 2: your old street | Your homes carry "OWNED BY YOU" signs | The same street, from the other side |
 | Round 2: your old home | The family's things on the kerb: a mattress, a kid's bike, a family photo, a box of toys, a teddy, a sign saying FREE | What a sale leaves behind |
 | Round 2: applying (E) | "TOO DEAR · $470 a week. You can pay $230. 50 other people applied too." | Unaffordable rent and competition |
+| The city on the horizon | The further out the town, the smaller and further away the city skyline at the end of the street | Urban sprawl: the city you work in moves out of reach |
+| Investor towers | "THE PINNACLE · 300 LUXURY APARTMENTS" with a red neon "0 AFFORDABLE · MOSTLY EMPTY" | Apartments built by the rich, not affordable housing |
 | Round 1: corners (← / →) | You choose: a poorer town or a richer one, and buy wherever you like | The winner has every choice |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
 | A harsher street | Every home swings a shop price tag ("$722k and rising"); empty investor towers wear a giant top hat and a VACANT neon; tents with cardboard signs ("WAS A RENTER") sit under the luxury billboards; the sky is smog | Homes treated as goods; wealth and homelessness side by side |
