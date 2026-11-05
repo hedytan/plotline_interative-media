@@ -58,6 +58,7 @@ function setup() {
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
   grain.updatePixels(); buildSkyline();
   if (typeof makeBrushTrees === 'function') { makeBrushTrees(); }
+  if (typeof makeForest === 'function') { makeForest(); }
 }
 function buildSkyline() {
   const r = rngN(seed + 99); skyline = [];
@@ -412,7 +413,8 @@ function drawPlot(L) {
 // One tree of the wild forest: painted broadleaf trees, dark pines, tall pale gums and low bushes.
 function drawWildTree(q, t) {
   const k = q.k, h = t.h, z = t.z, fog = fogFor(z);
-  if (t.kind === 'sprite') { drawTree(q, { h: t.h, tone: t.tone, z, x: t.x }); return; }
+  if (typeof drawBrushTree === 'function' && drawBrushTree(q, t.kind === 'sprite' ? 'broad' : t.kind, t.tone, t.h, z)) { return; }
+  if (t.kind === 'sprite' || t.kind === 'poplar') { drawTree(q, { h: t.h, tone: t.tone, z, x: t.x }); return; }
   ctx.save(); ctx.globalAlpha = 1 - fog * 0.6;
   if (t.kind === 'pine') {
     // A conifer: a dark trunk and four stacked tiers of needles, lit on one side.
@@ -446,8 +448,8 @@ function drawForest(L, k, back = 0, fall = 0, cut = false) {
   for (let row = rows - 1; row >= 0; row--) {
     for (let i = 0; i < n; i++) {
       const z = L.z0 + (i + 0.2 + r() * 0.6) * len / n, x = L.side * (EDGE_X + back + 1.4 + row * 4.5 + r() * 2);
-      const kr = r(), kind = kr < 0.3 ? 'sprite' : kr < 0.55 ? 'pine' : kr < 0.8 ? 'gum' : 'bush';
-      list.push({ x, z, kind, h: kind === 'bush' ? mixN(1.4, 2.8, r()) : kind === 'pine' ? mixN(8, 16, r()) : kind === 'gum' ? mixN(10, 18, r()) : mixN(6, 11, r()), tone: r() });
+      const kr = r(), kind = kr < 0.3 ? 'broad' : kr < 0.52 ? 'pine' : kr < 0.67 ? 'poplar' : kr < 0.84 ? 'gum' : 'bush';
+      list.push({ x, z, kind, h: kind === 'bush' ? mixN(1.5, 3, r()) : kind === 'pine' ? mixN(8, 17, r()) : kind === 'poplar' ? mixN(10, 16, r()) : kind === 'gum' ? mixN(11, 19, r()) : mixN(6, 12, r()), tone: r() });
     }
   }
   list.sort((a, b) => b.z - a.z);
@@ -962,6 +964,7 @@ function hazeSprite(img) {
   hazeCache.set(img, cv); return cv;
 }
 function drawTree(q, p) {
+  if (typeof drawBrushTree === 'function' && drawBrushTree(q, 'broad', p.tone || 0, p.h * 1.2, p.z)) { return; }
   // Painted trees (trees.js): grown once from a seed, drawn as sprites with a shadow and the street's haze.
   if (typeof brushTrees !== 'undefined' && brushTrees && brushTrees.length) {
     const img = brushTrees[Math.floor(p.tone * 997) % brushTrees.length], hpx = p.h * 1.35 * q.k, wpx = hpx * BT_W / BT_H, fog = fogFor(p.z);
