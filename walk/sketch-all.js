@@ -771,15 +771,15 @@ function drawGround(z, side) {
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
-    if (ch.slot !== 0) { continue; }
+    if (ch.slot !== 0) { const sl = typeof roadSlogan === 'function' ? roadSlogan(ch) : null; if (sl) { sl.split(' ').filter(w => w !== '·').forEach((w, i) => paintText(w, 0, ch.z0 + CROSS_W + 14 + i * 2.8, 2.4, '#f4ead0', ROAD_W * 1.7)); } continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
-function paintText(label, x, zz, size, col) {
+function paintText(label, x, zz, size, col, maxW) {
   const p = P(x, 0, zz); if (p.rz < 1.5 || p.rz > 120) {return;}
   const k = p.k, squash = cam.eye / p.rz;
   ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, squash); ctx.font = `bold ${size * k * 0.5}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = rgbaN(col, 0.85 * (1 - easeN((p.rz - 60) / 60))); ctx.fillText(label, 0, 0); ctx.restore();
+  ctx.fillStyle = rgbaN(col, 0.85 * (1 - easeN((p.rz - 60) / 60))); if (maxW) { ctx.fillText(label, 0, 0, maxW * k); } else { ctx.fillText(label, 0, 0); } ctx.restore();
 }
 
 /* ---------- Buildings and everything on the street ---------- */
@@ -809,7 +809,7 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'aframe') {drawAFrame(it.q, it.p);}
     ctx.restore();
   }
   if (!side) {drawTargetMarker();}
@@ -1300,6 +1300,7 @@ function drawCasino(L, x, z0, z1, H) {
 /* ---------- Pavement life ---------- */
 function drawLamp(q, p) {
   const k = q.k, h = 4.2, glow = night > 0.2 || p.flick < 0.3;
+  if (p.slogan && typeof drawPoleBanner === 'function') { drawPoleBanner(q, p); }
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(q.x - 0.06 * k, q.y - h * k, 0.12 * k, h * k);
   const lx = q.x, ly = q.y - h * k;
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(lx - 0.18 * k, ly - 0.55 * k, 0.36 * k, 0.12 * k);
@@ -1476,23 +1477,27 @@ function paydayIn() { const half = CHUNK_LEN * LAP_LEN / 2; return Math.round(ha
 /* ---------- Generated billboards ---------- */
 // Sentence templates; {tokens} are filled with live numbers from the street around you.
 const SIGNS = {
-  0: ['Charming fixer-upper. Roof sold separately.', 'Rent {rent}/wk. Mould included at no extra cost.', 'Cosy! (It means small.)', 'Room in share house. 6 housemates, 1 bathroom, endless vibes.', 'Walk to everything you can’t afford.'],
-  1: ['{people} people at today’s inspection. Bring a CV.', 'Must love stairs, no parking and your landlord.', 'Renovated: we painted it grey.', 'Just {deposit} deposit. Just 6 years of saving.', 'Light-filled! (One window.)'],
-  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s investment.', 'Heritage charm from {price}. Heritage wages not included.', 'Live where your barista can’t.', 'Second home? Third home? Why stop?'],
-  3: ['Luxury apartments. 80% empty. 100% sold.', 'Off the plan from {price}. Off your budget forever.', 'Rooftop pool for owners. Rooftop view of it for renters.', 'Prices up {growth}% this year. Wages up 3%.', 'Invest in bricks. Live in a shoebox.'],
-  4: ['Penthouse {price}. Studio from your dreams.', 'Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
-  out: ['New estate! Commute just {commute}.', 'Paddock to palace. Shops coming 2041.', 'Pushed out of the city? Welcome! Homes from {price}.', 'Only {commute} to the city. Each way.', 'The bus comes twice a day. Enjoy the space.'],
-  // Once you own homes, the city starts talking to you instead.
-  landlord: ['Landlord of the Year: YOU', 'Fewer neighbours. More equity.', 'Raise the rent? Everyone else is.', 'Your tenant is 24 and saving for a deposit. Sound familiar?', 'Congratulations. You are the market now.', 'Negative gearing: the tax office helps you buy their home.', 'Another family moved further out. Your commute: 0 min.'],
-  // Luxury towers going up where homes were.
-  luxury: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon.', 'From {price}. Bought by people who won’t live here.', 'Coming soon: 300 homes nobody here can afford.', 'Invest in bricks. Live in a shoebox.'],
-  // A street that has been emptied.
-  empty: ['Nobody lives here now. Great investment.', 'Ghost street. Prime location.', 'For lease. For lease. For lease.', 'Quiet neighbourhood. Very quiet.'],
-  // Her other rules: the signs tell what the shared land tax pays for.
-  shared: ['Land tax shared: {share} to everyone this year.', 'Homes are for living in.', 'Rent steady. Neighbours stayed.', 'The park is open. It’s yours too.', 'New school, paid for by the land.'],
-  // Round 2: the street as the family you evicted reads it.
-  renting: ['{people} people at today’s inspection.', 'Rent {rent}/wk. Applications close in 10 minutes.', 'No pets. No kids. No chance.', 'Landlord of the Year: YOU', 'Your old street: now an investment.', 'Can’t afford it here? Try further out.']
+  0: ['Cosy! (Tiny.)', 'Rent {rent}/wk. Mould is a feature.', 'Fixer-upper. You fix it, we raise the rent.', 'Walk to everything you can’t afford.', '6 housemates. 1 bathroom. Endless vibes.'],
+  1: ['{people} people at today’s inspection. Bring snacks. And a CV.', 'Light-filled! (One window.)', 'Renovated: we painted it grey and doubled the rent.', 'Just {deposit} deposit. Just 9 years of saving.', 'Pet friendly. People unfriendly.'],
+  2: ['Gated for your safety. (From you.)', 'Your dream home. Someone else’s third.', 'Live where your barista can’t.', 'Heritage charm. Heritage wages not included.', 'Why own one home when you can own theirs?'],
+  3: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'Rooftop pool for owners. A view of it for renters.', 'Invest in bricks. Live in a shoebox.', 'Prices up {growth}%. Wages up 3%. Smile!'],
+  4: ['Sky homes for people who already have homes.', 'Exclusive: nobody you know lives here.', 'Your rent paid for this view.', 'Buy now. Prices only go up. (For us.)'],
+  out: ['New estate! Only {commute} to the city. Each way.', 'Paddock to palace. Shops coming 2041.', 'Priced out? Welcome! Homes from {price}.', 'The bus comes twice a day. Enjoy the space!', 'Space to breathe. Nothing else.'],
+  // Once you own homes, the city starts flattering you.
+  landlord: ['LANDLORD OF THE YEAR: YOU', 'Fewer neighbours. More equity.', 'Raise the rent! Everyone else is.', 'Negative gearing: the tax office helps you buy their home.', 'You are the market now. Congratulations!', 'Thank you for your investment. — The City', 'Another one? You deserve it.'],
+  luxury: ['Luxury apartments. 80% empty. 100% sold.', 'Affordable housing: coming soon™', 'From {price}. Bought by people who won’t live here.', 'Coming soon: 300 homes nobody here can afford.', 'Invest in bricks. Live in a shoebox.'],
+  empty: ['Ghost street. Prime location.', 'Nobody lives here now. Great investment!', 'For lease. For lease. For lease.', 'Quiet neighbourhood. Very quiet.'],
+  shared: ['Homes are for living in.'],
+  // Round 2: the street as a renter reads it.
+  renting: ['{people} people at today’s inspection. Good luck!', 'Rent {rent}/wk. Applications close in 10 minutes.', 'No pets. No kids. No chance.', 'LANDLORD OF THE YEAR: (not you)', 'Can’t afford it here? Try further out!', 'Rent going up? So is our profit!']
 };
+// Satire everywhere else on the street: sandwich boards, lamp-post banners, the road itself, riders on the signs.
+const AFRAME = ['OPEN HOME · 200 people · 1 bathroom', 'HURRY! Only your life savings', 'BID NOW · CRY LATER', 'NEW! Same old box, new price', 'APPLY HERE · 3 payslips and a kidney', 'NO PETS · NO KIDS · NO PROBLEM', 'TODAY ONLY: everything', 'DREAM HOME · terms & conditions apply'];
+const POLE = ['LIVE · WORK · PAY', 'COMMUNITY (SOLD)', 'A GREAT PLACE TO INVEST', 'NEIGHBOURHOOD (FORMERLY)', 'YOUR CITY · OUR PROFIT', 'WELCOME HOME* *conditions'];
+const ROAD = ['MIND THE WEALTH GAP', 'SLOW · PRICES RISING', 'NO STANDING UNLESS YOU OWN', 'KEEP WALKING · YOU CAN’T AFFORD TO STOP', 'BUY LANE ONLY', 'CAUTION · GENTRIFICATION AHEAD'];
+const RIDER_SALE = ['SOLD OVER ASKING!', 'INVESTOR SPECIAL', '47 OFFERS', 'BE QUICK!', 'KIDS NOT INCLUDED', 'TENANTED · 8% YIELD'];
+const RIDER_RENT = ['50 APPLIED', 'NO KIDS', 'RENT BIDDING', '3 PAYSLIPS', 'NO PETS', 'VIEWING: 3 MIN'];
+const VOID_NAMES = ['NOBODY HOME', 'LUXURY VOIDS', 'THE EMPTY', 'INVESTMENT · NOT FOR LIVING', 'SOLD OUT · LIGHTS OFF'];
 function fillSign(text, tier, n = 0) {
   const L = { tier, priceK: 1 };
   return text.replace('{rent}', money(rentWeek * (1 + tier * 0.6))).replace('{people}', 25 + tier * 12 + (n % 15))
@@ -1558,6 +1563,11 @@ function plotsForChunk(ch, r) {
     if (ch.style === 'caravan') { b.h = mixN(2.5, 4, r()); b.color = pickN(r, ['#9a9080', '#8a8a7a']); }
     if (ch.style === 'castle' || ch.style === 'villa') { b.h = mixN(12, 18, r()); b.color = pickN(r, ['#5a8a4a', '#4a7a42', '#6a9a52']); }
   }
+  // Satire: a sandwich board or two on the pavement, banners on some lamp posts, a slogan painted on the road.
+  for (let i = 0; i < 2; i++) { if (r() < 0.35) { continue; } const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'aframe', x: side * (EDGE_X - 0.5), z: ch.z0 + CROSS_W + 4 + r() * (CHUNK_LEN - CROSS_W - 8), side, text: pickN(r, AFRAME) }); }
+  for (const p of ch.props) { if (p.kind === 'lamp' && r() < 0.5) { p.slogan = pickN(r, POLE); p.scol = pickN(r, ['#c8322a', '#3f6fa8', '#d4a017', '#2e9e47']); } }
+  ch.road = ch.slot === 0 ? null : pickN(r, ROAD);
+  for (const L of ch.lots) { if (L.forSale) { L.rider = Math.floor(r() * 6); } }
   // A signpost at the crossing: which way is cheaper, which way is richer.
   ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
   // Billboards on the pavement, written from the prices on this block.
@@ -1643,9 +1653,9 @@ function boardUpdate(z) {
     for (const L of ch.lots) {
       if (L.forSale && L.investorAt > 0 && (L.z0 + L.z1) / 2 - z < L.investorAt) {
         const tower = makeLot(null, Math.min(4, L.tier + 2), L.side, L.z0, L.z1 - L.z0, rngN(L.seed));
-        Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: 'SOLD', sign: true });
+        Object.assign(L, { style: null, forSale: false, investorAt: -1, sold: true, vacant: true, changedYear: lifeAge, born: clockT + 0.2, H: tower.H, depth: tower.depth, color: tower.color, tier: tower.tier, crown: tower.crown, spire: tower.spire, glass: tower.glass, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], sign: true });
         preserveLot(L); ch.props = ch.props.filter(p => p.lotRef !== L);
-        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor. Will sit empty.', fixed: true, col: '#c8322a', born: clockT });
+        ch.props.push({ kind: 'billboard', x: L.side * (ROAD_W + 1.4), z: (L.z0 + L.z1) / 2, side: L.side, text: 'SOLD to an investor! Will sit empty. Congratulations, everyone.', fixed: true, col: '#c8322a', born: clockT });
         sound.jail(); sayToast('An investor bought it first.');
       }
     }
@@ -1748,7 +1758,8 @@ function buyLot(L) {
     }
     landlordMode = owned.length >= 2;
     evicted.push(familyOf(L)); lastBuyZ = Math.max(lastBuyZ, L.z1);
-    soldBeat = { t: clockT, stamp: 'SOLD', col: [200, 50, 40], l1: `${familyOf(L)} had to leave.`, l2: `${n} famil${n > 1 ? 'ies' : 'y'} moved out so you could buy.` };
+    const cheers = ['Congratulations! You’re a landlord!', 'Another one! The city thanks you.', 'Winner! You own the street now.'];
+    soldBeat = { t: clockT, stamp: 'SOLD', col: [200, 50, 40], l1: cheers[Math.min(owned.length - 1, 2)], l2: 'Smile for the brochure.' };
     if (sound.evict) { setTimeout(() => sound.evict(), 350); }
   } else {
     newNeighbours += 3;
@@ -1905,7 +1916,12 @@ function drawForSale(L) {
     const r2 = rules === 2;
     ctx.font = `bold ${h * 0.2}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.fillText(r2 ? 'FOR RENT' : 'FOR SALE', base.x, top - h * 0.2 + h * 0.17);
     ctx.font = `bold ${h * 0.27}px Georgia, serif`; ctx.fillStyle = '#2a1e18'; ctx.fillText(r2 ? `${money(rentAsk(L))}/wk` : moneyK(priceOf(L)), base.x, top - h * 0.2 + h * 0.52);
-    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(r2 ? (L.applicants ? `${L.applicants} applied` : 'apply now') : familyOf(L) + ' live here', base.x, top - h * 0.2 + h * 0.8);
+    ctx.font = `${h * 0.15}px Georgia, serif`; ctx.fillStyle = '#7a5a4a'; ctx.fillText(r2 ? (L.applicants ? `${L.applicants} applied` : 'apply now') : 'a lovely family home', base.x, top - h * 0.2 + h * 0.8);
+    // A rider stuck across the corner, the way agents do.
+    const rid = (r2 ? RIDER_RENT : RIDER_SALE)[(L.rider || 0) % 6];
+    const ry = top - h * 0.2 + h + h * 0.06, rh = h * 0.3;
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(base.x - w * 0.46, ry, w * 0.92, rh); ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.04 * k); ctx.strokeRect(base.x - w * 0.46, ry, w * 0.92, rh);
+    ctx.fillStyle = '#c8322a'; ctx.font = `bold ${rh * 0.55}px Georgia, serif`; ctx.fillText(rid, base.x, ry + rh / 2 + 1, w * 0.86);
   }
   ctx.restore();
 }
@@ -1944,6 +1960,33 @@ function drawBillboard(q, p) {
   }
   ctx.restore();
 }
+// An agent's sandwich board on the pavement.
+function drawAFrame(q, p) {
+  const k = q.k; if (k < 3) { return; }
+  const w = 1.4 * k, h = 1.6 * k, top = q.y - h;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
+  ctx.fillStyle = '#3a2a20'; ctx.beginPath(); ctx.moveTo(q.x - w * 0.5, q.y); ctx.lineTo(q.x - w * 0.42, top); ctx.lineTo(q.x + w * 0.42, top); ctx.lineTo(q.x + w * 0.5, q.y); ctx.lineTo(q.x + w * 0.4, q.y); ctx.lineTo(q.x, top + h * 0.2); ctx.lineTo(q.x - w * 0.4, q.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fffaee'; ctx.fillRect(q.x - w * 0.42, top, w * 0.84, h * 0.8); ctx.fillStyle = '#c8322a'; ctx.fillRect(q.x - w * 0.42, top, w * 0.84, h * 0.16);
+  if (k > 16) {
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `bold ${h * 0.09}px Georgia, serif`; ctx.fillText('★ AGENT ★', q.x, top + h * 0.08);
+    ctx.fillStyle = '#2a1e18'; const size = h * 0.1; ctx.font = `bold ${size}px Georgia, serif`;
+    const words = p.text.split(' '), lines = []; let line = '';
+    for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.74 && line) { lines.push(line); line = wd; } else { line = t; } }
+    lines.push(line); lines.slice(0, 5).forEach((ln, i) => ctx.fillText(ln, q.x, top + h * 0.48 - (Math.min(5, lines.length) - 1) * size * 0.6 + i * size * 1.2));
+  }
+  ctx.restore();
+}
+// A council banner hanging from a lamp post, cheerful and empty.
+function drawPoleBanner(q, p) {
+  const k = q.k; if (k < 3) { return; }
+  const dir = p.x < 0 ? 1 : -1, bw = 0.55 * k, bh = 1.9 * k, bx = q.x + dir * 0.06 * k + (dir < 0 ? -bw : 0), by = q.y - 3.9 * k;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
+  ctx.fillStyle = toneN(p.scol, p.z); ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(bx, by + bh * 0.04, bw, bh * 0.02); ctx.fillRect(bx, by + bh * 0.94, bw, bh * 0.02);
+  if (k > 14) { ctx.translate(bx + bw / 2, by + bh / 2); ctx.rotate(-HALF_PI); ctx.fillStyle = '#fff'; ctx.font = `bold ${bw * 0.34}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.slogan, 0, 1, bh * 0.86); }
+  ctx.restore();
+}
+// A slogan painted on the road, read as you walk over it.
+function roadSlogan(ch) { return ch.road || null; }
 // People queueing for an open home.
 function drawOpenHome(q, p) {
   const k = q.k; if (k < 2 || emptyK < 0.7 || (rules === 1 && movedOut >= 6)) { return; }
@@ -2136,14 +2179,12 @@ function drawBoardHud() {
     fill(rules === 1 ? '#c8322a' : '#3f6fa8'); rect(x, y, 6, h, 8, 0, 0, 8);
     fill(40, 30, 24); textStyle(BOLD); textSize(16); textAlign(LEFT, TOP);
     if (rules === 1) {
-      text('YOU · THE LANDLORD', x + 16, y + 10);
-      textStyle(NORMAL); textSize(11); fill(150, 120, 100); textAlign(RIGHT, TOP); text(ZONE_NAMES[zone], x + w - 12, y + 13); textAlign(LEFT, TOP);
+      text('YOU · THE LANDLORD', x + 16, y + 10); textStyle(NORMAL);
       for (let i = 0; i < Math.max(OWN_GOAL, owned.length); i++) { houseIcon(x + 16 + i * 22, y + 38, 17, i < owned.length ? color(OWNER_COL) : color(190, 175, 160), i < owned.length); }
-      if (movedOut) { iconRow(x + 16, y + 68, movedOut, Math.floor((w - 50) / 15), 12, (ix, iy) => personIcon(ix, iy, 12, color(200, 50, 40), true)); }
-      else { fill(150, 130, 120); textSize(11); text('Families moved out: none yet', x + 16, y + 68); }
+      fill(150, 130, 120); textSize(11); textStyle(ITALIC); text(['The city believes in you.', 'The city is proud of you.', 'The city loves you.', 'The city is yours.'][Math.min(owned.length, 3)], x + 16, y + 68); textStyle(NORMAL);
     } else {
       text(`YOU · ${meName().toUpperCase()}`, x + 16, y + 10, w - 24);
-      textStyle(NORMAL); textSize(12); fill(150, 120, 100); text('Moving out. Looking for a home.', x + 16, y + 32);
+      textStyle(NORMAL); textSize(12); fill(150, 120, 100); text('Looking for a home you can afford.', x + 16, y + 32);
       textStyle(BOLD); fill(40, 30, 24); textSize(13); text(ZONE_NAMES[zone], x + 16, y + 52); textStyle(NORMAL); fill(150, 120, 100); textAlign(RIGHT, TOP); textSize(11); text(commuteShort(zone), x + w - 12, y + 54);
       const ww = 170, wx = width - ww - 16;
       fill(0, 50); rect(wx + 3, y + 4, ww, 62, 8); fill(255, 250, 238); rect(wx, y, ww, 62, 8);
@@ -2169,12 +2210,12 @@ function drawBoardHud() {
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'rule1') {
     const names = evicted.slice(0, 3), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || 'Three families';
-    const lines = [`You own ${owned.length} homes.`, `To get them, ${who} had to leave.`, '', `Now walk the same street as ${evicted[0] || 'them'}.`];
+    const lines = [`You own ${owned.length} homes.`, 'The city is so proud of you.', '', `Now walk the same street as ${evicted[0] || 'them'},`, 'who lived in the first one.'];
     storyCard('YOU WIN', lines, clockT - ending.t > 3.5 ? 'Press E or click' : '', easeN((clockT - ending.t - 2.5) / 1.2));
   }
   if (ending && ending.kind === 'rule2') {
     const a = firstRun || { owned: 3, moved: 3 };
-    const lines = [`${meName()} found a home in ${ZONE_NAMES[zone]}, ${commuteShort(zone)}.`, `You won ${a.owned} homes. ${(a.evicted || []).length || a.owned} families had to leave, to places like this.`, '', 'Monopoly began in 1904 as Lizzie Magie’s The Landlord’s Game.', 'It was a warning: under these rules one player wins,', 'and everyone else is pushed further out.', 'In 1935 it was sold as Monopoly. She was paid $500.'];
+    const lines = [`${meName()} found a home in ${ZONE_NAMES[zone]}, ${commuteShort(zone)}.`, `You won ${a.owned} homes on the street they lived on.`, '', 'Monopoly began in 1904 as Lizzie Magie’s The Landlord’s Game.', 'It was a warning: under these rules one player wins,', 'and everyone else is pushed further out.', 'In 1935 it was sold as Monopoly. She was paid $500.'];
     storyCard('YOUR WIN WAS THEIR LOSS', lines, 'Press R to walk again', easeN((clockT - ending.t - 1) / 1.2), '#3f6fa8');
   }
   pop();
@@ -2198,9 +2239,9 @@ function drawOpening() {
   const n1 = r1 ? OWN_GOAL : 1;
   fill(40, 30, 24); textAlign(LEFT, CENTER); textSize(19); text(r1 ? `Buy ${OWN_GOAL} homes on this street.` : 'Find a home you can rent.', rx + n1 * 30 + 12, y + 148, tw - n1 * 30 - 12);
   // Row 2: what it costs.
-  const ry = y + 190, n2 = r1 ? 4 : 1;
+  const ry = y + 190, n2 = r1 ? 0 : 1;
   for (let i = 0; i < n2; i++) { personIcon(rx + i * 26, ry, 22, r1 ? color(200, 50, 40) : color(63, 111, 168), true); }
-  textStyle(BOLD); textSize(17); fill(r1 ? color(200, 50, 40) : color(63, 111, 168)); text(r1 ? 'Every home you buy, a family has to leave.' : `You can pay ${money(RENT_BUDGET)} a week. You’re carrying a box.`, rx + n2 * 26 + 12, ry + 11, tw - n2 * 26 - 12);
+  textStyle(BOLD); textSize(17); fill(r1 ? color(200, 50, 40) : color(63, 111, 168)); text(r1 ? 'The whole city will cheer you on.' : `You can pay ${money(RENT_BUDGET)} a week.`, rx + n2 * 26 + 12, ry + 11, tw - n2 * 26 - 12);
   // Row 3: the keys.
   const ky = y + 248; textStyle(BOLD); textSize(13);
   const keys = [['↑', 'walk'], ['E', r1 ? 'buy' : 'rent'], ['stand still', 'listen']];
@@ -2362,7 +2403,7 @@ function evolveStreet(ch) {
     if (L.owned || L.vacant || lifeAge < L.redevelopYear) { continue; }
     L.formerName = L.formerName || L.name || 'LOCAL HOMES';
     L.H = Math.max(L.H * 1.65, 20 + (L.seed % 19)); L.tier = 3; L.style = null; L.glass = true; L.color = '#88999f';
-    L.vacant = true; L.forSale = false; L.investorAt = -1; L.sign = true; L.name = 'PRIVATE INVESTMENT'; L.changedYear = lifeAge;
+    L.vacant = true; L.forSale = false; L.investorAt = -1; L.sign = true; L.name = VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length]; L.changedYear = lifeAge;
     L.born = clockT; preserveLot(L);
   }
   const gone = ch.lots.filter(l => l.vacant || l.owned && !l.home).length;

@@ -362,15 +362,15 @@ function drawGround(z, side) {
   // Painted street names and the GO arrow.
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
-    if (ch.slot !== 0) { continue; }
+    if (ch.slot !== 0) { const sl = typeof roadSlogan === 'function' ? roadSlogan(ch) : null; if (sl) { sl.split(' ').filter(w => w !== '·').forEach((w, i) => paintText(w, 0, ch.z0 + CROSS_W + 14 + i * 2.8, 2.4, '#f4ead0', ROAD_W * 1.7)); } continue; }
     paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
-function paintText(label, x, zz, size, col) {
+function paintText(label, x, zz, size, col, maxW) {
   const p = P(x, 0, zz); if (p.rz < 1.5 || p.rz > 120) {return;}
   const k = p.k, squash = cam.eye / p.rz;
   ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, squash); ctx.font = `bold ${size * k * 0.5}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = rgbaN(col, 0.85 * (1 - easeN((p.rz - 60) / 60))); ctx.fillText(label, 0, 0); ctx.restore();
+  ctx.fillStyle = rgbaN(col, 0.85 * (1 - easeN((p.rz - 60) / 60))); if (maxW) { ctx.fillText(label, 0, 0, maxW * k); } else { ctx.fillText(label, 0, 0); } ctx.restore();
 }
 
 /* ---------- Buildings and everything on the street ---------- */
@@ -400,7 +400,7 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'billboard') {drawBillboard(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'aframe') {drawAFrame(it.q, it.p);}
     ctx.restore();
   }
   if (!side) {drawTargetMarker();}
@@ -891,6 +891,7 @@ function drawCasino(L, x, z0, z1, H) {
 /* ---------- Pavement life ---------- */
 function drawLamp(q, p) {
   const k = q.k, h = 4.2, glow = night > 0.2 || p.flick < 0.3;
+  if (p.slogan && typeof drawPoleBanner === 'function') { drawPoleBanner(q, p); }
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(q.x - 0.06 * k, q.y - h * k, 0.12 * k, h * k);
   const lx = q.x, ly = q.y - h * k;
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(lx - 0.18 * k, ly - 0.55 * k, 0.36 * k, 0.12 * k);
