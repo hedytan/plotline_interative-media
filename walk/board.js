@@ -454,20 +454,12 @@ function drawTurnSign(q, p) {
   ctx.restore();
 }
 // The satire drawn onto the buildings themselves (called from drawLot, inside the rise scope).
-// Every lived-in home wears a price tag on a string, like goods in a shop; empty investor towers
-// get a tycoon's top hat and a VACANT sign in red neon.
+// Empty investor towers get a red neon sign: 0 AFFORDABLE.
 function satireOnLot(L, x, z0, z1, H) {
   if (L.special || L.piece || intro) { return; }
   if (L.vacant) {
     const on = Math.sin(clockT * 3 + L.seed) > -0.6;
     facadeSign(L, x, z0, L.z0 + (L.z1 - L.z0) * 0.25, L.z1 - (L.z1 - L.z0) * 0.25, H * 0.3, H * 0.3 + 1.6, on ? '#2a0a0a' : '#1a1414', on ? '#ff4a3a' : '#5a2a2a', '0 AFFORDABLE · MOSTLY EMPTY', on ? '#ff3020' : null);
-    const xm = x + L.side * L.depth / 2, top = P(xm, H, (L.z0 + L.z1) / 2); if (top.rz < 3) { return; }
-    const k = top.k, bw = L.depth * 1.1 * k, cw = L.depth * 0.62 * k, ch = L.depth * 0.75 * k;
-    ctx.save(); ctx.globalAlpha = 1 - fogFor((L.z0 + L.z1) / 2) * 0.7;
-    ctx.fillStyle = '#141414'; ctx.beginPath(); ctx.ellipse(top.x, top.y, bw / 2, bw * 0.12, 0, 0, TWO_PI); ctx.fill();
-    ctx.fillRect(top.x - cw / 2, top.y - ch, cw, ch); ctx.beginPath(); ctx.ellipse(top.x, top.y - ch, cw / 2, cw * 0.12, 0, 0, TWO_PI); ctx.fill();
-    ctx.fillStyle = '#d4a017'; ctx.fillRect(top.x - cw / 2, top.y - ch * 0.32, cw, ch * 0.14);
-    ctx.restore();
     return;
   }
   // (Homes no longer wear price tags: the street had too much on it.)

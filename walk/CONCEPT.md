@@ -37,7 +37,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Investor towers | "THE PINNACLE · 300 LUXURY APARTMENTS" with a red neon "0 AFFORDABLE · MOSTLY EMPTY" | Apartments built by the rich, not affordable housing |
 | Round 1: corners (← / →) | You choose: a poorer town or a richer one, and buy wherever you like | The winner has every choice |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
-| A harsher street | Empty investor towers wear a giant top hat and a red neon "0 AFFORDABLE · MOSTLY EMPTY"; the sky is smog | Wealth built for investors, not for people |
+| A harsher street | Empty investor towers carry a red neon "0 AFFORDABLE · MOSTLY EMPTY"; the sky is smog | Wealth built for investors, not for people |
 | Slogans painted on the walls | One wall a block carries a slogan painted by hand in red: "300 HOMES. 0 YOU CAN AFFORD.", "LUXURY APARTMENTS. AFFORDABLE TO NOBODY.", "CAN'T AFFORD THE CITY? MOVE TO THE EDGE." | The street itself speaks the artwork's message, with nothing else in the way |
 | Endings, from above | The camera rises out of the street: in Round 1 the whole city is a grey board with SOLD on every square and only your pieces in colour (POPULATION: YOU); in Round 2 a dashed red line runs from the suburbs to The Fringe, where your box is | The city as the game sees it |
 | The sound of homes | Every lived-in home has its own sound through the wall: kids, a dog, a piano, the TV. Stand still and it comes through clearly. Buy it and it goes silent | A home is somebody's life; buying it takes that life off the street |
