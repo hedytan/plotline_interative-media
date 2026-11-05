@@ -481,6 +481,8 @@ function drawLot(L) {
   drawMaterial(L, x, z0, z1, H);
   if (L.style) { drawStyled(L, x, z0, z1, H); } else { [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H); }
   drawWeathering(L, x, z0, z1, H);
+  // The artwork's slogan, as a red band across the facade.
+  if (L.art && !L.owned && !L.vacant) { facadeSign(L, x, z0, L.z0 + 0.4, L.z1 - 0.4, H * 0.5, H * 0.5 + Math.min(1.6, H * 0.22), '#e02020', '#ffffff', L.art); }
   if(L.vacant){facadeSign(L,x,z0,L.z0+.2,L.z1-.2,1.2,2.3,"#eee4d0","#413c39","FORMERLY " + L.formerName,null);}
 }
 // Windows on the street facade: a grid in (along street, height) coordinates.

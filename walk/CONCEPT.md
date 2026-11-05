@@ -33,6 +33,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Round 2: applying (E) | "TOO DEAR · $470 a week. You can pay $230. 50 other people applied too." | Unaffordable rent and competition |
 | Round 1: corners (← / →) | You choose: a poorer town or a richer one, and buy wherever you like | The winner has every choice |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
+| The artwork's voice | Posters and bands across buildings in red bars of white type: "YOUR HOME IS OUR PORTFOLIO", "LOCATION LOCATION EVICTION", "PASS GO. COLLECT EVERYTHING." | The street itself becomes the artwork's statement |
 | Satire on every surface | Agents' sandwich boards ("BID NOW · CRY LATER"), council banners on lamp posts ("COMMUNITY (SOLD)"), words painted on the road ("MIND THE WEALTH GAP"), riders on the signs ("KIDS NOT INCLUDED"), empty towers called "NOBODY HOME"; the game cheers every purchase ("Congratulations! You're a landlord!") | The city sells homes as a game and celebrates the winner |
 | Satirical billboards | They change with you: "Light-filled! (One window.)", "Landlord of the Year: YOU", "No pets. No kids. No chance." | The city's advertising flatters whoever has the money |
 | The sound of homes | Every lived-in home has its own sound through the wall: kids, a dog, a piano, the TV. Stand still and it comes through clearly. Buy it and it goes silent | A home is somebody's life; buying it takes that life off the street |

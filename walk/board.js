@@ -104,6 +104,8 @@ const POLE = ['LIVE · WORK · PAY', 'COMMUNITY (SOLD)', 'A GREAT PLACE TO INVES
 const ROAD = ['MIND THE WEALTH GAP', 'SLOW · PRICES RISING', 'NO STANDING UNLESS YOU OWN', 'KEEP WALKING · YOU CAN’T AFFORD TO STOP', 'BUY LANE ONLY', 'CAUTION · GENTRIFICATION AHEAD'];
 const RIDER_SALE = ['SOLD OVER ASKING!', 'INVESTOR SPECIAL', '47 OFFERS', 'BE QUICK!', 'KIDS NOT INCLUDED', 'TENANTED · 8% YIELD'];
 const RIDER_RENT = ['50 APPLIED', 'NO KIDS', 'RENT BIDDING', '3 PAYSLIPS', 'NO PETS', 'VIEWING: 3 MIN'];
+// The artwork's own slogans, in red bars of white type, on billboards and across the buildings.
+const ART = ['YOUR HOME IS OUR PORTFOLIO', 'LOCATION LOCATION EVICTION', 'HOME IS WHERE THE YIELD IS', 'BUY LOW. EVICT HIGH.', 'OWN NOTHING. RENT EVERYTHING.', 'NOBODY LIVES HERE. EVERYBODY PROFITS.', 'THIS COULD HAVE BEEN YOURS', 'WE SOLD YOUR STREET', 'YOU ARE NOT THE CUSTOMER. YOUR RENT IS.', 'THE MARKET LOVES YOU (NOT)', 'PASS GO. COLLECT EVERYTHING.', 'ROLL THE DICE. LOSE THE HOUSE.'];
 const VOID_NAMES = ['NOBODY HOME', 'LUXURY VOIDS', 'THE EMPTY', 'INVESTMENT · NOT FOR LIVING', 'SOLD OUT · LIGHTS OFF'];
 function fillSign(text, tier, n = 0) {
   const L = { tier, priceK: 1 };
@@ -175,13 +177,15 @@ function plotsForChunk(ch, r) {
   for (const p of ch.props) { if (p.kind === 'lamp' && r() < 0.5) { p.slogan = pickN(r, POLE); p.scol = pickN(r, ['#c8322a', '#3f6fa8', '#d4a017', '#2e9e47']); } }
   ch.road = ch.slot === 0 ? null : pickN(r, ROAD);
   for (const L of ch.lots) { if (L.forSale) { L.rider = Math.floor(r() * 6); } }
+  for (const side of [-1, 1]) { const tall = ch.lots.filter(L => L.side === side && !L.forSale && L.H > 6.5); if (tall.length && r() < 0.7) { pickN(r, tall).art = pickN(r, ART); } }
   // A signpost at the crossing: which way is cheaper, which way is richer.
   ch.props.push({ kind: 'turnsign', x: ROAD_W + 0.9, z: ch.z0 - 0.8, side: 1 });
   // Billboards on the pavement, written from the prices on this block.
   for (let i = 0; i < 2; i++) {
     if (r() < 0.45) { continue; }
     const side = i === 0 ? -1 : 1, z = ch.z0 + CROSS_W + 6 + r() * (CHUNK_LEN - CROSS_W - 12);
-    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, tier: ch.tier, idx: Math.floor(r() * 1000), col: DISTRICTS[ch.tier].stripe[0] });
+    const idx = Math.floor(r() * 1000);
+    ch.props.push({ kind: 'billboard', x: side * (ROAD_W + 1.4), z, side, tier: ch.tier, idx, col: DISTRICTS[ch.tier].stripe[0], art: r() < 0.45 ? ART[idx % ART.length] : null });
   }
   // An open home with a queue down the pavement, in the cheaper districts.
   if (ch.tier <= 2 && zone >= 2 && r() < 0.55) {
@@ -331,7 +335,7 @@ function useHere() {
     if (rentedAt) { return; }
     if (!act.ok) { soldBeat = { t: clockT, stamp: 'TOO DEAR', col: [110, 100, 96], l1: `${money(rentAsk(L))} a week. You can pay ${money(RENT_BUDGET)}.`, l2: `${L.applicants} other people applied too.`, dur: 2.6 }; if (sound.ding) { sound.ding(); } return; }
     L.forSale = false; rentedAt = clockT;
-    soldBeat = { t: clockT, stamp: 'HOME', col: [63, 111, 168], l1: `${meName()} found a home.`, l2: `${deedName(L)}, ${commuteShort(zone)}.`, dur: 2.8 }; if (sound.welcome) { sound.welcome(); }
+    soldBeat = { t: clockT, stamp: 'HOME', col: [63, 111, 168], l1: 'You found a home.', l2: `${deedName(L)}, ${commuteShort(zone)}.`, dur: 2.8 }; if (sound.welcome) { sound.welcome(); }
     return;
   }
   if (!act.ok) { sayToast('Not enough money yet.'); return; }
@@ -556,6 +560,7 @@ function drawBillboard(q, p) {
   const w = 4.6 * k, h = 2.3 * k, top = q.y - 4.6 * k, x = q.x;
   ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85;
   ctx.fillStyle = '#2a2a30'; ctx.fillRect(x - w * 0.36, top, 0.12 * k, 4.6 * k); ctx.fillRect(x + w * 0.36 - 0.12 * k, top, 0.12 * k, 4.6 * k);
+  if (p.art) { drawArtPoster(x, top - h, w, h, p.art, k); ctx.restore(); return; }
   ctx.fillStyle = '#fffaf0'; ctx.fillRect(x - w / 2, top - h, w, h);
   ctx.fillStyle = p.col; ctx.fillRect(x - w / 2, top - h, w, h * 0.12); ctx.fillRect(x - w / 2, top - h * 0.12, w, h * 0.12);
   ctx.strokeStyle = '#2a1e18'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x - w / 2, top - h, w, h);
@@ -569,6 +574,22 @@ function drawBillboard(q, p) {
     lines.slice(0, 4).forEach((ln, i) => ctx.fillText(ln, x, y0 + i * lh));
   }
   ctx.restore();
+}
+// A poster in the artwork's own voice: a grey, grainy picture of a house, and white words on red bars.
+function drawArtPoster(cx, y, w, h, slogan, k) {
+  const x = cx - w / 2, g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, '#9a9792'); g.addColorStop(1, '#4a4846');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  // A house, in silhouette, like a cut-out photograph.
+  ctx.fillStyle = 'rgba(20,20,20,0.55)'; ctx.beginPath(); ctx.moveTo(x + w * 0.58, y + h); ctx.lineTo(x + w * 0.58, y + h * 0.5); ctx.lineTo(x + w * 0.76, y + h * 0.26); ctx.lineTo(x + w * 0.94, y + h * 0.5); ctx.lineTo(x + w * 0.94, y + h); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(235,230,220,0.5)'; ctx.fillRect(x + w * 0.66, y + h * 0.62, w * 0.08, h * 0.14); ctx.fillRect(x + w * 0.79, y + h * 0.62, w * 0.08, h * 0.14);
+  ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(1, 0.05 * k); ctx.strokeRect(x, y, w, h);
+  if (w < 50) { ctx.fillStyle = '#e02020'; ctx.fillRect(x + w * 0.06, y + h * 0.3, w * 0.6, h * 0.14); return; }
+  const size = h * 0.15; ctx.font = `italic 900 ${size}px "Helvetica Neue", Futura, Arial, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const words = slogan.split(' '), lines = []; let line = '';
+  for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w * 0.62 && line) { lines.push(line); line = wd; } else { line = t; } }
+  lines.push(line);
+  const n = Math.min(4, lines.length), lh = size * 1.32, y0 = y + h * 0.5 - (n - 1) * lh / 2;
+  lines.slice(0, n).forEach((ln, i) => { const tw = ctx.measureText(ln).width, bx = x + w * 0.05; ctx.fillStyle = '#e02020'; ctx.fillRect(bx, y0 + i * lh - size * 0.62, tw + size * 0.5, size * 1.24); ctx.fillStyle = '#fff'; ctx.fillText(ln, bx + size * 0.25, y0 + i * lh + 1); });
 }
 // An agent's sandwich board on the pavement.
 function drawAFrame(q, p) {
@@ -793,7 +814,7 @@ function drawBoardHud() {
       for (let i = 0; i < Math.max(OWN_GOAL, owned.length); i++) { houseIcon(x + 16 + i * 22, y + 38, 17, i < owned.length ? color(OWNER_COL) : color(190, 175, 160), i < owned.length); }
       fill(150, 130, 120); textSize(11); textStyle(ITALIC); text(['The city believes in you.', 'The city is proud of you.', 'The city loves you.', 'The city is yours.'][Math.min(owned.length, 3)], x + 16, y + 68); textStyle(NORMAL);
     } else {
-      text(`YOU · ${meName().toUpperCase()}`, x + 16, y + 10, w - 24);
+      text('YOU · THE TENANT', x + 16, y + 10, w - 24);
       textStyle(NORMAL); textSize(12); fill(150, 120, 100); text('Looking for a home you can afford.', x + 16, y + 32);
       textStyle(BOLD); fill(40, 30, 24); textSize(13); text(ZONE_NAMES[zone], x + 16, y + 52); textStyle(NORMAL); fill(150, 120, 100); textAlign(RIGHT, TOP); textSize(11); text(commuteShort(zone), x + w - 12, y + 54);
       const ww = 170, wx = width - ww - 16;
@@ -820,12 +841,12 @@ function drawBoardHud() {
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'rule1') {
     const names = evicted.slice(0, 3), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || 'Three families';
-    const lines = [`You own ${owned.length} homes.`, 'The city is so proud of you.', '', `Now walk the same street as ${evicted[0] || 'them'},`, 'who lived in the first one.'];
+    const lines = [`You own ${owned.length} homes.`, 'The city is so proud of you.', '', 'Now walk the same street', 'as the people who lived in the first one.'];
     storyCard('YOU WIN', lines, clockT - ending.t > 3.5 ? 'Press E or click' : '', easeN((clockT - ending.t - 2.5) / 1.2));
   }
   if (ending && ending.kind === 'rule2') {
     const a = firstRun || { owned: 3, moved: 3 };
-    const lines = [`${meName()} found a home in ${ZONE_NAMES[zone]}, ${commuteShort(zone)}.`, `You won ${a.owned} homes on the street they lived on.`, '', 'Monopoly began in 1904 as Lizzie Magie’s The Landlord’s Game.', 'It was a warning: under these rules one player wins,', 'and everyone else is pushed further out.', 'In 1935 it was sold as Monopoly. She was paid $500.'];
+    const lines = [`You found a home in ${ZONE_NAMES[zone]}, ${commuteShort(zone)}.`, `In Round 1 you won ${a.owned} homes. One of them was yours.`, '', 'Monopoly began in 1904 as Lizzie Magie’s The Landlord’s Game.', 'It was a warning: under these rules one player wins,', 'and everyone else is pushed further out.', 'In 1935 it was sold as Monopoly. She was paid $500.'];
     storyCard('YOUR WIN WAS THEIR LOSS', lines, 'Press R to walk again', easeN((clockT - ending.t - 1) / 1.2), '#3f6fa8');
   }
   pop();
@@ -838,7 +859,7 @@ function drawOpening() {
   const w = Math.min(600, width - 32), h = 350, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
   fill(0, 60); rect(x + 4, y + 6, w, h, 12); fill(255, 250, 238); rect(x, y, w, h, 12); fill(col); rect(x, y, w, 34, 12, 12, 0, 0);
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text(r1 ? 'AN ARTWORK · MONOPOLY, LIVED ON A REAL STREET' : 'ROUND 2 · THE SAME STREET', cx, y + 17);
-  const title = r1 ? 'THE LANDLORD’S WALK' : `NOW YOU ARE ${meName().toUpperCase()}`;
+  const title = r1 ? 'THE LANDLORD’S WALK' : 'NOW YOU ARE THEM';
   fill(40, 30, 24); textSize(34); textSize(Math.min(34, 34 * (w - 40) / textWidth(title))); text(title, cx, y + 70);
   const tag = r1 ? 'What if Monopoly were real, and the houses had people in them?' : 'The first home you bought was theirs.';
   textStyle(ITALIC); textSize(16); fill(110, 90, 80); textSize(Math.min(16, 16 * (w - 40) / textWidth(tag))); text(tag, cx, y + 102); textStyle(BOLD);
@@ -870,8 +891,8 @@ function drawCarryBox() {
   fill('#e8d8b0'); rect(x, y + h * 0.14, w, h * 0.08);
   // Written on the box in marker: whose things these are.
   fill(70, 45, 30); textFont('Georgia'); textStyle(BOLD); textAlign(CENTER, CENTER);
-  const label = meName().toUpperCase(); textSize(w * 0.08); textSize(Math.min(w * 0.08, w * 0.08 * (w * 0.78) / textWidth(label))); text(label, x + w / 2, y + h * 0.36);
-  textStyle(NORMAL); textSize(w * 0.05); text('everything we own', x + w / 2, y + h * 0.5);
+  const label = 'EVERYTHING WE OWN'; textSize(w * 0.08); textSize(Math.min(w * 0.08, w * 0.08 * (w * 0.78) / textWidth(label))); text(label, x + w / 2, y + h * 0.36);
+  textStyle(NORMAL); textSize(w * 0.05); text('this side up', x + w / 2, y + h * 0.5);
   fill('#d9a882'); ellipse(x + w * 0.03, y + h * 0.4, w * 0.12, w * 0.19); ellipse(x + w * 0.97, y + h * 0.4, w * 0.12, w * 0.19);
   pop();
 }
@@ -933,7 +954,7 @@ function drawListing(L, x, y) {
   textStyle(NORMAL); textSize(13);
   [['To buy it', moneyK(dep)], ['You have', moneyK(pw)]].forEach(([a, b], i) => { const ly = y + 56 + i * 20; fill(i === 1 && pw < dep ? color(200, 50, 40) : color(40, 30, 24)); textAlign(LEFT, CENTER); text(a, x + 14, ly); textAlign(RIGHT, CENTER); textStyle(BOLD); text(b, x + w - 14, ly); textStyle(NORMAL); });
   textStyle(ITALIC); textSize(11); textAlign(CENTER, CENTER); fill(rules === 1 ? color(200, 50, 40) : color(SHARE_COL));
-  text(rules === 1 ? `${familyOf(L)} live here.` : 'Whoever lives here stays.', x + 8, y + 104, w - 16);
+  text(rules === 1 ? 'Somebody lives here.' : 'Whoever lives here stays.', x + 8, y + 104, w - 16);
   pop();
 }
 
