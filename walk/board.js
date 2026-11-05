@@ -915,11 +915,15 @@ function drawJunk(q, p) {
 
 
 /* ---------- Your hands: chop the forest, raise the city (webcam + ml5 handPose) ---------- */
-// Press H to use the camera. A fast diagonal stroke down chops the forest beside you; raising
-// your hand raises the buildings on the cleared land, as high as your hand goes. Without a
-// camera: X chops, hold B to build. Only in Round 1: the tenant owns no land to build on.
-let handMode = false, handVideo = null, handModel = null, handStatus = '', raiseLevel = 0, chopHintT = -9;
-const handState = { ok: false, x: 0.5, y: 0.6, vx: 0, vy: 0, t: 0, seen: -9, chopT: -9, trail: [] };
+// Press H to use the camera. The hand moves are decided so each one carries the meaning:
+//   swipe left / right  -> chop the forest on that side (as many times as you like)
+//   open hand, lift up   -> build homes on the cleared land, floor by floor
+//   fist, lift up        -> build luxury towers for investors (they stay empty: 0 AFFORDABLE)
+// Only lifting builds; a hand held still does nothing, so you chop first and build after.
+// Without a camera: ← / → chop... (X chops the right, Z the left), hold B for homes, N for towers.
+// Only in Round 1: the tenant owns no land to build on.
+let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9, liftK = 0;
+const handState = { ok: false, x: 0.5, y: 0.6, fist: false, t: 0, seen: -9, chopT: -9, trail: [] };
 function startHands() {
   if (handMode) { handMode = false; handStatus = ''; return; }
   handMode = true; handStatus = 'Starting the camera…';
@@ -928,71 +932,92 @@ function startHands() {
     try {
       handVideo = createCapture(VIDEO); handVideo.size(320, 240); handVideo.hide();
       handModel = ml5.handPose({ maxHands: 1 }, () => { handStatus = 'Show your hand to the camera'; handModel.detectStart(handVideo, gotHands); });
-    } catch (e) { handStatus = 'No camera: press X to chop, hold B to build'; }
+    } catch (e) { handStatus = 'No camera: Z / X chop, hold B (homes) or N (towers)'; }
   };
   if (window.ml5) { go(); return; }
   const sc = document.createElement('script'); sc.src = 'https://unpkg.com/ml5@1.0.1/dist/ml5.min.js';
-  sc.onload = go; sc.onerror = () => { handStatus = 'Hand tracking could not load: press X to chop, hold B to build'; };
+  sc.onload = go; sc.onerror = () => { handStatus = 'Hand tracking could not load: Z / X chop, hold B or N'; };
   document.head.appendChild(sc);
 }
 function gotHands(results) {
   const h = results && results[0]; if (!h || !handVideo) { return; }
-  const kp = h.keypoints || [], p = kp.find(k => k.name === 'index_finger_mcp') || kp.find(k => k.name === 'wrist') || kp[0]; if (!p) { return; }
-  handFeed(1 - p.x / (handVideo.width || 320), p.y / (handVideo.height || 240));
+  const kp = h.keypoints || [], at = n => kp.find(k => k.name === n);
+  const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { return; }
+  // A fist: the fingertips are close to the wrist compared with the size of the palm.
+  let fist = false;
+  if (wrist && mcp) {
+    const palm = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y) || 1, tips = ['index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip'].map(at).filter(Boolean);
+    if (tips.length) { const reach = tips.reduce((s2, tp) => s2 + Math.hypot(tp.x - wrist.x, tp.y - wrist.y), 0) / tips.length / palm; fist = reach < 1.3; }
+  }
+  handFeed(1 - p.x / (handVideo.width || 320), p.y / (handVideo.height || 240), fist);
 }
-// One position of your hand (0..1, mirrored like a mirror), from the camera or from a test.
-function handFeed(nx, ny) {
-  const now = performance.now() / 1000, s = handState, dt = Math.max(0.016, now - s.t);
-  if (s.ok && now - s.seen < 0.4) { s.vx = mixN(s.vx, (nx - s.x) / dt, 0.6); s.vy = mixN(s.vy, (ny - s.y) / dt, 0.6); } else { s.vx = 0; s.vy = 0; }
-  s.x = nx; s.y = ny; s.t = now; s.ok = true; s.seen = now;
-  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length > 12) { s.trail.shift(); }
-  if (Math.abs(s.vx) > 0.9 && s.vy > 0.9 && Math.hypot(s.vx, s.vy) > 2 && now - s.chopT > 0.45) { s.chopT = now; chopForest(s.x < 0.5 ? -1 : 1); }
+// One position of your hand (0..1, mirrored like a mirror) from the camera, or from a test.
+function handFeed(nx, ny, fist = false) {
+  const now = performance.now() / 1000, s = handState, fresh = s.ok && now - s.seen < 0.4;
+  if (fresh) { const up = s.y - ny; if (up > 0.004) { liftK += up; } }   // how far the hand has lifted since last frame
+  s.x = nx; s.y = ny; s.fist = fist; s.t = now; s.ok = true; s.seen = now;
+  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.3) { s.trail.shift(); }
+  // A swipe: the hand crossed a good part of the picture sideways in the last 0.3 s.
+  const a = s.trail[0]; if (a && now - s.chopT > 0.28) { const dx = nx - a.x, dy = ny - a.y; if (Math.abs(dx) > 0.28 && Math.abs(dx) > Math.abs(dy) * 0.7) { s.chopT = now; s.trail.length = 0; chopForest(dx < 0 ? -1 : 1); } }
 }
 function handsActive() { return rules === 1 && !intro && !ending; }
 // Land that waits for your hands instead of building itself.
 function waitsForHand(L) { return handMode && rules === 1 && !L.forSale && !L.special && !L.owned && !L.piece; }
-// How far a lot's building has risen: by your hand once you have cleared it, otherwise on its own.
-function lotRise(L) { return L.cutT !== undefined && L.born === undefined ? (L.grow || 0) : riseOf(L.born); }
+// How far a lot's building has risen: floor by floor under your hand once cleared, otherwise on its own.
+function lotRise(L) {
+  if (L.cutT === undefined || L.born !== undefined) { return riseOf(L.born); }
+  const n = floorsOf(L), f = Math.floor((L.grow || 0) * n + 1e-6) / n, bump = L.floorT !== undefined ? Math.max(0, 1 - (clockT - L.floorT) / 0.18) : 0;
+  return f + bump * 0.6 / n;
+}
+function floorsOf(L) { return L.buildKind === 'tower' ? 14 : Math.max(2, Math.round(L.H / 2.6)); }
 function chopForest(side) {
   if (!handsActive()) { return; }
   const z = distanceWalked, pick = s => { let best = null; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side !== s || L.cutT !== undefined || L.born !== undefined || !waitsForHand(L)) { continue; } const d = L.z0 - z; if (d > -2 && d < 45 && (!best || d < best.d)) { best = { L, d }; } } } return best && best.L; };
-  const L = pick(side) || pick(-side); if (!L) { return; }
+  const L = pick(side); if (!L) { return; }
   L.cutT = clockT; L.grow = 0;
-  const L2 = pick(L.side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; }   // one swing clears a stretch of two lots
-  if (sound.chop) { sound.chop(L.side); }
-  if (clockT - chopHintT > 8) { chopHintT = clockT; sayToast('The forest is gone. Raise your hand to build.'); }
+  const L2 = pick(side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; }   // one swing clears a stretch of two lots
+  if (sound.chop) { sound.chop(side); }
+  if (clockT - chopHintT > 10) { chopHintT = clockT; sayToast('Cleared. Lift an open hand for homes, a fist for luxury towers.'); }
+}
+// A cleared lot becomes an investor's tower when a fist builds it.
+function makeTower(L) {
+  const r = rngN(L.seed + 5), t = makeLot(null, 4, L.side, L.z0, L.z1 - L.z0, r);
+  Object.assign(L, { style: null, tier: 4, H: mixN(45, 80, r()), depth: t.depth, color: t.color, crown: t.crown, spire: t.spire, glass: true, vacant: true, sign: true, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], setback: 0 });
 }
 function handUpdate(dt) {
   const s = handState; if (s.ok && performance.now() / 1000 - s.seen > 0.6) { s.ok = false; }
-  // How high your hand is (or how long B is held) sets how high the cleared land builds.
-  let target = 0;
-  if (s.ok) { target = constrain((0.72 - s.y) / 0.5, 0, 1); }
-  if (keysHeld.has('KeyB')) { target = Math.min(1, raiseLevel + dt * 0.7); }
-  raiseLevel = s.ok || keysHeld.has('KeyB') ? target : Math.max(0, raiseLevel - dt * 0.5);
-  if (!handsActive()) { return; }
-  let grew = 0;
-  for (const ch of chunks.values()) {
-    for (const L of ch.lots) {
-      if (L.cutT === undefined || L.born !== undefined || clockT - L.cutT < 0.8) { continue; }
-      if (raiseLevel > L.grow) { const g0 = L.grow; L.grow = Math.min(raiseLevel, L.grow + dt * 1.2); grew += L.grow - g0; }
-      if (L.grow > 0.985) { L.born = clockT - RISE_T - 1; L.thud = true; if (sound.rise) { sound.rise(L.tier, L.side, Math.max(0, L.z0 - distanceWalked)); } }
-    }
+  // Keys stand in for the camera: B lifts homes, N lifts towers.
+  let fist = s.ok && s.fist;
+  if (keysHeld.has('KeyB')) { liftK += dt * 0.6; fist = false; }
+  if (keysHeld.has('KeyN')) { liftK += dt * 0.6; fist = true; }
+  const lift = liftK; liftK = 0;
+  if (!handsActive() || lift <= 0) { return; }
+  // The lift raises every cleared lot near you that is still going up, nearest first.
+  const cleared = [];
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.8 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
+  cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
+  if (!cleared.length) { if (clockT - buildHintT > 6) { buildHintT = clockT; sayToast('Nothing cleared to build on. Swipe to chop the forest first.'); } return; }
+  for (const L of cleared.slice(0, 2)) {
+    if (!L.buildKind) { L.buildKind = fist ? 'tower' : 'home'; if (fist) { makeTower(L); } }
+    const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
+    L.grow = Math.min(1, L.grow + lift * (L.buildKind === 'tower' ? 1.6 : 2.4));
+    const after = Math.floor(L.grow * n + 1e-6);
+    if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
+    if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; if (sound.built) { sound.built(L.buildKind === 'tower'); } if (L.buildKind === 'tower' && !toasts.some(t2 => t2.text.startsWith('Luxury tower') && clockT - t2.t < 3)) { sayToast('Luxury tower built. 0 affordable. Mostly empty.'); } }
   }
-  if (grew > 0 && sound.build) { sound.build(grew); }
 }
 // The camera picture and your hand, bottom right, while the hands are on.
 function drawHandPanel() {
   if (!handMode) { return; }
-  const w = 160, h = 120, x = width - w - 16, y = height - h - 16;
-  push(); noStroke(); fill(0, 120); rect(x - 4, y - 24, w + 8, h + 28, 8);
+  const w = 176, h = 132, x = width - w - 16, y = height - h - 16;
+  push(); noStroke(); fill(0, 140); rect(x - 4, y - 44, w + 8, h + 48, 8);
   if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
   else { fill(40); rect(x, y, w, h, 4); }
   const s = handState;
-  if (s.ok) { stroke(255, 210, 60); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke(); fill(255, 210, 60); circle(x + s.x * w, y + s.y * h, 12); }
-  // How high you are building.
-  fill(255, 255, 255, 60); rect(x + w - 10, y, 6, h); fill('#d4a017'); rect(x + w - 10, y + h * (1 - raiseLevel), 6, h * raiseLevel);
-  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, CENTER);
-  text(rules === 1 ? (s.ok ? '↘ chop the forest   ↑ raise to build' : handStatus || 'Show your hand') : 'You own no land to build on.', x, y - 12, w + 4);
+  if (s.ok) { stroke(255, 210, 60); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke(); fill(s.fist ? '#e0302a' : '#ffd23f'); circle(x + s.x * w, y + s.y * h, 16); fill(255); textSize(11); textAlign(CENTER, CENTER); text(s.fist ? '✊' : '✋', x + s.x * w, y + s.y * h - 16); }
+  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
+  if (rules === 1) { text(s.ok || !handStatus ? '← →  swipe: chop the forest\n✋ lift: homes    ✊ lift: luxury towers' : handStatus, x, y - 38, w + 4); }
+  else { text('You own no land to build on.', x, y - 38, w + 4); }
   pop();
 }
 
@@ -1005,7 +1030,8 @@ function boardKey(e) {
   if (code === 'KeyR') { restartWalk(); return true; }
   if (code === 'KeyH') { startHands(); return true; }
   if (code === 'KeyX') { chopForest(1); return true; }
-  if (code === 'KeyB') { return true; }
+  if (code === 'KeyZ') { chopForest(-1); return true; }
+  if (code === 'KeyB' || code === 'KeyN') { return true; }
   return false;
 }
 

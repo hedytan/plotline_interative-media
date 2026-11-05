@@ -76,21 +76,35 @@ class WalkSound extends StreetSound {
     super.footstep(pace);
     if (typeof rules !== 'undefined' && rules === 2 && this._ok && this.context && this.context.state === 'running' && Math.random() < 0.7) { const t = this.context.currentTime + 0.03; this._m(2600 + Math.random() * 900, t, 0.09, 'sine', 0.02, 9000); if (Math.random() < 0.5) { this._m(3400 + Math.random() * 600, t + 0.05, 0.07, 'sine', 0.012, 9000); } }
   }
-  // A tree comes down: a crack of wood, a creak, and a heavy thump.
+  // A tree comes down, loud: the axe bites, the wood cracks, branches crash, and the trunk thumps down.
   chop(side) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(); p.pan.value = side * 0.6; p.connect(this.master);
-    const burst = (when, dur, freq, gain, type) => { const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s2.buffer = this.noise; f.type = type; f.frequency.value = freq; g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur); s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + dur + 0.02); };
-    burst(t, 0.08, 2500, 0.5, 'bandpass'); burst(t + 0.05, 0.35, 900, 0.18, 'bandpass');
-    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(140, t + 0.1); o.frequency.exponentialRampToValueAtTime(70, t + 0.6); g.gain.setValueAtTime(0.0001, t + 0.1); g.gain.linearRampToValueAtTime(0.05, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65); o.connect(g); g.connect(p); o.start(t + 0.1); o.stop(t + 0.7);
-    const k = ctx.createOscillator(), kg = ctx.createGain(); k.frequency.setValueAtTime(90, t + 0.65); k.frequency.exponentialRampToValueAtTime(35, t + 0.95); kg.gain.setValueAtTime(0.5, t + 0.65); kg.gain.exponentialRampToValueAtTime(0.0001, t + 1.0); k.connect(kg); kg.connect(p); k.start(t + 0.65); k.stop(t + 1.05);
-    burst(t + 0.65, 0.4, 300, 0.25, 'lowpass');
+    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(), out = ctx.createGain(); p.pan.value = side * 0.7; out.gain.value = 1.6; p.connect(out); out.connect(this.master);
+    const burst = (when, dur, freq, gain, type, q = 1) => { const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s2.buffer = this.noise; f.type = type; f.frequency.value = freq; f.Q.value = q; g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur); s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + dur + 0.02); };
+    const thump = (when, f0, gain, dur) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(f0, when); o.frequency.exponentialRampToValueAtTime(f0 * 0.35, when + dur); g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur); o.connect(g); g.connect(p); o.start(when); o.stop(when + dur + 0.02); };
+    // The axe: a hard, bright chop with a woody knock.
+    burst(t, 0.06, 3200, 0.9, 'highpass'); burst(t, 0.12, 900, 0.7, 'bandpass', 3); thump(t, 220, 0.6, 0.12);
+    // The wood splitting: a run of cracks.
+    for (let i = 0; i < 6; i++) { burst(t + 0.12 + i * 0.045 + Math.random() * 0.02, 0.04, 1500 + Math.random() * 2500, 0.45, 'bandpass', 4); }
+    // The creak as it leans over.
+    const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = 'sawtooth'; f.type = 'bandpass'; f.frequency.value = 600; f.Q.value = 6; o.frequency.setValueAtTime(160, t + 0.35); o.frequency.exponentialRampToValueAtTime(60, t + 1.0); g.gain.setValueAtTime(0.0001, t + 0.35); g.gain.linearRampToValueAtTime(0.25, t + 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.05); o.connect(f); f.connect(g); g.connect(p); o.start(t + 0.35); o.stop(t + 1.1);
+    // The crash of branches and the trunk hitting the ground.
+    burst(t + 0.95, 1.3, 1800, 0.6, 'lowpass'); burst(t + 0.95, 0.5, 5000, 0.25, 'highpass'); thump(t + 1.0, 95, 1.0, 0.6); thump(t + 1.12, 70, 0.6, 0.5);
   }
-  // Building up: a machine rumble and a rising whine while your hand lifts the city.
-  build(amount) {
-    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 30 || Math.random() > 0.35) { return; }
-    const t = this.context.currentTime; this._hit(t, 0.12, 180 + Math.random() * 80, Math.min(0.08, 0.02 + amount * 2), 'lowpass', 1);
-    this._m(220 + Math.random() * 300, t, 0.12, 'square', Math.min(0.01, 0.004 + amount), 900);
+  // Building up, floor by floor: a heavy "dun" for every floor, a little higher each time.
+  floorUp(i, n, side = 0) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(), out = ctx.createGain(); p.pan.value = side * 0.5; out.gain.value = 1.3; p.connect(out); out.connect(this.master);
+    const f0 = 70 + i / n * 90, o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(f0 * 1.8, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.12); g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(p); o.start(t); o.stop(t + 0.37);
+    const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g2 = ctx.createGain(); s2.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 1800 + i / n * 1500; f.Q.value = 5; g2.gain.setValueAtTime(0.35, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); s2.connect(f); f.connect(g2); g2.connect(p); s2.start(t, Math.random()); s2.stop(t + 0.1);
+  }
+  // Finished: a big landing thump and a bright, hollow fanfare (a home) or a cold, glassy chord (a tower).
+  built(tower) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, out = ctx.createGain(); out.gain.value = 1.2; out.connect(this.master);
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.5); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.62);
+    const notes = tower ? [59, 62, 66, 71, 74] : [60, 64, 67, 72, 76];
+    notes.forEach((n, i) => { const v = ctx.createOscillator(), vg = ctx.createGain(); v.type = tower ? 'sine' : 'triangle'; v.frequency.value = MIDI(n + 12); vg.gain.setValueAtTime(0.0001, t + 0.15 + i * 0.07); vg.gain.linearRampToValueAtTime(0.12, t + 0.17 + i * 0.07); vg.gain.exponentialRampToValueAtTime(0.0001, t + 1.4 + i * 0.07); v.connect(vg); vg.connect(out); v.start(t + 0.15 + i * 0.07); v.stop(t + 1.5 + i * 0.07); });
   }
   // A phone notification: your application was turned down.
   ding() {

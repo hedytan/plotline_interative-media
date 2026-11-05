@@ -24,7 +24,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 |---|---|---|
 | Opening | The camera starts above a board-game board and dives into one square, which becomes the street | You are entering the game, as a lived place |
 | Forest to city | Ahead of you the land is still forest, with wind and birds; as you come near, the trees go down and the buildings rise, and the sound turns into traffic and music | Development, as it happens: the city spreads over what was there before |
-| Your hands (camera, H) | A diagonal chop of your hand cuts down the forest beside you; raising your hand raises the buildings on the cleared land, as high as your hand goes. In Round 2 your hands do nothing: "You own no land to build on." | Development is a physical act by those with land and power; the tenant has neither |
+| Your hands (camera, H) | Swipe left or right and the forest on that side comes down, loudly. Lift an open hand and homes go up, floor by floor; lift a fist and luxury towers go up instead, empty, "0 AFFORDABLE". In Round 2 your hands do nothing: "You own no land to build on." | Development is a physical act by those with land and power; a grabbing fist builds for investors, not for people |
 | Walking (↑) | Homes rise out of the ground ahead of you | The landscape is generated as you move |
 | Stopping beside a home for sale | The camera turns to face it; the family out the front speaks ("The kids grew up here.") | A listing is someone's home |
 | Buying (E) | A SOLD stamp and the family's name; they carry boxes away; the music stops for a moment | Your win is their loss |
