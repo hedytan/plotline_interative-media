@@ -57,7 +57,7 @@ const FAMILIES = ['The Nguyens', 'The Kellys', 'Mrs Brown', 'The Patels', 'The W
 const LEAVING = ['We’ve lived here eleven years.', 'Where do we go now?', 'The kids’ school is just there.', 'We couldn’t match the price.', 'Two hours from work, now.', 'My mum is next door.', 'The landlord sold it.'];
 const ARRIVING = ['We can finally stay!', 'Hello, neighbour!', 'The kids can walk to school.', 'Ten minutes from work.'];
 // How alive the street still is: 1 = full of people, falling as families are moved out (Rule 1).
-function streetLife() { return rules === 2 ? 0.85 : Math.max(0.12, 1 - movedOut / 14) * emptyK; }
+function streetLife() { return rules === 2 ? 1 : Math.max(0.12, 1 - movedOut / 14) * emptyK; }
 const streetMemory = new Map();
 
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
@@ -389,7 +389,7 @@ function startRule2() {
   // The homes you bought, and the investors' towers, are still there in Round 2.
   const keep = [...streetMemory.entries()].filter(([, v]) => v.owned || v.sold);
   firstRun = { owned: owned.length, moved: movedOut, evicted: evicted.slice(), me: evicted[0] || 'The Nguyens', passZ: lastBuyZ + 4 };
-  rules = 2; if (startSeed !== null) { seed = startSeed; } resetLife();
+  rules = 2; if (startSeed !== null) { seed = startSeed; } resetLife(); night = 0; nightTarget = 0;
   for (const [k, v] of keep) { streetMemory.set(k, v); }
 }
 
@@ -824,8 +824,11 @@ function drawCarryBox() {
   fill(0, 45); rect(x + 10, y + 12, w, h, 4);
   fill('#c39565'); rect(x, y, w, h, 4);
   fill('#a8784a'); rect(x, y, w, h * 0.14, 4, 4, 0, 0);
-  fill('#e8d8b0'); rect(x + w * 0.44, y, w * 0.12, h * 0.6);
-  fill(70, 45, 30); textFont('Georgia'); textStyle(BOLD); textSize(w * 0.058); textAlign(CENTER, CENTER); text('KIDS’ ROOM', x + w * 0.265, y + h * 0.34); text('KITCHEN', x + w * 0.735, y + h * 0.34);
+  fill('#e8d8b0'); rect(x, y + h * 0.14, w, h * 0.08);
+  // Written on the box in marker: whose things these are.
+  fill(70, 45, 30); textFont('Georgia'); textStyle(BOLD); textAlign(CENTER, CENTER);
+  const label = meName().toUpperCase(); textSize(w * 0.08); textSize(Math.min(w * 0.08, w * 0.08 * (w * 0.78) / textWidth(label))); text(label, x + w / 2, y + h * 0.36);
+  textStyle(NORMAL); textSize(w * 0.05); text('everything we own', x + w / 2, y + h * 0.5);
   fill('#d9a882'); ellipse(x + w * 0.03, y + h * 0.4, w * 0.12, w * 0.19); ellipse(x + w * 0.97, y + h * 0.4, w * 0.12, w * 0.19);
   pop();
 }
