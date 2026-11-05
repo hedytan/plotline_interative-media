@@ -4,7 +4,12 @@
 
 A first-person p5.js generative landscape (brief: *Generative Landscape*). You walk down an endless board-game street and decide what gets built on it. Every building, person and sound is drawn or synthesised in code. The only library is p5.js.
 
-## The Landlord's Walk (newest — Hedy's pick)
+## We Build Our World (newest — Hedy's pick)
+**▶ https://hedytan.github.io/plotline_interative-media/build/** (click once for sound; press H to use your hands with the camera)
+
+An interactive artwork and generative landscape about how we make the world we live in. Everything starts as forest, with wind and birdsong. You cut it down with a swipe of your hand and raise buildings with a lift: an open hand builds homes, a fist builds towers, floor by floor. The street turns into a city around you: birds give way to traffic, wind to music. Build ten buildings and the card counts the trees: *Every city was a forest once. We build our world the way we want it. Nobody asks the forest.* No camera: Z / X cut, hold B or N to build, ↑ walks.
+
+## The Landlord's Walk (previous direction)
 **▶ https://hedytan.github.io/plotline_interative-media/walk/** (click once to start the sound)
 
 An interactive artwork: Monopoly, lived on a real street. **Your win is someone else's loss.** About a minute per round. Concept, audience, meaning of each interaction and the timeline: [walk/CONCEPT.md](walk/CONCEPT.md).
