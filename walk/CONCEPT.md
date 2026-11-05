@@ -23,7 +23,6 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Interaction | What the player sees or hears | What it means |
 |---|---|---|
 | Walking (↑) | Homes rise out of the ground ahead of you | The landscape is generated as you move |
-| Life squares on the road | Board-game squares of a life plan: GRADUATE, GET A JOB, GET MARRIED, BUY A HOUSE, HAVE A BABY... As the landlord each one ticks and the game cheers. As the tenant the same squares are crossed out with the reason ("0 results in your price range", "“No kids,” says the lease") | Board games promise a life path; who gets it depends on who owns |
 | Stopping beside a home for sale | The camera turns to face it; the family out the front speaks ("The kids grew up here.") | A listing is someone's home |
 | Buying (E) | A SOLD stamp and the family's name; they carry boxes away; the music stops for a moment | Your win is their loss |
 | Buying a second or third home | The real house sinks; a giant plastic Monopoly house (then a red hotel) drops onto the lot | To the winner, a home is only a game piece |
@@ -44,7 +43,6 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 
 ## Research and influences
 - Lizzie Magie, *The Landlord's Game* (patented 1904), and its two rule sets (monopolist and anti-monopolist, "Prosperity").
-- The 1860 board game of a life path (school, job, marriage, children, house, retirement; winner = the richest), whose fixed path the life squares parody.
 - Henry George's land value tax, which her second rule set is based on.
 - The history of Monopoly: Charles Darrow sold the game to Parker Brothers in 1935; Magie was paid $500.
 - Australian housing: deposits, negative gearing, rent rises, the commute from outer suburbs.
