@@ -272,7 +272,7 @@ function boardUpdate(z) {
   // Round 2: nothing here is affordable, so at the next corner you are turned further out.
   // On the old street that happens only after you have walked past every home you bought.
   if (rules === 2 && !ending && !intro && !turnAnim && !sideSt && !rentedAt && zone < ZONE_NAMES.length - 1) {
-    const c = Math.floor(distanceWalked / CHUNK_LEN) + 1, zc = c * CHUNK_LEN + CROSS_W / 2, passZ = zone === START_ZONE && firstRun ? firstRun.passZ : -Infinity;
+    const c = Math.floor(distanceWalked / CHUNK_LEN) + 1, zc = c * CHUNK_LEN + CROSS_W / 2, passZ = firstRun && zone === firstRun.zone ? firstRun.passZ : -Infinity;
     if (zc - distanceWalked < 26 && zc > passZ) { queuedTurn = -1; makeSide(-1, c); sayToast(`Nothing you can pay for here. Further out: ${ZONE_NAMES[zone + 1]}.`); }
   }
 }
@@ -398,8 +398,11 @@ function restartWalk() { rules = 1; firstRun = null; seed += 97; startSeed = see
 function startRule2() {
   // The homes you bought, and the investors' towers, are still there in Round 2.
   const keep = [...streetMemory.entries()].filter(([, v]) => v.owned || v.sold);
-  firstRun = { owned: owned.length, moved: movedOut, evicted: evicted.slice(), me: evicted[0] || 'The Nguyens', passZ: lastBuyZ + 4 };
+  // Round 2 starts in the town of the first home you bought, and walks you past every home you bought there.
+  const z0 = owned.length ? owned[0].zone : START_ZONE, slots = owned.filter(o => o.zone === z0 && o.key).map(o => Number(o.key.split(':')[1]));
+  firstRun = { owned: owned.length, moved: movedOut, evicted: evicted.slice(), me: evicted[0] || 'The Nguyens', zone: z0, passZ: slots.length ? (Math.max(...slots) + 1) * CHUNK_LEN - 20 : -Infinity };
   rules = 2; if (startSeed !== null) { seed = startSeed; } resetLife(); night = 0; nightTarget = 0;
+  zone = z0; rentWeek = rentFor(zone); buildSkyline();
   for (const [k, v] of keep) { streetMemory.set(k, v); }
 }
 
@@ -534,7 +537,7 @@ function drawForSale(L) {
 }
 // A street sign at each crossing: left to a cheaper town, right to a richer one.
 function drawTurnSign(q, p) {
-  const k = q.k; if (k < 3 || rules === 1) { return; }
+  const k = q.k; if (k < 3) { return; }
   const w = 3.4 * k, h = 0.55 * k, top = q.y - 3.4 * k, out = zone < ZONE_NAMES.length - 1 ? ZONE_NAMES[zone + 1] : null, inn = zone > 0 ? ZONE_NAMES[zone - 1] : null;
   ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
   ctx.fillStyle = '#3a4a3a'; ctx.fillRect(q.x - 0.06 * k, top - 0.2 * k, 0.12 * k, 3.6 * k);
@@ -832,7 +835,7 @@ function drawBoardHud() {
 function drawOpening() {
   const r1 = rules === 1, col = r1 ? '#c8322a' : '#3f6fa8', pulse = 0.5 + 0.5 * Math.sin(clockT * 4);
   push(); noStroke(); fill(20, 14, 10, 150); rect(0, 0, width, height);
-  const w = Math.min(600, width - 32), h = 330, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
+  const w = Math.min(600, width - 32), h = 350, x = width / 2 - w / 2, y = Math.max(12, height / 2 - h / 2), cx = width / 2;
   fill(0, 60); rect(x + 4, y + 6, w, h, 12); fill(255, 250, 238); rect(x, y, w, h, 12); fill(col); rect(x, y, w, 34, 12, 12, 0, 0);
   fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(12); text(r1 ? 'AN ARTWORK · MONOPOLY, LIVED ON A REAL STREET' : 'ROUND 2 · THE SAME STREET', cx, y + 17);
   const title = r1 ? 'THE LANDLORD’S WALK' : `NOW YOU ARE ${meName().toUpperCase()}`;
@@ -851,9 +854,9 @@ function drawOpening() {
   textStyle(BOLD); textSize(17); fill(r1 ? color(200, 50, 40) : color(63, 111, 168)); text(r1 ? 'The whole city will cheer you on.' : `You can pay ${money(RENT_BUDGET)} a week.`, rx + n2 * 26 + 12, ry + 11, tw - n2 * 26 - 12);
   // Row 3: the keys.
   const ky = y + 248; textStyle(BOLD); textSize(13);
-  const keys = [['↑', 'walk'], ['E', r1 ? 'buy' : 'rent'], ['stand still', 'listen']];
+  const keys = r1 ? [['↑', 'walk'], ['E', 'buy'], ['← →', 'poorer / richer town']] : [['↑', 'walk'], ['E', 'rent']];
   let kx = rx; for (const [k, label] of keys) { const kw = textWidth(k) + 20; fill(255); stroke(90, 70, 60); strokeWeight(1.5); rect(kx, ky, kw, 28, 6); noStroke(); fill(40, 30, 24); textAlign(CENTER, CENTER); text(k, kx + kw / 2, ky + 14); textStyle(NORMAL); fill(90, 70, 60); textAlign(LEFT, CENTER); text(label, kx + kw + 8, ky + 14); kx += kw + textWidth(label) + 28; textStyle(BOLD); }
-  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 30); drawingContext.globalAlpha = 1;
+  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1; textStyle(ITALIC); textSize(13); fill(110, 90, 80); text('Stand still to listen to the homes.', cx, y + 296); textStyle(BOLD); drawingContext.globalAlpha = 1;
   pop();
 }
 // Round 2: you carry your things in a moving box, in front of you as you walk.
@@ -937,6 +940,8 @@ function drawListing(L, x, y) {
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
+  if (rules === 1 && (code === 'ArrowLeft' || code === 'KeyA')) { tryTurn(-1); return true; }
+  if (rules === 1 && (code === 'ArrowRight' || code === 'KeyD')) { tryTurn(1); return true; }
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
   return false;
@@ -957,6 +962,8 @@ function nextText() {
     return 'Walk on · look for FOR RENT';
   }
   if (L) { return 'Press E to buy it'; }
+  if (sideSt && queuedTurn) { return `Turning to ${ZONE_NAMES[sideSt.zone]}`; }
+  if (atCrossing(distanceWalked + 12) || atCrossing(distanceWalked + 6)) { return '← poorer town  ·  → richer town'; }
   return 'Walk to a FOR SALE sign';
 }
 function drawNextBar() {
