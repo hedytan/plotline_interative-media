@@ -76,6 +76,22 @@ class WalkSound extends StreetSound {
     super.footstep(pace);
     if (typeof rules !== 'undefined' && rules === 2 && this._ok && this.context && this.context.state === 'running' && Math.random() < 0.7) { const t = this.context.currentTime + 0.03; this._m(2600 + Math.random() * 900, t, 0.09, 'sine', 0.02, 9000); if (Math.random() < 0.5) { this._m(3400 + Math.random() * 600, t + 0.05, 0.07, 'sine', 0.012, 9000); } }
   }
+  // A tree comes down: a crack of wood, a creak, and a heavy thump.
+  chop(side) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(); p.pan.value = side * 0.6; p.connect(this.master);
+    const burst = (when, dur, freq, gain, type) => { const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s2.buffer = this.noise; f.type = type; f.frequency.value = freq; g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur); s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + dur + 0.02); };
+    burst(t, 0.08, 2500, 0.5, 'bandpass'); burst(t + 0.05, 0.35, 900, 0.18, 'bandpass');
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(140, t + 0.1); o.frequency.exponentialRampToValueAtTime(70, t + 0.6); g.gain.setValueAtTime(0.0001, t + 0.1); g.gain.linearRampToValueAtTime(0.05, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65); o.connect(g); g.connect(p); o.start(t + 0.1); o.stop(t + 0.7);
+    const k = ctx.createOscillator(), kg = ctx.createGain(); k.frequency.setValueAtTime(90, t + 0.65); k.frequency.exponentialRampToValueAtTime(35, t + 0.95); kg.gain.setValueAtTime(0.5, t + 0.65); kg.gain.exponentialRampToValueAtTime(0.0001, t + 1.0); k.connect(kg); kg.connect(p); k.start(t + 0.65); k.stop(t + 1.05);
+    burst(t + 0.65, 0.4, 300, 0.25, 'lowpass');
+  }
+  // Building up: a machine rumble and a rising whine while your hand lifts the city.
+  build(amount) {
+    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 30 || Math.random() > 0.35) { return; }
+    const t = this.context.currentTime; this._hit(t, 0.12, 180 + Math.random() * 80, Math.min(0.08, 0.02 + amount * 2), 'lowpass', 1);
+    this._m(220 + Math.random() * 300, t, 0.12, 'square', Math.min(0.01, 0.004 + amount), 900);
+  }
   // A phone notification: your application was turned down.
   ding() {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }

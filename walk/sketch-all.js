@@ -214,6 +214,22 @@ class WalkSound extends StreetSound {
     super.footstep(pace);
     if (typeof rules !== 'undefined' && rules === 2 && this._ok && this.context && this.context.state === 'running' && Math.random() < 0.7) { const t = this.context.currentTime + 0.03; this._m(2600 + Math.random() * 900, t, 0.09, 'sine', 0.02, 9000); if (Math.random() < 0.5) { this._m(3400 + Math.random() * 600, t + 0.05, 0.07, 'sine', 0.012, 9000); } }
   }
+  // A tree comes down: a crack of wood, a creak, and a heavy thump.
+  chop(side) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(); p.pan.value = side * 0.6; p.connect(this.master);
+    const burst = (when, dur, freq, gain, type) => { const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s2.buffer = this.noise; f.type = type; f.frequency.value = freq; g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur); s2.connect(f); f.connect(g); g.connect(p); s2.start(when, Math.random()); s2.stop(when + dur + 0.02); };
+    burst(t, 0.08, 2500, 0.5, 'bandpass'); burst(t + 0.05, 0.35, 900, 0.18, 'bandpass');
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(140, t + 0.1); o.frequency.exponentialRampToValueAtTime(70, t + 0.6); g.gain.setValueAtTime(0.0001, t + 0.1); g.gain.linearRampToValueAtTime(0.05, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65); o.connect(g); g.connect(p); o.start(t + 0.1); o.stop(t + 0.7);
+    const k = ctx.createOscillator(), kg = ctx.createGain(); k.frequency.setValueAtTime(90, t + 0.65); k.frequency.exponentialRampToValueAtTime(35, t + 0.95); kg.gain.setValueAtTime(0.5, t + 0.65); kg.gain.exponentialRampToValueAtTime(0.0001, t + 1.0); k.connect(kg); kg.connect(p); k.start(t + 0.65); k.stop(t + 1.05);
+    burst(t + 0.65, 0.4, 300, 0.25, 'lowpass');
+  }
+  // Building up: a machine rumble and a rising whine while your hand lifts the city.
+  build(amount) {
+    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 30 || Math.random() > 0.35) { return; }
+    const t = this.context.currentTime; this._hit(t, 0.12, 180 + Math.random() * 80, Math.min(0.08, 0.02 + amount * 2), 'lowpass', 1);
+    this._m(220 + Math.random() * 300, t, 0.12, 'square', Math.min(0.01, 0.004 + amount), 900);
+  }
   // A phone notification: your application was turned down.
   ding() {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
@@ -619,7 +635,7 @@ function draw() {
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
   // How built-up is the street around you? 0 = all forest, 1 = all buildings.
   let builtN = 0, lotN = 0;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, riseOf(L.born)); } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born)); } } }
   sound.devK = lotN ? builtN / lotN : 0;
   sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
 
@@ -642,12 +658,12 @@ function birthDelay(seedish, ahead) {
 }
 function updateLandmarks(z) {
   for (const ch of chunks.values()) {
-    for (const b of ch.back) {if (b.born === undefined && b.z0 - z < APPEAR_Z + 10) {b.born = clockT + 0.4 + birthDelay(ch.c * 13, b.z0 - z);}}
+    for (const b of ch.back) {if (b.born === undefined && b.z0 - z < APPEAR_Z + 10 && !(typeof waitsForHand === 'function' && ch.lots.some(L => L.side === b.side && L.born === undefined && waitsForHand(L)))) {b.born = clockT + 0.4 + birthDelay(ch.c * 13, b.z0 - z);}}
     for (const p of ch.props) {if (p.born === undefined && p.z - z < APPEAR_Z - 8) {p.born = clockT + birthDelay(Math.floor(p.z * 7), p.z - z);}}
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(typeof waitsForHand === 'function' && waitsForHand(L))) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -804,16 +820,18 @@ function drawWorld(z, side) {
   }
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
+    const rise = typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born);
+    const g = rise * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
     if (L.piece) { drawBoardSquare(L); }
-    // Before it is built, every lot is forest; as the building rises, the trees go down.
-    const forestK = L.piece ? 0 : 1 - Math.min(1, riseOf(L.born) * 1.4);
-    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    if (forestK > 0.02) { drawForest(L, forestK); }
+    // Before it is built, every lot is forest; as the building rises, the trees go down
+    // (or, with your hands, they fall when you chop them and stumps are left).
+    const cut = L.cutT !== undefined, forestK = L.piece ? 0 : cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
+    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
     if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
     if (L.piece) { drawToyPiece(L); }
     if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
-    const age = clockT - L.born; if (age < RISE_T + 0.8 && !L.piece) {drawDust(L, age);}
+    const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && !L.piece && age === age) {drawDust(L, Math.min(age, RISE_T));}
   }
   const items = [];
   for (const ch of all) {
@@ -840,7 +858,7 @@ function drawPlot(L) {
 }
 // The forest that stood here before the street was built: a stand of trees on every lot,
 // sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
-function drawForest(L, k, back = 0) {
+function drawForest(L, k, back = 0, fall = 0, cut = false) {
   if (k <= 0.02 || L.special) { return; }
   const r = rngN(L.seed + 77), len = L.z1 - L.z0, n = Math.max(2, Math.round(len / 2.4)), rows = 3, list = [];
   for (let row = rows - 1; row >= 0; row--) {
@@ -853,6 +871,14 @@ function drawForest(L, k, back = 0) {
   for (const t of list) {
     if (t.z < cam.z + NEAR_Z + 1) { continue; }
     const q = P(t.x, 0, t.z); if (q.rz < 1.5 || q.rz > FAR_Z) { continue; }
+    if (cut) {
+      // Chopped: the tree falls away from the road and fades; a stump is left until the building comes.
+      const gone = easeN((clockT - L.cutT - 0.7) / 0.5);
+      if (k > 0.05) { ctx.fillStyle = toneN('#7a5a3a', t.z); ctx.fillRect(q.x - 0.25 * q.k, q.y - 0.5 * q.k * k, 0.5 * q.k, 0.5 * q.k * k); ctx.fillStyle = toneN('#d8c09a', t.z); ctx.beginPath(); ctx.ellipse(q.x, q.y - 0.5 * q.k * k, 0.25 * q.k, 0.08 * q.k, 0, 0, TWO_PI); ctx.fill(); }
+      if (gone >= 1) { continue; }
+      ctx.save(); ctx.globalAlpha = 1 - gone; ctx.translate(q.x, q.y); ctx.rotate(L.side * fall * 1.45); ctx.translate(-q.x, -q.y);
+      drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore(); continue;
+    }
     ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.min(1, 0.5 + k * 0.5), k); ctx.translate(-q.x, -q.y);
     drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore();
   }
@@ -1605,7 +1631,7 @@ function houseLife() {
 
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
-  updateTurn(); houseLife();
+  updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
   // Prices rise with time, and time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
@@ -2124,6 +2150,7 @@ function drawBoardHud() {
     }
   }
   if (!intro && !ending) { drawSoldBeat(); }
+  if (!intro) { drawHandPanel(); }
   if (intro) {
     const bt = clockT - boardT0;
     if (rules === 1 && bt < 3.6) { drawBoardScene('intro', easeN((bt - 0.9) / 2.3), 1 - easeN((bt - 3.0) / 0.6)); }
@@ -2172,7 +2199,7 @@ function drawOpening() {
   const ky = y + 248; textStyle(BOLD); textSize(13);
   const keys = r1 ? [['↑', 'walk'], ['E', 'buy'], ['← →', 'poorer / richer town']] : [['↑', 'walk'], ['E', 'rent']];
   let kx = rx; for (const [k, label] of keys) { const kw = textWidth(k) + 20; fill(255); stroke(90, 70, 60); strokeWeight(1.5); rect(kx, ky, kw, 28, 6); noStroke(); fill(40, 30, 24); textAlign(CENTER, CENTER); text(k, kx + kw / 2, ky + 14); textStyle(NORMAL); fill(90, 70, 60); textAlign(LEFT, CENTER); text(label, kx + kw + 8, ky + 14); kx += kw + textWidth(label) + 28; textStyle(BOLD); }
-  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1; textStyle(ITALIC); textSize(13); fill(110, 90, 80); text('Stand still to listen to the homes.', cx, y + 296); textStyle(BOLD); drawingContext.globalAlpha = 1;
+  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1; textStyle(ITALIC); textSize(13); fill(110, 90, 80); text(r1 ? 'Press H to use your hands: chop the forest, raise the city.' : 'Stand still to listen to the homes.', cx, y + 296); textStyle(BOLD); drawingContext.globalAlpha = 1;
   pop();
 }
 // Round 2: you carry your things in a moving box, in front of you as you walk.
@@ -2340,6 +2367,89 @@ function drawJunk(q, p) {
   ctx.restore();
 }
 
+
+/* ---------- Your hands: chop the forest, raise the city (webcam + ml5 handPose) ---------- */
+// Press H to use the camera. A fast diagonal stroke down chops the forest beside you; raising
+// your hand raises the buildings on the cleared land, as high as your hand goes. Without a
+// camera: X chops, hold B to build. Only in Round 1: the tenant owns no land to build on.
+let handMode = false, handVideo = null, handModel = null, handStatus = '', raiseLevel = 0, chopHintT = -9;
+const handState = { ok: false, x: 0.5, y: 0.6, vx: 0, vy: 0, t: 0, seen: -9, chopT: -9, trail: [] };
+function startHands() {
+  if (handMode) { handMode = false; handStatus = ''; return; }
+  handMode = true; handStatus = 'Starting the camera…';
+  if (handModel) { handStatus = 'Show your hand to the camera'; return; }
+  const go = () => {
+    try {
+      handVideo = createCapture(VIDEO); handVideo.size(320, 240); handVideo.hide();
+      handModel = ml5.handPose({ maxHands: 1 }, () => { handStatus = 'Show your hand to the camera'; handModel.detectStart(handVideo, gotHands); });
+    } catch (e) { handStatus = 'No camera: press X to chop, hold B to build'; }
+  };
+  if (window.ml5) { go(); return; }
+  const sc = document.createElement('script'); sc.src = 'https://unpkg.com/ml5@1.0.1/dist/ml5.min.js';
+  sc.onload = go; sc.onerror = () => { handStatus = 'Hand tracking could not load: press X to chop, hold B to build'; };
+  document.head.appendChild(sc);
+}
+function gotHands(results) {
+  const h = results && results[0]; if (!h || !handVideo) { return; }
+  const kp = h.keypoints || [], p = kp.find(k => k.name === 'index_finger_mcp') || kp.find(k => k.name === 'wrist') || kp[0]; if (!p) { return; }
+  handFeed(1 - p.x / (handVideo.width || 320), p.y / (handVideo.height || 240));
+}
+// One position of your hand (0..1, mirrored like a mirror), from the camera or from a test.
+function handFeed(nx, ny) {
+  const now = performance.now() / 1000, s = handState, dt = Math.max(0.016, now - s.t);
+  if (s.ok && now - s.seen < 0.4) { s.vx = mixN(s.vx, (nx - s.x) / dt, 0.6); s.vy = mixN(s.vy, (ny - s.y) / dt, 0.6); } else { s.vx = 0; s.vy = 0; }
+  s.x = nx; s.y = ny; s.t = now; s.ok = true; s.seen = now;
+  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length > 12) { s.trail.shift(); }
+  if (Math.abs(s.vx) > 0.9 && s.vy > 0.9 && Math.hypot(s.vx, s.vy) > 2 && now - s.chopT > 0.45) { s.chopT = now; chopForest(s.x < 0.5 ? -1 : 1); }
+}
+function handsActive() { return rules === 1 && !intro && !ending; }
+// Land that waits for your hands instead of building itself.
+function waitsForHand(L) { return handMode && rules === 1 && !L.forSale && !L.special && !L.owned && !L.piece; }
+// How far a lot's building has risen: by your hand once you have cleared it, otherwise on its own.
+function lotRise(L) { return L.cutT !== undefined && L.born === undefined ? (L.grow || 0) : riseOf(L.born); }
+function chopForest(side) {
+  if (!handsActive()) { return; }
+  const z = distanceWalked, pick = s => { let best = null; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side !== s || L.cutT !== undefined || L.born !== undefined || !waitsForHand(L)) { continue; } const d = L.z0 - z; if (d > -2 && d < 45 && (!best || d < best.d)) { best = { L, d }; } } } return best && best.L; };
+  const L = pick(side) || pick(-side); if (!L) { return; }
+  L.cutT = clockT; L.grow = 0;
+  const L2 = pick(L.side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; }   // one swing clears a stretch of two lots
+  if (sound.chop) { sound.chop(L.side); }
+  if (clockT - chopHintT > 8) { chopHintT = clockT; sayToast('The forest is gone. Raise your hand to build.'); }
+}
+function handUpdate(dt) {
+  const s = handState; if (s.ok && performance.now() / 1000 - s.seen > 0.6) { s.ok = false; }
+  // How high your hand is (or how long B is held) sets how high the cleared land builds.
+  let target = 0;
+  if (s.ok) { target = constrain((0.72 - s.y) / 0.5, 0, 1); }
+  if (keysHeld.has('KeyB')) { target = Math.min(1, raiseLevel + dt * 0.7); }
+  raiseLevel = s.ok || keysHeld.has('KeyB') ? target : Math.max(0, raiseLevel - dt * 0.5);
+  if (!handsActive()) { return; }
+  let grew = 0;
+  for (const ch of chunks.values()) {
+    for (const L of ch.lots) {
+      if (L.cutT === undefined || L.born !== undefined || clockT - L.cutT < 0.8) { continue; }
+      if (raiseLevel > L.grow) { const g0 = L.grow; L.grow = Math.min(raiseLevel, L.grow + dt * 1.2); grew += L.grow - g0; }
+      if (L.grow > 0.985) { L.born = clockT - RISE_T - 1; L.thud = true; if (sound.rise) { sound.rise(L.tier, L.side, Math.max(0, L.z0 - distanceWalked)); } }
+    }
+  }
+  if (grew > 0 && sound.build) { sound.build(grew); }
+}
+// The camera picture and your hand, bottom right, while the hands are on.
+function drawHandPanel() {
+  if (!handMode) { return; }
+  const w = 160, h = 120, x = width - w - 16, y = height - h - 16;
+  push(); noStroke(); fill(0, 120); rect(x - 4, y - 24, w + 8, h + 28, 8);
+  if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
+  else { fill(40); rect(x, y, w, h, 4); }
+  const s = handState;
+  if (s.ok) { stroke(255, 210, 60); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke(); fill(255, 210, 60); circle(x + s.x * w, y + s.y * h, 12); }
+  // How high you are building.
+  fill(255, 255, 255, 60); rect(x + w - 10, y, 6, h); fill('#d4a017'); rect(x + w - 10, y + h * (1 - raiseLevel), 6, h * raiseLevel);
+  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, CENTER);
+  text(rules === 1 ? (s.ok ? '↘ chop the forest   ↑ raise to build' : handStatus || 'Show your hand') : 'You own no land to build on.', x, y - 12, w + 4);
+  pop();
+}
+
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
@@ -2347,6 +2457,9 @@ function boardKey(e) {
   if (rules === 1 && (code === 'ArrowRight' || code === 'KeyD')) { tryTurn(1); return true; }
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
+  if (code === 'KeyH') { startHands(); return true; }
+  if (code === 'KeyX') { chopForest(1); return true; }
+  if (code === 'KeyB') { return true; }
   return false;
 }
 

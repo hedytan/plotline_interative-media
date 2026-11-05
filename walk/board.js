@@ -177,7 +177,7 @@ function houseLife() {
 
 /* ---------- Every frame ---------- */
 function boardUpdate(z) {
-  updateTurn(); houseLife();
+  updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
   // Prices rise with time, and time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
@@ -696,6 +696,7 @@ function drawBoardHud() {
     }
   }
   if (!intro && !ending) { drawSoldBeat(); }
+  if (!intro) { drawHandPanel(); }
   if (intro) {
     const bt = clockT - boardT0;
     if (rules === 1 && bt < 3.6) { drawBoardScene('intro', easeN((bt - 0.9) / 2.3), 1 - easeN((bt - 3.0) / 0.6)); }
@@ -744,7 +745,7 @@ function drawOpening() {
   const ky = y + 248; textStyle(BOLD); textSize(13);
   const keys = r1 ? [['↑', 'walk'], ['E', 'buy'], ['← →', 'poorer / richer town']] : [['↑', 'walk'], ['E', 'rent']];
   let kx = rx; for (const [k, label] of keys) { const kw = textWidth(k) + 20; fill(255); stroke(90, 70, 60); strokeWeight(1.5); rect(kx, ky, kw, 28, 6); noStroke(); fill(40, 30, 24); textAlign(CENTER, CENTER); text(k, kx + kw / 2, ky + 14); textStyle(NORMAL); fill(90, 70, 60); textAlign(LEFT, CENTER); text(label, kx + kw + 8, ky + 14); kx += kw + textWidth(label) + 28; textStyle(BOLD); }
-  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1; textStyle(ITALIC); textSize(13); fill(110, 90, 80); text('Stand still to listen to the homes.', cx, y + 296); textStyle(BOLD); drawingContext.globalAlpha = 1;
+  textAlign(CENTER, CENTER); textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1; textStyle(ITALIC); textSize(13); fill(110, 90, 80); text(r1 ? 'Press H to use your hands: chop the forest, raise the city.' : 'Stand still to listen to the homes.', cx, y + 296); textStyle(BOLD); drawingContext.globalAlpha = 1;
   pop();
 }
 // Round 2: you carry your things in a moving box, in front of you as you walk.
@@ -912,6 +913,89 @@ function drawJunk(q, p) {
   ctx.restore();
 }
 
+
+/* ---------- Your hands: chop the forest, raise the city (webcam + ml5 handPose) ---------- */
+// Press H to use the camera. A fast diagonal stroke down chops the forest beside you; raising
+// your hand raises the buildings on the cleared land, as high as your hand goes. Without a
+// camera: X chops, hold B to build. Only in Round 1: the tenant owns no land to build on.
+let handMode = false, handVideo = null, handModel = null, handStatus = '', raiseLevel = 0, chopHintT = -9;
+const handState = { ok: false, x: 0.5, y: 0.6, vx: 0, vy: 0, t: 0, seen: -9, chopT: -9, trail: [] };
+function startHands() {
+  if (handMode) { handMode = false; handStatus = ''; return; }
+  handMode = true; handStatus = 'Starting the camera…';
+  if (handModel) { handStatus = 'Show your hand to the camera'; return; }
+  const go = () => {
+    try {
+      handVideo = createCapture(VIDEO); handVideo.size(320, 240); handVideo.hide();
+      handModel = ml5.handPose({ maxHands: 1 }, () => { handStatus = 'Show your hand to the camera'; handModel.detectStart(handVideo, gotHands); });
+    } catch (e) { handStatus = 'No camera: press X to chop, hold B to build'; }
+  };
+  if (window.ml5) { go(); return; }
+  const sc = document.createElement('script'); sc.src = 'https://unpkg.com/ml5@1.0.1/dist/ml5.min.js';
+  sc.onload = go; sc.onerror = () => { handStatus = 'Hand tracking could not load: press X to chop, hold B to build'; };
+  document.head.appendChild(sc);
+}
+function gotHands(results) {
+  const h = results && results[0]; if (!h || !handVideo) { return; }
+  const kp = h.keypoints || [], p = kp.find(k => k.name === 'index_finger_mcp') || kp.find(k => k.name === 'wrist') || kp[0]; if (!p) { return; }
+  handFeed(1 - p.x / (handVideo.width || 320), p.y / (handVideo.height || 240));
+}
+// One position of your hand (0..1, mirrored like a mirror), from the camera or from a test.
+function handFeed(nx, ny) {
+  const now = performance.now() / 1000, s = handState, dt = Math.max(0.016, now - s.t);
+  if (s.ok && now - s.seen < 0.4) { s.vx = mixN(s.vx, (nx - s.x) / dt, 0.6); s.vy = mixN(s.vy, (ny - s.y) / dt, 0.6); } else { s.vx = 0; s.vy = 0; }
+  s.x = nx; s.y = ny; s.t = now; s.ok = true; s.seen = now;
+  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length > 12) { s.trail.shift(); }
+  if (Math.abs(s.vx) > 0.9 && s.vy > 0.9 && Math.hypot(s.vx, s.vy) > 2 && now - s.chopT > 0.45) { s.chopT = now; chopForest(s.x < 0.5 ? -1 : 1); }
+}
+function handsActive() { return rules === 1 && !intro && !ending; }
+// Land that waits for your hands instead of building itself.
+function waitsForHand(L) { return handMode && rules === 1 && !L.forSale && !L.special && !L.owned && !L.piece; }
+// How far a lot's building has risen: by your hand once you have cleared it, otherwise on its own.
+function lotRise(L) { return L.cutT !== undefined && L.born === undefined ? (L.grow || 0) : riseOf(L.born); }
+function chopForest(side) {
+  if (!handsActive()) { return; }
+  const z = distanceWalked, pick = s => { let best = null; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side !== s || L.cutT !== undefined || L.born !== undefined || !waitsForHand(L)) { continue; } const d = L.z0 - z; if (d > -2 && d < 45 && (!best || d < best.d)) { best = { L, d }; } } } return best && best.L; };
+  const L = pick(side) || pick(-side); if (!L) { return; }
+  L.cutT = clockT; L.grow = 0;
+  const L2 = pick(L.side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; }   // one swing clears a stretch of two lots
+  if (sound.chop) { sound.chop(L.side); }
+  if (clockT - chopHintT > 8) { chopHintT = clockT; sayToast('The forest is gone. Raise your hand to build.'); }
+}
+function handUpdate(dt) {
+  const s = handState; if (s.ok && performance.now() / 1000 - s.seen > 0.6) { s.ok = false; }
+  // How high your hand is (or how long B is held) sets how high the cleared land builds.
+  let target = 0;
+  if (s.ok) { target = constrain((0.72 - s.y) / 0.5, 0, 1); }
+  if (keysHeld.has('KeyB')) { target = Math.min(1, raiseLevel + dt * 0.7); }
+  raiseLevel = s.ok || keysHeld.has('KeyB') ? target : Math.max(0, raiseLevel - dt * 0.5);
+  if (!handsActive()) { return; }
+  let grew = 0;
+  for (const ch of chunks.values()) {
+    for (const L of ch.lots) {
+      if (L.cutT === undefined || L.born !== undefined || clockT - L.cutT < 0.8) { continue; }
+      if (raiseLevel > L.grow) { const g0 = L.grow; L.grow = Math.min(raiseLevel, L.grow + dt * 1.2); grew += L.grow - g0; }
+      if (L.grow > 0.985) { L.born = clockT - RISE_T - 1; L.thud = true; if (sound.rise) { sound.rise(L.tier, L.side, Math.max(0, L.z0 - distanceWalked)); } }
+    }
+  }
+  if (grew > 0 && sound.build) { sound.build(grew); }
+}
+// The camera picture and your hand, bottom right, while the hands are on.
+function drawHandPanel() {
+  if (!handMode) { return; }
+  const w = 160, h = 120, x = width - w - 16, y = height - h - 16;
+  push(); noStroke(); fill(0, 120); rect(x - 4, y - 24, w + 8, h + 28, 8);
+  if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
+  else { fill(40); rect(x, y, w, h, 4); }
+  const s = handState;
+  if (s.ok) { stroke(255, 210, 60); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke(); fill(255, 210, 60); circle(x + s.x * w, y + s.y * h, 12); }
+  // How high you are building.
+  fill(255, 255, 255, 60); rect(x + w - 10, y, 6, h); fill('#d4a017'); rect(x + w - 10, y + h * (1 - raiseLevel), 6, h * raiseLevel);
+  fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, CENTER);
+  text(rules === 1 ? (s.ok ? '↘ chop the forest   ↑ raise to build' : handStatus || 'Show your hand') : 'You own no land to build on.', x, y - 12, w + 4);
+  pop();
+}
+
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
@@ -919,6 +1003,9 @@ function boardKey(e) {
   if (rules === 1 && (code === 'ArrowRight' || code === 'KeyD')) { tryTurn(1); return true; }
   if (code === 'KeyE' || code === 'Space' || code === 'Enter' && (intro || ending)) { useHere(); return true; }
   if (code === 'KeyR') { restartWalk(); return true; }
+  if (code === 'KeyH') { startHands(); return true; }
+  if (code === 'KeyX') { chopForest(1); return true; }
+  if (code === 'KeyB') { return true; }
   return false;
 }
 

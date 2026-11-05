@@ -194,7 +194,7 @@ function draw() {
   let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
   // How built-up is the street around you? 0 = all forest, 1 = all buildings.
   let builtN = 0, lotN = 0;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, riseOf(L.born)); } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born)); } } }
   sound.devK = lotN ? builtN / lotN : 0;
   sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
 
@@ -217,12 +217,12 @@ function birthDelay(seedish, ahead) {
 }
 function updateLandmarks(z) {
   for (const ch of chunks.values()) {
-    for (const b of ch.back) {if (b.born === undefined && b.z0 - z < APPEAR_Z + 10) {b.born = clockT + 0.4 + birthDelay(ch.c * 13, b.z0 - z);}}
+    for (const b of ch.back) {if (b.born === undefined && b.z0 - z < APPEAR_Z + 10 && !(typeof waitsForHand === 'function' && ch.lots.some(L => L.side === b.side && L.born === undefined && waitsForHand(L)))) {b.born = clockT + 0.4 + birthDelay(ch.c * 13, b.z0 - z);}}
     for (const p of ch.props) {if (p.born === undefined && p.z - z < APPEAR_Z - 8) {p.born = clockT + birthDelay(Math.floor(p.z * 7), p.z - z);}}
   }
   for (const ch of chunks.values()) {for (const L of ch.lots) {
     const mid = (L.z0 + L.z1) / 2;
-    if (L.born === undefined && L.z0 - z < APPEAR_Z) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
+    if (L.born === undefined && L.z0 - z < APPEAR_Z && !(typeof waitsForHand === 'function' && waitsForHand(L))) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
     // Buildings far ahead follow the economy; once you are close they keep what they became.
     if (mid - z > 40) {L.econ = economy;}
@@ -379,16 +379,18 @@ function drawWorld(z, side) {
   }
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const g = riseOf(L.born) * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
+    const rise = typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born);
+    const g = rise * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
     if (L.piece) { drawBoardSquare(L); }
-    // Before it is built, every lot is forest; as the building rises, the trees go down.
-    const forestK = L.piece ? 0 : 1 - Math.min(1, riseOf(L.born) * 1.4);
-    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
-    if (forestK > 0.02) { drawForest(L, forestK); }
+    // Before it is built, every lot is forest; as the building rises, the trees go down
+    // (or, with your hands, they fall when you chop them and stumps are left).
+    const cut = L.cutT !== undefined, forestK = L.piece ? 0 : cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
+    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
     if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
     if (L.piece) { drawToyPiece(L); }
     if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
-    const age = clockT - L.born; if (age < RISE_T + 0.8 && !L.piece) {drawDust(L, age);}
+    const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && !L.piece && age === age) {drawDust(L, Math.min(age, RISE_T));}
   }
   const items = [];
   for (const ch of all) {
@@ -415,7 +417,7 @@ function drawPlot(L) {
 }
 // The forest that stood here before the street was built: a stand of trees on every lot,
 // sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
-function drawForest(L, k, back = 0) {
+function drawForest(L, k, back = 0, fall = 0, cut = false) {
   if (k <= 0.02 || L.special) { return; }
   const r = rngN(L.seed + 77), len = L.z1 - L.z0, n = Math.max(2, Math.round(len / 2.4)), rows = 3, list = [];
   for (let row = rows - 1; row >= 0; row--) {
@@ -428,6 +430,14 @@ function drawForest(L, k, back = 0) {
   for (const t of list) {
     if (t.z < cam.z + NEAR_Z + 1) { continue; }
     const q = P(t.x, 0, t.z); if (q.rz < 1.5 || q.rz > FAR_Z) { continue; }
+    if (cut) {
+      // Chopped: the tree falls away from the road and fades; a stump is left until the building comes.
+      const gone = easeN((clockT - L.cutT - 0.7) / 0.5);
+      if (k > 0.05) { ctx.fillStyle = toneN('#7a5a3a', t.z); ctx.fillRect(q.x - 0.25 * q.k, q.y - 0.5 * q.k * k, 0.5 * q.k, 0.5 * q.k * k); ctx.fillStyle = toneN('#d8c09a', t.z); ctx.beginPath(); ctx.ellipse(q.x, q.y - 0.5 * q.k * k, 0.25 * q.k, 0.08 * q.k, 0, 0, TWO_PI); ctx.fill(); }
+      if (gone >= 1) { continue; }
+      ctx.save(); ctx.globalAlpha = 1 - gone; ctx.translate(q.x, q.y); ctx.rotate(L.side * fall * 1.45); ctx.translate(-q.x, -q.y);
+      drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore(); continue;
+    }
     ctx.save(); ctx.translate(q.x, q.y); ctx.scale(Math.min(1, 0.5 + k * 0.5), k); ctx.translate(-q.x, -q.y);
     drawTree(q, { h: t.h, tone: t.tone, z: t.z, x: t.x }); ctx.restore();
   }
