@@ -153,6 +153,8 @@ function draw() {
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
   else if (turnAnim || nameBox || intro || ending) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
+  // With the camera on, walking or running on the spot moves you down the street at that pace.
+  if (target === 0 && !paused && dashTarget === null && !turnAnim && !nameBox && !intro && !ending && typeof bodySpeed === 'function') { target = bodySpeed(); }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.

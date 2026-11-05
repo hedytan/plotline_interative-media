@@ -711,6 +711,8 @@ function draw() {
   if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
   else if (turnAnim || nameBox || intro || ending) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
+  // With the camera on, walking or running on the spot moves you down the street at that pace.
+  if (target === 0 && !paused && dashTarget === null && !turnAnim && !nameBox && !intro && !ending && typeof bodySpeed === 'function') { target = bodySpeed(); }
   stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.
@@ -2247,7 +2249,7 @@ function drawOpening() {
   // The three moves.
   const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes'], ['☝ ↑', 'Lift a pointing finger: shops'], ['✊ ↑', 'Lift a fist: towers']];
   rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
-  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use your hands with the camera.   ↑ walks, as far as you like.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
+  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use the camera: walk or run on the spot and the street moves with you.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
@@ -2520,7 +2522,7 @@ function makeBuilt(L, kind) {
 }
 function makeTower(L) { makeBuilt(L, 'tower'); }
 function handUpdate(dt) {
-  const now = performance.now() / 1000;
+  const now = performance.now() / 1000; sampleMotion();
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
   // Keys stand in for the camera: B lifts homes and N towers, on both sides.
   const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') || keysHeld.has('KeyV') ? dt * 0.6 : 0, keyShape = keysHeld.has('KeyN') ? 'fist' : keysHeld.has('KeyV') ? 'point' : 'open';
@@ -2545,11 +2547,15 @@ function handUpdate(dt) {
 // The camera picture and your hand, bottom right, while the hands are on.
 function drawHandPanel() {
   if (!handMode) { return; }
-  const w = 176, h = 132, x = width - w - 16, y = height - h - 16;
-  push(); noStroke(); fill(0, 140); rect(x - 4, y - 44, w + 8, h + 48, 8);
+  const w = 230, h = 150, x = width - w - 16, y = height - h - 16;
+  push(); noStroke(); fill(0, 140); rect(x - 4, y - 50, w + 8, h + 54, 8);
   if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
   else { fill(40); rect(x, y, w, h, 4); }
   stroke(255, 255, 255, 50); strokeWeight(1); line(x + w / 2, y, x + w / 2, y + h); noStroke();
+  // Your steps: how much your body is moving, and what the street does with it.
+  const sp = bodySpeed(), mode = sp <= 0 ? 'standing' : sp < WALK_SPD * 1.05 ? 'walking' : 'running';
+  fill(0, 120); rect(x, y + h - 16, w, 16); fill(mode === 'running' ? '#e0302a' : mode === 'walking' ? '#ffd23f' : '#888'); rect(x, y + h - 16, w * Math.min(1, motionK / 0.4), 16);
+  fill(255); textSize(10); textStyle(BOLD); textAlign(LEFT, CENTER); text(`STEPS · ${mode}`, x + 6, y + h - 8);
   for (const side of [-1, 1]) {
     const s = hands[side]; if (!s.ok) { continue; }
     const col = side < 0 ? color(90, 200, 255) : color(255, 210, 60);
@@ -2558,8 +2564,34 @@ function drawHandPanel() {
   }
   const s = { ok: hands[-1].ok || hands[1].ok };
   fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
-  text(s.ok || !handStatus ? 'L hand → left · R hand → right · swing: cut\nlift ✋ homes · ☝ shops · ✊ towers' : handStatus, x, y - 38, w + 4);
+  textSize(10); text(s.ok || !handStatus ? 'Swing L / R hand: cut that side\nLift ✋ homes · ☝ shops · ✊ towers\nStep or run on the spot to move' : handStatus, x, y - 46, w + 4);
   pop();
+}
+
+/* ---------- Your body: walk or run on the spot, and the street moves with you ---------- */
+// While the camera is on, the middle of the picture (your body, not your arms out to the sides) is
+// compared frame to frame. Standing still stops; stepping on the spot walks; running on the spot runs.
+// [ and ] make it less or more sensitive.
+let motionCanvas = null, motionPrev = null, motionK = 0, motionT = 0, motionGain = 1;
+function sampleMotion() {
+  if (!handMode || !handVideo || !handVideo.elt || handVideo.elt.readyState < 2) { motionK *= 0.9; return; }
+  const now = performance.now(); if (now - motionT < 66) { return; } motionT = now;
+  const W = 48, H = 36;
+  if (!motionCanvas) { motionCanvas = document.createElement('canvas'); motionCanvas.width = W; motionCanvas.height = H; }
+  const c = motionCanvas.getContext('2d', { willReadFrequently: true }); c.drawImage(handVideo.elt, 0, 0, W, H);
+  const d = c.getImageData(0, 0, W, H).data, cur = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) { cur[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3; }
+  let changed = 0, n = 0;
+  if (motionPrev) { for (let y = 0; y < H; y++) { for (let x = 15; x < 33; x++) { const i = y * W + x; n++; if (Math.abs(cur[i] - motionPrev[i]) > 20) { changed++; } } } }
+  motionPrev = cur;
+  if (n) { motionK = mixN(motionK, Math.min(1, changed / n * motionGain), 0.35); }
+}
+// The walking speed your body asks for, in metres per second.
+function bodySpeed() {
+  if (!handMode || !handVideo) { return 0; }
+  const m = motionK;
+  if (m < 0.04) { return 0; }
+  return m < 0.16 ? mixN(1.5, WALK_SPD, (m - 0.04) / 0.12) : mixN(WALK_SPD, RUN_SPD * 1.2, Math.min(1, (m - 0.16) / 0.22));
 }
 
 /* ---------- Keys ---------- */
@@ -2572,6 +2604,8 @@ function boardKey(e) {
   if (code === 'KeyX' || code === 'ArrowRight' || code === 'KeyD') { chopForest(1); return true; }
   if (code === 'KeyZ' || code === 'ArrowLeft' || code === 'KeyA') { chopForest(-1); return true; }
   if (code === 'KeyB' || code === 'KeyN' || code === 'KeyV') { return true; }
+  if (code === 'BracketLeft') { motionGain = Math.max(0.3, motionGain / 1.25); sayToast(`Step sensitivity ${Math.round(motionGain * 100)}%`); return true; }
+  if (code === 'BracketRight') { motionGain = Math.min(4, motionGain * 1.25); sayToast(`Step sensitivity ${Math.round(motionGain * 100)}%`); return true; }
   return false;
 }
 
