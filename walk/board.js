@@ -291,8 +291,8 @@ function actionFor(L) {
   return null;
 }
 function useHere() {
-  if (intro) { intro = false; return; }
-  if (ending) { if (ending.kind === 'rule1' && clockT - ending.t > 3.5) { startRule2(); } return; }
+  if (intro) { if (boardIntroOn()) { boardT0 = -99; return; } intro = false; return; }
+  if (ending) { if (ending.kind === 'rule1' && clockT - ending.t > 6) { startRule2(); } return; }
   const L = plotHere(distanceWalked), act = actionFor(L);
   if (!act) { sayToast('Find a FOR SALE sign first.'); return; }
   if (rules === 2) {
@@ -350,7 +350,7 @@ function endWalkNow(kind) { ending = { kind, t: clockT }; sound.go(); baseNight 
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   lifeAge = START_AGE; zone = START_ZONE; market = 1; rentPaid = 0; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null; landlordMode = false;
-  owned = []; rentIn = 0; movedOut = 0; walkedTotal = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0;
+  owned = []; rentIn = 0; movedOut = 0; walkedTotal = 0; emptyK = 1; evicted = []; lastBuyZ = 0; rentedAt = 0; boardT0 = clockT;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0; soldBeat = null;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -823,16 +823,25 @@ function drawBoardHud() {
     }
   }
   if (!intro && !ending) { drawSoldBeat(); }
-  if (intro) { drawOpening(); }
+  if (intro) {
+    const bt = clockT - boardT0;
+    if (rules === 1 && bt < 3.6) { drawBoardScene('intro', easeN((bt - 0.9) / 2.3), 1 - easeN((bt - 3.0) / 0.6)); }
+    if (rules !== 1 || bt > 3.0) { drawOpening(); }
+  }
+  // The end: the camera rises out of the street and the city is a board again.
+  if (ending) {
+    const b0 = ending.kind === 'rule1' ? 2.6 : 0.3, et = clockT - ending.t;
+    if (et > b0) { drawBoardScene(ending.kind === 'rule1' ? 'won' : 'out', 1 - easeN((et - b0 - 0.3) / 2.2), easeN((et - b0) / 0.4)); }
+  }
   if (ending && ending.kind === 'rule1') {
     const names = evicted.slice(0, 3), who = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || 'Three families';
     const lines = [`You own ${owned.length} homes. Population: you.`, 'Their memories were included in the price.', '', 'Now walk the same street', 'as the people who lived in the first one.'];
-    storyCard('CONGRATULATIONS. YOU WON THE STREET.', lines, clockT - ending.t > 3.5 ? 'Press E or click' : '', easeN((clockT - ending.t - 2.5) / 1.2));
+    storyCard('CONGRATULATIONS. YOU WON THE STREET.', lines, clockT - ending.t > 6 ? 'Press E or click' : '', easeN((clockT - ending.t - 5.2) / 1.0));
   }
   if (ending && ending.kind === 'rule2') {
     const a = firstRun || { owned: 3, moved: 3 };
     const lines = [`You found a home in ${ZONE_NAMES[zone]}, ${commuteShort(zone)}.`, `In Round 1 you won ${a.owned} homes. One of them was yours.`, '', 'Monopoly began in 1904 as Lizzie Magie’s The Landlord’s Game.', 'It was a warning: under these rules one player wins,', 'and everyone else is pushed further out.', 'In 1935 it was sold as Monopoly. She was paid $500.'];
-    storyCard('YOUR WIN WAS THEIR LOSS', lines, 'Press R to walk again', easeN((clockT - ending.t - 1) / 1.2), '#3f6fa8');
+    storyCard('YOUR WIN WAS THEIR LOSS', lines, 'Press R to walk again', easeN((clockT - ending.t - 2.9) / 1.0), '#3f6fa8');
   }
   pop();
   if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
@@ -913,6 +922,123 @@ function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
   pop();
 }
 
+
+/* ---------- The board: the opening dive, and the city seen from above at the end ---------- */
+// A board of 40 squares in the order of the towns, cheap to dear from GO. The opening starts
+// above it and dives into the Leafy Suburbs square, which becomes the street. At the end the
+// camera rises out of the street and the whole city is a board again.
+const BOARD_ZONE_COL = ['#8a4a9a', '#2e9e47', '#d4a017', '#3f8fd6', '#e06a9a', '#8b5a2b'];
+const BOARD_CELLS = [
+  'GO', 5, 5, 'RENT UP', 5, 5, 'LEASE ENDS', 4, 4, 4,
+  'PUSHED OUT', 4, 'INSPECTION', 3, 3, 'RENT UP', 3, 3, 3, 'NO KIDS',
+  'WAITING LIST', 2, 2, 'RENT UP', 2, 2, 1, 1, 'BIDDING WAR', 1,
+  'EVICTED', 0, 0, 'INVESTOR', 0, 'VACANT', 'VACANT', 'INVESTOR', 'VACANT', 'VACANT'
+];
+let boardT0 = 0;   // when the opening dive started
+function cellXY(i) {
+  // Board units: the board is 1100 x 1100, each square 100. GO is the bottom-right corner, play runs clockwise.
+  if (i <= 10) { return [1000 - i * 100, 1000]; }
+  if (i <= 20) { return [0, 1000 - (i - 10) * 100]; }
+  if (i <= 30) { return [(i - 20) * 100, 0]; }
+  return [1000, (i - 30) * 100];
+}
+function firstCell(zn) { return BOARD_CELLS.indexOf(zn); }
+function boardIntroOn() { return intro && rules === 1 && clockT - boardT0 < 3.6; }
+// mode: 'intro' (colourful, homes on every square), 'won' (grey, sold, only your pieces), 'out' (your path out to The Fringe)
+function drawBoardScene(mode, zoomK, alpha) {
+  if (alpha <= 0.001) { return; }
+  const target = mode === 'won' && owned.length ? firstCell(owned[0].zone) : mode === 'out' ? firstCell(5) : firstCell(START_ZONE);
+  const [tx0, ty0] = cellXY(target), tx = tx0 + 50, ty = ty0 + 50;
+  const full = Math.min(width, height) * 0.86 / 1100, close = Math.max(width, height) * 1.25 / 100;
+  const e = zoomK, sc = Math.exp(mixN(Math.log(full), Math.log(close), e));
+  const keep = full * (1 - e) / sc, cx = tx - (tx - 550) * keep, cy = ty - (ty - 550) * keep, tilt = mixN(0.62, 1, e), rot = mixN(-0.32, 0, e);
+  const grey = mode === 'won';
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = grey ? '#2a2a2c' : '#2f3a34'; ctx.fillRect(0, 0, width, height);
+  ctx.translate(width / 2, height / 2); ctx.scale(sc, sc * tilt); ctx.rotate(rot); ctx.translate(-cx, -cy);
+  // The board itself, with a shadow under it.
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(18, 26, 1100, 1100);
+  ctx.fillStyle = grey ? '#c9c7c2' : '#d8ead2'; ctx.fillRect(0, 0, 1100, 1100);
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, 1100, 1100); ctx.strokeRect(100, 100, 900, 900);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const mine = owned.map(o => o.zone); let placed = 0;
+  for (let i = 0; i < 40; i++) {
+    const [x, y] = cellXY(i), v = BOARD_CELLS[i], corner = i % 10 === 0;
+    ctx.fillStyle = grey ? '#d6d3cc' : '#f2f6ea'; ctx.fillRect(x, y, 100, 100); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, 100, 100);
+    if (typeof v === 'number') {
+      // A town's square: its colour bar on the inner edge, its name and price.
+      const col = grey ? '#8a8680' : BOARD_ZONE_COL[v], side = i < 10 ? 0 : i < 20 ? 1 : i < 30 ? 2 : 3;
+      ctx.fillStyle = col;
+      if (side === 0) { ctx.fillRect(x, y, 100, 24); } else if (side === 1) { ctx.fillRect(x + 76, y, 24, 100); } else if (side === 2) { ctx.fillRect(x, y + 76, 100, 24); } else { ctx.fillRect(x, y, 24, 100); }
+      ctx.fillStyle = '#1a1a1a'; ctx.font = 'bold 11px Georgia, serif'; ctx.fillText(ZONE_NAMES[v].toUpperCase(), x + 50, y + 46, 70);
+      ctx.font = '11px Georgia, serif'; ctx.fillText(moneyK(TOWNS[v].price), x + 50, y + 62, 70);
+      const k = mine.indexOf(v);
+      if (mode === 'won' && k >= 0) {
+        // Your pieces: the only colour left on the board.
+        mine.splice(k, 1); placed++; ctx.fillStyle = placed >= 3 ? '#e0302a' : '#1fb04a';
+        ctx.beginPath(); ctx.moveTo(x + 36, y + 96); ctx.lineTo(x + 36, y + 84); ctx.lineTo(x + 50, y + 73); ctx.lineTo(x + 64, y + 84); ctx.lineTo(x + 64, y + 96); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.5; ctx.stroke();
+      } else if (mode === 'won') {
+        ctx.save(); ctx.translate(x + 50, y + 82); ctx.rotate(-0.25); ctx.strokeStyle = '#c8322a'; ctx.lineWidth = 2; ctx.strokeRect(-26, -9, 52, 18); ctx.fillStyle = '#c8322a'; ctx.font = 'bold 12px Georgia, serif'; ctx.fillText('SOLD', 0, 1); ctx.restore();
+      } else {
+        // Somebody's home on every square.
+        ctx.fillStyle = '#3f9e5a'; for (let h = 0; h < 2; h++) { const hx = x + 30 + h * 24, hy = y + 80; ctx.beginPath(); ctx.moveTo(hx - 8, hy + 10); ctx.lineTo(hx - 8, hy); ctx.lineTo(hx, hy - 7); ctx.lineTo(hx + 8, hy); ctx.lineTo(hx + 8, hy + 10); ctx.closePath(); ctx.fill(); }
+      }
+    } else {
+      ctx.fillStyle = v === 'VACANT' || v === 'INVESTOR' ? (grey ? '#3a3a3a' : '#2a2a2a') : '#1a1a1a';
+      if (v === 'VACANT' || v === 'INVESTOR') { ctx.fillRect(x + 6, y + 6, 88, 88); ctx.fillStyle = v === 'VACANT' ? '#ff4a3a' : '#d4a017'; }
+      ctx.font = `bold ${corner ? 15 : 12}px Georgia, serif`; ctx.fillText(v, x + 50, y + 50, 88);
+      if (v === 'GO') { ctx.fillStyle = '#c8322a'; ctx.font = 'bold 30px Georgia, serif'; ctx.fillText('←', x + 50, y + 76); }
+    }
+  }
+  // The middle of the board.
+  ctx.save(); ctx.translate(550, 550); ctx.rotate(-Math.PI / 4);
+  ctx.fillStyle = grey ? '#5a5652' : '#c8322a'; ctx.fillRect(-330, -50, 660, 100);
+  ctx.fillStyle = '#fff'; ctx.font = 'italic 900 50px "Helvetica Neue", Arial, sans-serif'; ctx.fillText(grey ? 'POPULATION: YOU' : mode === 'out' ? 'FURTHER OUT' : 'THE LANDLORD’S WALK', 0, 3, 620);
+  ctx.restore();
+  // Round 2: the way you were pushed, from the suburbs to The Fringe.
+  if (mode === 'out') {
+    const pts = []; for (let i = firstCell(START_ZONE); i >= firstCell(5); i--) { const [x, y] = cellXY(i); pts.push([x + 50, y + 50]); }
+    ctx.strokeStyle = '#c8322a'; ctx.lineWidth = 12; ctx.setLineDash([22, 14]); ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
+    const [ex, ey] = pts[pts.length - 1]; ctx.fillStyle = '#c39565'; ctx.fillRect(ex - 30, ey - 22, 60, 44); ctx.strokeStyle = '#5a3a20'; ctx.lineWidth = 3; ctx.strokeRect(ex - 30, ey - 22, 60, 44); ctx.fillStyle = '#e8d8b0'; ctx.fillRect(ex - 30, ey - 16, 60, 6);
+  }
+  ctx.restore();
+}
+// Round 2: the family's things, left out on the kerb in front of the home you bought from them.
+function addKerbside(ch, L) {
+  if (L.kerbDone) { return; } L.kerbDone = true;
+  const mid = (L.z0 + L.z1) / 2, x = L.side * (EDGE_X - 0.7);
+  ['mattress', 'bike', 'frame', 'box', 'teddy', 'free'].forEach((item, i) => ch.props.push({ kind: 'junk', item, x: x + L.side * (i % 2) * 0.35, z: mid - 3 + i * 1.1, side: L.side }));
+}
+function drawJunk(q, p) {
+  const k = q.k; if (k < 3) { return; }
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.85; ctx.lineCap = 'round';
+  const x = q.x, y = q.y;
+  if (p.item === 'mattress') {
+    ctx.translate(x, y); ctx.rotate(p.side * 0.12); ctx.fillStyle = toneN('#e8e4dc', p.z); ctx.fillRect(-0.45 * k, -1.9 * k, 0.9 * k, 1.9 * k);
+    ctx.fillStyle = toneN('#8aa0c0', p.z); for (let i = 0; i < 6; i++) { ctx.fillRect(-0.45 * k, (-1.8 + i * 0.32) * k, 0.9 * k, 0.08 * k); }
+    ctx.fillStyle = 'rgba(120,90,40,0.35)'; ctx.beginPath(); ctx.ellipse(0.1 * k, -0.7 * k, 0.22 * k, 0.15 * k, 0, 0, TWO_PI); ctx.fill();
+  } else if (p.item === 'bike') {
+    ctx.strokeStyle = toneN('#d03a3a', p.z); ctx.lineWidth = Math.max(1, 0.05 * k);
+    ctx.beginPath(); ctx.arc(x - 0.3 * k, y - 0.22 * k, 0.22 * k, 0, TWO_PI); ctx.arc(x + 0.3 * k, y - 0.22 * k, 0.22 * k, 0, TWO_PI); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 0.3 * k, y - 0.22 * k); ctx.lineTo(x - 0.05 * k, y - 0.55 * k); ctx.lineTo(x + 0.3 * k, y - 0.22 * k); ctx.lineTo(x + 0.2 * k, y - 0.6 * k); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillRect(x + 0.12 * k, y - 0.66 * k, 0.18 * k, 0.05 * k);
+  } else if (p.item === 'frame') {
+    // A family photo, face up to the sky.
+    ctx.translate(x, y); ctx.rotate(-0.25); ctx.fillStyle = toneN('#b8902a', p.z); ctx.fillRect(-0.28 * k, -0.62 * k, 0.56 * k, 0.62 * k);
+    ctx.fillStyle = toneN('#e8dcc0', p.z); ctx.fillRect(-0.22 * k, -0.56 * k, 0.44 * k, 0.5 * k);
+    ctx.fillStyle = toneN('#6a5a4a', p.z); [-0.11, 0, 0.11].forEach((dx, i) => { const r = i === 1 ? 0.04 : 0.05; ctx.beginPath(); ctx.arc(dx * k, -0.38 * k, r * k, 0, TWO_PI); ctx.fill(); ctx.fillRect((dx - r) * k, -0.33 * k, r * 2 * k, 0.2 * k); });
+  } else if (p.item === 'box') {
+    ctx.fillStyle = toneN('#c39565', p.z); ctx.fillRect(x - 0.3 * k, y - 0.5 * k, 0.6 * k, 0.5 * k); ctx.fillStyle = toneN('#e8d8b0', p.z); ctx.fillRect(x - 0.3 * k, y - 0.46 * k, 0.6 * k, 0.07 * k);
+    if (k > 20) { ctx.fillStyle = '#3a2a1a'; ctx.font = `bold ${0.1 * k}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('KIDS’ TOYS', x, y - 0.2 * k); }
+  } else if (p.item === 'teddy') {
+    ctx.fillStyle = toneN('#a8743a', p.z); ctx.beginPath(); ctx.arc(x, y - 0.18 * k, 0.16 * k, 0, TWO_PI); ctx.arc(x, y - 0.42 * k, 0.11 * k, 0, TWO_PI); ctx.arc(x - 0.08 * k, y - 0.52 * k, 0.04 * k, 0, TWO_PI); ctx.arc(x + 0.08 * k, y - 0.52 * k, 0.04 * k, 0, TWO_PI); ctx.fill();
+  } else if (p.item === 'free') {
+    ctx.fillStyle = '#5a4030'; ctx.fillRect(x - 0.03 * k, y - 0.9 * k, 0.06 * k, 0.9 * k); ctx.fillStyle = toneN('#b8915a', p.z); ctx.fillRect(x - 0.35 * k, y - 1.2 * k, 0.7 * k, 0.4 * k);
+    if (k > 10) { ctx.fillStyle = '#2a1e18'; ctx.font = `bold ${0.24 * k}px "Marker Felt", "Comic Sans MS", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('FREE', x, y - 1.0 * k); }
+  }
+  ctx.restore();
+}
+
 /* ---------- Keys ---------- */
 function boardKey(e) {
   const code = e.code;
@@ -960,8 +1086,8 @@ function drawTargetMarker() {
   ctx.stroke(); ctx.fill(); ctx.restore();
 }
 function boardClick(mx, my) {
-  if (intro) { intro = false; return true; }
-  if (ending) { if (ending.kind === 'rule1' && clockT - ending.t > 3.5) { startRule2(); } return true; }
+  if (intro) { if (boardIntroOn()) { boardT0 = -99; return true; } intro = false; return true; }
+  if (ending) { if (ending.kind === 'rule1' && clockT - ending.t > 6) { startRule2(); } return true; }
   // A click (or a tap) beside a FOR SALE / FOR RENT sign buys or applies, so it plays without a keyboard.
   if (plotHere(distanceWalked)) { useHere(); return true; }
   return false;
@@ -980,6 +1106,7 @@ function rememberStreet(ch) {
     L.redevelopYear = L.seed % 3 === 0 ? Infinity : START_AGE + 2 + (Math.abs(L.seed) % 5);
     const saved = streetMemory.get(L.memoryKey);
     if (saved) { Object.assign(L, saved); }
+    if (rules === 2 && L.owned && L.home) { addKerbside(ch, L); }
   });
   // Ordinary residents, rather than only open-home queues, make the loss visible.
   const rr = rngN(seed + ch.slot * 83 + zone * 761);

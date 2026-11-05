@@ -22,6 +22,7 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 
 | Interaction | What the player sees or hears | What it means |
 |---|---|---|
+| Opening | The camera starts above a board-game board and dives into one square, which becomes the street | You are entering the game, as a lived place |
 | Walking (↑) | Homes rise out of the ground ahead of you | The landscape is generated as you move |
 | Stopping beside a home for sale | The camera turns to face it; the family out the front speaks ("The kids grew up here.") | A listing is someone's home |
 | Buying (E) | A SOLD stamp and the family's name; they carry boxes away; the music stops for a moment | Your win is their loss |
@@ -30,11 +31,13 @@ This is the warning Lizzie Magie built into *The Landlord's Game* in 1904, befor
 | Winning | Every house ahead becomes a grey plastic piece | The winner's street is a board, not a place |
 | Round 2: the box | You carry a moving box in front of you the whole time | You are now the one who had to leave |
 | Round 2: your old street | Your homes carry "OWNED BY YOU" signs | The same street, from the other side |
+| Round 2: your old home | The family's things on the kerb: a mattress, a kid's bike, a family photo, a box of toys, a teddy, a sign saying FREE | What a sale leaves behind |
 | Round 2: applying (E) | "TOO DEAR · $470 a week. You can pay $230. 50 other people applied too." | Unaffordable rent and competition |
 | Round 1: corners (← / →) | You choose: a poorer town or a richer one, and buy wherever you like | The winner has every choice |
 | Round 2: corners | You are turned, without choosing, into poorer towns; signposts give the commute | Urban sprawl: pushed further from work |
 | A harsher street | Every home swings a shop price tag ("$722k and rising"); empty investor towers wear a giant top hat and a VACANT neon; tents with cardboard signs ("WAS A RENTER") sit under the luxury billboards; the sky is smog | Homes treated as goods; wealth and homelessness side by side |
 | The artwork's voice | Posters and bands across buildings in red bars of white type: "YOUR HOME IS OUR PORTFOLIO", "LOCATION LOCATION EVICTION", "PASS GO. COLLECT EVERYTHING." | The street itself becomes the artwork's statement |
+| Endings, from above | The camera rises out of the street: in Round 1 the whole city is a grey board with SOLD on every square and only your pieces in colour (POPULATION: YOU); in Round 2 a dashed red line runs from the suburbs to The Fringe, where your box is | The city as the game sees it |
 | Satire on every surface | Agents' sandwich boards ("BID NOW · CRY LATER"), council banners on lamp posts ("COMMUNITY (SOLD)"), words painted on the road ("MIND THE WEALTH GAP"), riders on the signs ("KIDS NOT INCLUDED"), empty towers called "NOBODY HOME"; the game cheers every purchase ("Congratulations! You're a landlord!") | The city sells homes as a game and celebrates the winner |
 | Satirical billboards | They change with you: "Light-filled! (One window.)", "Landlord of the Year: YOU", "No pets. No kids. No chance." | The city's advertising flatters whoever has the money |
 | The sound of homes | Every lived-in home has its own sound through the wall: kids, a dog, a piano, the TV. Stand still and it comes through clearly. Buy it and it goes silent | A home is somebody's life; buying it takes that life off the street |
