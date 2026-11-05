@@ -2109,7 +2109,7 @@ function drawOpening() {
   fill(30, 40, 30); textSize(36); text('WE BUILD OUR WORLD', cx, y + 70);
   textStyle(ITALIC); textSize(16); fill(90, 100, 85); const tag = 'Everything here is forest. Make it the world you want.'; textSize(Math.min(16, 16 * (w - 40) / textWidth(tag))); text(tag, cx, y + 102); textStyle(BOLD);
   // The three moves.
-  const rows = [['← →', 'Swipe your hand: cut the forest down'], ['✋ ↑', 'Lift an open hand: build homes'], ['✊ ↑', 'Lift a fist: build towers']];
+  const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: build homes on that side'], ['✊ ↑', 'Lift a fist: build towers on that side']];
   rows.forEach(([k, label], i) => { const ry = y + 136 + i * 38; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
   textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H to use your hands with the camera.  ↑ walks.', cx, y + 258); text('No camera: Z / X cut, hold B for homes, N for towers.', cx, y + 276);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
@@ -2292,7 +2292,10 @@ function drawJunk(q, p) {
 let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0;
 const BUILD_GOAL = 10;
 let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9, liftK = 0;
-const handState = { ok: false, x: 0.5, y: 0.6, fist: false, t: 0, seen: -9, chopT: -9, trail: [] };
+// Two hands, one for each side of the street. In the mirrored picture your left hand is on the left.
+const newHand = () => ({ ok: false, x: 0.5, y: 0.6, fist: false, t: 0, seen: -9, chopT: -9, trail: [], lift: 0 });
+const hands = { [-1]: newHand(), [1]: newHand() };
+const handState = hands[1];   // kept for old callers
 function startHands() {
   if (handMode) { handMode = false; handStatus = ''; return; }
   handMode = true; handStatus = 'Starting the camera…';
@@ -2300,7 +2303,7 @@ function startHands() {
   const go = () => {
     try {
       handVideo = createCapture(VIDEO); handVideo.size(320, 240); handVideo.hide();
-      handModel = ml5.handPose({ maxHands: 1 }, () => { handStatus = 'Show your hand to the camera'; handModel.detectStart(handVideo, gotHands); });
+      handModel = ml5.handPose({ maxHands: 2 }, () => { handStatus = 'Show your hand to the camera'; handModel.detectStart(handVideo, gotHands); });
     } catch (e) { handStatus = 'No camera: Z / X chop, hold B (homes) or N (towers)'; }
   };
   if (window.ml5) { go(); return; }
@@ -2309,25 +2312,35 @@ function startHands() {
   document.head.appendChild(sc);
 }
 function gotHands(results) {
-  const h = results && results[0]; if (!h || !handVideo) { return; }
-  const kp = h.keypoints || [], at = n => kp.find(k => k.name === n);
-  const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { return; }
-  // A fist: the fingertips are close to the wrist compared with the size of the palm.
-  let fist = false;
-  if (wrist && mcp) {
-    const palm = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y) || 1, tips = ['index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip'].map(at).filter(Boolean);
-    if (tips.length) { const reach = tips.reduce((s2, tp) => s2 + Math.hypot(tp.x - wrist.x, tp.y - wrist.y), 0) / tips.length / palm; fist = reach < 1.3; }
+  if (!results || !results.length || !handVideo) { return; }
+  const seen = [];
+  for (const h of results.slice(0, 2)) {
+    const kp = h.keypoints || [], at = n => kp.find(k => k.name === n);
+    const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { continue; }
+    // A fist: the fingertips are close to the wrist compared with the size of the palm.
+    let fist = false;
+    if (wrist && mcp) {
+      const palm = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y) || 1, tips = ['index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip'].map(at).filter(Boolean);
+      if (tips.length) { fist = tips.reduce((s2, tp) => s2 + Math.hypot(tp.x - wrist.x, tp.y - wrist.y), 0) / tips.length / palm < 1.3; }
+    }
+    seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist });
   }
-  handFeed(1 - p.x / (handVideo.width || 320), p.y / (handVideo.height || 240), fist);
+  // Two hands: the one further left is your left hand. One hand: whichever half of the picture it is in.
+  seen.sort((a, b) => a.x - b.x);
+  if (seen.length === 2) { handFeedSide(-1, seen[0].x, seen[0].y, seen[0].fist); handFeedSide(1, seen[1].x, seen[1].y, seen[1].fist); }
+  else if (seen.length === 1) { handFeedSide(seen[0].x < 0.5 ? -1 : 1, seen[0].x, seen[0].y, seen[0].fist); }
 }
 // One position of your hand (0..1, mirrored like a mirror) from the camera, or from a test.
-function handFeed(nx, ny, fist = false) {
-  const now = performance.now() / 1000, s = handState, fresh = s.ok && now - s.seen < 0.4;
-  if (fresh) { const up = s.y - ny; if (up > 0.004) { liftK += up; } }   // how far the hand has lifted since last frame
+function handFeed(nx, ny, fist = false) { handFeedSide(nx < 0.5 ? -1 : 1, nx, ny, fist); }
+// One position of one hand (0..1, mirrored like a mirror). Left hand -> left side of the street, right -> right.
+function handFeedSide(side, nx, ny, fist = false) {
+  const now = performance.now() / 1000, s = hands[side], fresh = s.ok && now - s.seen < 0.4;
+  if (fresh) { const up = s.y - ny; if (up > 0.004) { s.lift += up; } }   // lifting this hand builds on its side
   s.x = nx; s.y = ny; s.fist = fist; s.t = now; s.ok = true; s.seen = now;
   s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.3) { s.trail.shift(); }
-  // A swipe: the hand crossed a good part of the picture sideways in the last 0.3 s.
-  const a = s.trail[0]; if (a && now - s.chopT > 0.28) { const dx = nx - a.x, dy = ny - a.y; if (Math.abs(dx) > 0.28 && Math.abs(dx) > Math.abs(dy) * 0.7) { s.chopT = now; s.trail.length = 0; chopForest(dx < 0 ? -1 : 1); } }
+  // A chop: a fast stroke of this hand, sideways or down (not up, which builds), cuts the forest on its side.
+  const a = s.trail[0];
+  if (a && now - s.chopT > 0.28) { const dx = nx - a.x, dy = ny - a.y; if (Math.hypot(dx, dy) > 0.25 && dy > -0.06) { s.chopT = now; s.trail.length = 0; chopForest(side); } }
 }
 function handsActive() { return !intro && !ending; }
 // Land that waits for your hands instead of building itself.
@@ -2355,25 +2368,26 @@ function makeTower(L) {
   Object.assign(L, { style: null, tier: 4, H: mixN(45, 80, r()), depth: t.depth, color: t.color, crown: t.crown, spire: t.spire, glass: true, vacant: true, sign: true, name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length], setback: 0 });
 }
 function handUpdate(dt) {
-  const s = handState; if (s.ok && performance.now() / 1000 - s.seen > 0.6) { s.ok = false; }
-  // Keys stand in for the camera: B lifts homes, N lifts towers.
-  let fist = s.ok && s.fist;
-  if (keysHeld.has('KeyB')) { liftK += dt * 0.6; fist = false; }
-  if (keysHeld.has('KeyN')) { liftK += dt * 0.6; fist = true; }
-  const lift = liftK; liftK = 0;
-  if (!handsActive() || lift <= 0) { return; }
-  // The lift raises every cleared lot near you that is still going up, nearest first.
-  const cleared = [];
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.8 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
-  cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
-  if (!cleared.length) { if (clockT - buildHintT > 6) { buildHintT = clockT; sayToast('Nothing cleared to build on. Swipe to chop the forest first.'); } return; }
-  for (const L of cleared.slice(0, 2)) {
-    if (!L.buildKind) { L.buildKind = fist ? 'tower' : 'home'; if (fist) { makeTower(L); } }
-    const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
-    L.grow = Math.min(1, L.grow + lift * (L.buildKind === 'tower' ? 1.6 : 2.4));
-    const after = Math.floor(L.grow * n + 1e-6);
-    if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
-    if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; builtCount++; if (L.buildKind === 'tower') { towersBuilt++; } else { homesBuilt++; } if (sound.built) { sound.built(L.buildKind === 'tower'); }  }
+  const now = performance.now() / 1000;
+  for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
+  // Keys stand in for the camera: B lifts homes and N towers, on both sides.
+  const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') ? dt * 0.6 : 0, keyFist = keysHeld.has('KeyN');
+  for (const side of [-1, 1]) {
+    const s = hands[side], lift = s.lift + keyLift, fist = keyLift ? keyFist : s.ok && s.fist; s.lift = 0;
+    if (!handsActive() || lift <= 0) { continue; }
+    // The lift raises the cleared lots on this hand's side, nearest first.
+    const cleared = [];
+    for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.8 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
+    cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
+    if (!cleared.length) { if (clockT - buildHintT > 6 && !keyLift) { buildHintT = clockT; sayToast(`Nothing cleared on the ${side < 0 ? 'left' : 'right'}. Chop the forest there first.`); } continue; }
+    for (const L of cleared.slice(0, 2)) {
+      if (!L.buildKind) { L.buildKind = fist ? 'tower' : 'home'; if (fist) { makeTower(L); } }
+      const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
+      L.grow = Math.min(1, L.grow + lift * (L.buildKind === 'tower' ? 1.6 : 2.4));
+      const after = Math.floor(L.grow * n + 1e-6);
+      if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
+      if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; builtCount++; if (L.buildKind === 'tower') { towersBuilt++; } else { homesBuilt++; } if (sound.built) { sound.built(L.buildKind === 'tower'); } }
+    }
   }
 }
 // The camera picture and your hand, bottom right, while the hands are on.
@@ -2383,10 +2397,16 @@ function drawHandPanel() {
   push(); noStroke(); fill(0, 140); rect(x - 4, y - 44, w + 8, h + 48, 8);
   if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
   else { fill(40); rect(x, y, w, h, 4); }
-  const s = handState;
-  if (s.ok) { stroke(255, 210, 60); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke(); fill(s.fist ? '#e0302a' : '#ffd23f'); circle(x + s.x * w, y + s.y * h, 16); fill(255); textSize(11); textAlign(CENTER, CENTER); text(s.fist ? '✊' : '✋', x + s.x * w, y + s.y * h - 16); }
+  stroke(255, 255, 255, 50); strokeWeight(1); line(x + w / 2, y, x + w / 2, y + h); noStroke();
+  for (const side of [-1, 1]) {
+    const s = hands[side]; if (!s.ok) { continue; }
+    const col = side < 0 ? color(90, 200, 255) : color(255, 210, 60);
+    stroke(col); strokeWeight(3); noFill(); beginShape(); for (const p of s.trail) { vertex(x + p.x * w, y + p.y * h); } endShape(); noStroke();
+    fill(s.fist ? color(224, 48, 42) : col); circle(x + s.x * w, y + s.y * h, 16); fill(255); textSize(10); textAlign(CENTER, CENTER); text((side < 0 ? 'L ' : 'R ') + (s.fist ? '✊' : '✋'), x + s.x * w, y + s.y * h - 16);
+  }
+  const s = { ok: hands[-1].ok || hands[1].ok };
   fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
-  text(s.ok || !handStatus ? '← →  swipe: cut the forest\n✋ lift: homes    ✊ lift: towers' : handStatus, x, y - 38, w + 4);
+  text(s.ok || !handStatus ? 'L hand → left · R hand → right\nswing: cut · ✋↑ homes · ✊↑ towers' : handStatus, x, y - 38, w + 4);
   pop();
 }
 
@@ -2411,8 +2431,8 @@ function nextForSale() {
 function nextText() {
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
-  if (cleared) { return 'Lift your hand to build  (✋ homes · ✊ towers)'; }
-  if (forest) { return 'Swipe ← or → to cut the forest'; }
+  if (cleared) { return 'Lift a hand to build on its side  (✋ homes · ✊ towers)'; }
+  if (forest) { return 'Swing your left or right hand to cut that side'; }
   return 'Walk on  ↑';
 }
 function drawNextBar() {
