@@ -24,6 +24,10 @@ const STYLES_LOT = {
   castle: { tier: 2, len: [28, 33], setback: 8, name: 'A castle', moved: 1, priceK: 1.6, col: ['#8a4a9a', '#d8b0e8'] },
   villa: { tier: 2, len: [20, 26], setback: 6, name: 'Grand villa', moved: 1, priceK: 0.8, col: ['#c8322a', '#f2d13a'] },
   bungalow: { tier: 1, len: [11, 14], setback: 4.5, name: 'Family bungalow', moved: 1, priceK: 1, col: ['#3f8fd6', '#a9d8f0'] },
+  apartment: { tier: 3, len: [12, 20], setback: 3, name: 'Apartments', moved: 6, priceK: 1, col: ['#c8c0b0', '#e8e0d0'] },
+  factory: { tier: 3, len: [16, 24], setback: 2, name: 'Factory', moved: 0, priceK: 1, col: ['#8a9096', '#c0c4c8'] },
+  carpark: { tier: 1, len: [12, 20], setback: 0.6, name: 'Car park', moved: 0, priceK: 1, col: ['#3c3c42', '#8a8a90'] },
+  petrol: { tier: 1, len: [12, 18], setback: 0.8, name: 'Petrol station', moved: 0, priceK: 1, col: ['#d8322a', '#f2efe6'] },
   caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] }
 };
 function townSlot(slot) { return TOWNS[zone].slots[slot]; }
@@ -82,7 +86,7 @@ function lifeKind(L) {
   const pool = L.style === 'caravan' || L.tier === 0 ? ['dog', 'radio', 'baby', 'tv', 'kids'] : L.tier >= 3 ? ['tv', 'piano', 'baby', 'talk'] : L.tier === 2 ? ['piano', 'dog', 'kids', 'talk'] : ['kids', 'dog', 'piano', 'cook', 'tv', 'baby'];
   return pool[Math.abs(L.seed >> 3) % pool.length];
 }
-function lived(L) { return !L.special && !L.vacant && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
+function lived(L) { return !L.special && !L.vacant && L.style !== 'carpark' && L.style !== 'petrol' && L.style !== 'factory' && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
 function houseLife() {
   if (!sound || !sound.life) { return; }
   const listen = intro || ending || turnAnim ? 0 : easeN((stillT - 0.6) / 1.2);
@@ -114,7 +118,7 @@ function boardUpdate(z) {
   updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
   const devNow = sound && sound.devK ? sound.devK : 0; devBar += (devNow - devBar) * (1 - Math.exp(-dt * 1.5));
-  smogK += (Math.min(1, builtCount / 30) - smogK) * (1 - Math.exp(-dt * 0.6));
+  smogK += (Math.min(1, (builtCount + factoriesBuilt * 3) / 30) - smogK) * (1 - Math.exp(-dt * 0.6));
   if (!lookHint && builtCount >= 6 && !ending) { lookHint = true; sayToast('Press C to look back at what you have done.'); }
   // Time is the walk: standing still, nothing changes.
   const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
@@ -145,7 +149,7 @@ function endWalk(kind) {
 function resetLife() {
   streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
   lifeAge = START_AGE; zone = START_ZONE; market = 1; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null;
-  owned = []; walkedTotal = 0; smogK = 0; lookHint = false; backWant = false; backT = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; nextThought = 10;
+  owned = []; walkedTotal = 0; smogK = 0; lookHint = false; backWant = false; backT = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; factoriesBuilt = 0; nextThought = 10;
   baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0;
   chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
 }
@@ -413,7 +417,7 @@ function drawOpening() {
   fill(30, 40, 30); textSize(36); text('WE BUILD OUR WORLD', cx, y + 70);
   textStyle(ITALIC); textSize(16); fill(90, 100, 85); const tag = 'Everything here is forest. Make it the world you want.'; textSize(Math.min(16, 16 * (w - 40) / textWidth(tag))); text(tag, cx, y + 102); textStyle(BOLD);
   // The three moves.
-  const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes'], ['☝ ↑', 'Lift a pointing finger: shops'], ['✊ ↑', 'Lift a fist: towers']];
+  const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['✋ ↑', 'Lift an open hand: homes (higher = taller)'], ['☝ ↑', 'Lift a pointing finger: petrol, shops, offices'], ['✊ ↑', 'Lift a fist: car parks, factories, towers']];
   rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
   textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press H for the camera: walk or run on the spot to move.   C: look back.', cx, y + 268); text('F when you are finished.   No camera: Z / X cut, hold B homes · V shops · N towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
@@ -447,7 +451,7 @@ function drawJunk(q, p) { }
 //   fist, lift up        -> build luxury towers for investors (they stay empty: 0 AFFORDABLE)
 // Only lifting builds; a hand held still does nothing, so you chop first and build after.
 // Without a camera: ← / → chop... (X chops the right, Z the left), hold B for homes, N for towers.
-let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0, shopsBuilt = 0;
+let treesCut = 0, builtCount = 0, homesBuilt = 0, towersBuilt = 0, shopsBuilt = 0, factoriesBuilt = 0, keyHoldT = 0;
 let nextThought = 10;
 const THOUGHTS = ['Every city was a forest once.', 'Listen. Fewer birds now.', 'We build our world the way we want it.', 'Nobody asks the forest.', 'How much is enough?'];
 let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9, buildHintT = -9;
@@ -522,28 +526,37 @@ function chopForest(side) {
   const L2 = pick(side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; treesCut += treesOn(L2); }   // one swing clears a stretch of two lots
   spawnBirds(L, side); if (L2) { spawnBirds(L2, side); }
   if (sound.chop) { sound.chop(side); } if (sound.flutter) { sound.flutter(side); }
-  if (clockT - chopHintT > 10) { chopHintT = clockT; sayToast('The forest is gone. Lift an open hand for homes, a fist for towers.'); }
+  if (clockT - chopHintT > 10) { chopHintT = clockT; sayToast('The forest is gone. Lift your hand to build: the higher, the taller.'); }
 }
 // What a cleared lot becomes. Each kind of hand builds a different family of buildings, picked at
 // random so the street never repeats: homes (bungalows, terraces, cottages, caravans, villas,
 // mansions), shops (corner shops, high-street shops, brick offices) or towers (brick and glass,
 // skyscrapers that stand empty, and on a big lot a castle).
-function makeBuilt(L, kind) {
-  const r = rngN(L.seed + 5 + builtCount * 31), len = L.z1 - L.z0;
+function makeBuilt(L, kind, level = 0) {
+  // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
+  //   open hand: bungalows, cottages, caravans -> terraces, villas, mansions -> apartment blocks
+  //   pointing:  petrol stations, corner shops -> high-street shops -> brick offices
+  //   fist:      car parks -> factories -> skyscrapers that stand empty
+  const r = rngN(L.seed + 5 + builtCount * 31 + level * 7), len = L.z1 - L.z0;
   let opts;
-  if (kind === 'tower') { opts = [['tier', 3], ['tier', 4], ['tier', 4]]; if (len >= 26) { opts.push(['style', 'castle']); } }
-  else if (kind === 'shop') { opts = [['tier', 1], ['tier', 1], ['tier', 0], ['tier', 3]]; }
-  else { opts = [['style', 'bungalow'], ['style', 'bungalow'], ['tier', 1], ['tier', 0]]; if (len >= 10) { opts.push(['style', 'caravan']); } if (len >= 18) { opts.push(['style', 'villa'], ['tier', 2]); } }
+  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark']] : level === 1 ? (len >= 9 ? [['style', 'factory'], ['style', 'factory'], ['tier', 3]] : [['tier', 3]]) : [['tier', 4], ['tier', 4], ['tier', 3]]; }
+  else if (kind === 'shop') { opts = level === 0 ? (len >= 11 ? [['style', 'petrol'], ['tier', 0]] : [['tier', 0]]) : level === 1 ? [['tier', 1]] : [['tier', 3]]; }
+  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0]].concat(len >= 10 ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1]].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment']]; }
   const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(null, tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
   if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, formerName: 'FOREST', name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
 }
+// The height of your hand picks the size: low (0), chest to face (1), above your head (2).
+// With the keys, holding longer goes bigger.
+function handLevel(s) { const h = 1 - s.y; return h < 0.5 ? 0 : h < 0.72 ? 1 : 2; }
 function handUpdate(dt) {
   const now = performance.now() / 1000; sampleMotion();
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
-  // Keys stand in for the camera: B lifts homes and N towers, on both sides.
+  // Keys stand in for the camera: B lifts homes, V shops, N industry, on both sides.
   const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') || keysHeld.has('KeyV') ? dt * 0.6 : 0, keyShape = keysHeld.has('KeyN') ? 'fist' : keysHeld.has('KeyV') ? 'point' : 'open';
+  keyHoldT = keyLift ? keyHoldT + dt : 0;
+  const keyLevel = keyHoldT < 1.2 ? 0 : keyHoldT < 2.6 ? 1 : 2;
   for (const side of [-1, 1]) {
     const s = hands[side], lift = s.lift + keyLift, shape = keyLift ? keyShape : s.ok ? s.shape || 'open' : 'open'; s.lift = 0;
     if (!handsActive() || lift <= 0) { continue; }
@@ -552,15 +565,70 @@ function handUpdate(dt) {
     for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.8 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
     cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
     if (!cleared.length) { if (clockT - buildHintT > 6 && !keyLift) { buildHintT = clockT; sayToast(`Nothing cleared on the ${side < 0 ? 'left' : 'right'}. Chop the forest there first.`); } continue; }
+    const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
     for (const L of cleared.slice(0, 2)) {
-      if (!L.buildKind) { L.buildKind = shape === 'fist' ? 'tower' : shape === 'point' ? 'shop' : 'home'; makeBuilt(L, L.buildKind); }
-      const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
-      L.grow = Math.min(1, L.grow + lift * (L.buildKind === 'tower' ? 1.6 : 2.4));
-      const after = Math.floor(L.grow * n + 1e-6);
-      if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
-      if (L.grow >= 1) { L.born = clockT - RISE_T - 1; L.thud = true; builtCount++; if (L.buildKind === 'tower') { towersBuilt++; } else if (L.buildKind === 'shop') { shopsBuilt++; } else { homesBuilt++; } if (sound.built) { sound.built(L.buildKind === 'tower'); } }
+      if (!L.buildKind) { L.buildKind = shape === 'fist' ? 'tower' : shape === 'point' ? 'shop' : 'home'; L.level = -1; L.grow = 0; }
+      // Reaching higher turns it into a bigger building; what is built so far keeps its height.
+      if (level > L.level) { const builtM = (L.grow || 0) * (L.H || 0); L.level = level; makeBuilt(L, L.buildKind, level); L.grow = Math.min(0.98, builtM / L.H); }
+      // While your hand is still rising it keeps going (it can still get bigger); it tops out
+      // when you stop. Taller buildings need more lifting.
+      L.liftT = clockT;
+      growLot(L, lift * 2.4 * Math.pow(8 / Math.max(8, L.H), 0.75), 0.97);
     }
   }
+  // Once you stop lifting, the building tops out at the size your hand reached: the last floors go
+  // up on their own (slower for tall ones, so you see the crane), the scaffolding comes down.
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > 0.35) { growLot(L, dt * 0.9 * Math.sqrt(8 / Math.max(8, L.H)), 1); } } }
+}
+function growLot(L, add, cap) {
+  const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
+  L.grow = Math.min(cap, L.grow + add);
+  const after = Math.floor(L.grow * n + 1e-6);
+  if (after > before) { L.floorT = clockT; if (sound.floorUp) { sound.floorUp(after, n, L.side); } }
+  if (L.grow >= 1) {
+    L.born = clockT - RISE_T - 1; L.thud = true; builtCount++;
+    if (L.buildKind === 'tower') { towersBuilt++; } else if (L.buildKind === 'shop') { shopsBuilt++; } else { homesBuilt++; }
+    if (L.style === 'factory') { factoriesBuilt++; }
+    if (sound.built) { sound.built(L.buildKind === 'tower'); }
+  }
+}
+// Scaffolding while a building goes up: poles, ledgers, braces, planks and a green net on top,
+// and a tower crane beside the tall ones. It comes down when the building is finished.
+function drawScaffold(L, g) {
+  if (L.style === 'carpark' || L.style === 'petrol') { return; }
+  const s = L.side, x = s * (EDGE_X + L.setback), xs = x - s * 0.8, z0 = clipZ(L.z0), z1 = L.z1; if (z1 <= z0 + 0.2) { return; }
+  const built = L.H * g, top = Math.min(L.H + 1, built + 2.2), near = P(xs, 0, z0); if (near.rz > FAR_Z) { return; }
+  const lw = Math.max(1, Math.min(4, near.k * 0.05));
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(midN(z0, z1)) * 0.8;
+  for (let y = 3; y <= top; y += 3) { polyN([P(xs, y, z0), P(xs, y, z1), P(x, y, z1), P(x, y, z0)], toneN('#a07a4a', z0, 0.9)); }
+  polyN(wallQuad(xs, z0, xs, z1, Math.max(0, built - 3), top), rgbaN('#2f7a4a', 0.3));
+  ctx.strokeStyle = toneN('#c89a3a', z0); ctx.lineWidth = lw; ctx.beginPath();
+  for (let zz = Math.ceil(L.z0 / 2) * 2; zz <= z1; zz += 2) { if (zz < z0) { continue; } segN(P(xs, 0, zz), P(xs, top, zz)); }
+  for (let y = 1.5; y <= top; y += 1.5) { segN(P(xs, y, z0), P(xs, y, z1)); }
+  ctx.stroke();
+  ctx.strokeStyle = toneN('#9a7a3a', z0); ctx.lineWidth = Math.max(1, lw * 0.7); ctx.beginPath();
+  for (let zz = Math.ceil(L.z0 / 4) * 4; zz + 2 <= z1; zz += 4) { if (zz < z0) { continue; } for (let y = 0; y + 3 <= top; y += 3) { segN(P(xs, y, zz), P(xs, y + 3, zz + 2)); } }
+  ctx.stroke();
+  ctx.restore();
+  if (L.H > 18) { drawCrane(L, x, top); }
+}
+function drawCrane(L, x, top) {
+  const s = L.side, mz = L.z1 - 2, mx = x + s * Math.min(L.depth * 0.7, 10), H = Math.max(L.H, top) + 9;
+  if (mz < cam.z + 3) { return; }
+  const base = P(mx, 0, mz); if (base.rz > FAR_Z) { return; }
+  const lw = Math.max(1, Math.min(5, base.k * 0.12)), w = 0.8;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(mz) * 0.8; ctx.strokeStyle = toneN('#f2b81a', mz); ctx.lineWidth = lw; ctx.beginPath();
+  segN(P(mx, 0, mz - w), P(mx, H, mz - w)); segN(P(mx, 0, mz + w), P(mx, H, mz + w));
+  for (let y = 0; y < H; y += 2) { segN(P(mx, y, mz - w), P(mx, y + 2, mz + w)); }
+  const a = clockT * 0.25 + (Math.abs(L.seed) % 100) * 0.06, len = 22, cx = Math.cos(a), cz = Math.sin(a);
+  const jx = mx + cx * len, jz = mz + cz * len, bx = mx - cx * 8, bz = mz - cz * 8;
+  segN(P(bx, H, bz), P(jx, H, jz)); segN(P(mx, H + 4, mz), P(jx, H, jz)); segN(P(mx, H + 4, mz), P(bx, H, bz)); segN(P(mx, H, mz), P(mx, H + 4, mz));
+  ctx.stroke();
+  const tr = 0.55 + 0.25 * Math.sin(clockT * 0.7), hx = mx + cx * len * tr, hz = mz + cz * len * tr, hy = Math.max(top + 1, H - 6 - 6 * Math.pow(Math.sin(clockT * 0.5), 2));
+  ctx.strokeStyle = toneN('#2a2a2a', mz); ctx.lineWidth = Math.max(1, lw * 0.4); ctx.beginPath(); segN(P(hx, H, hz), P(hx, hy, hz)); ctx.stroke();
+  polyN(wallQuad(hx, hz - 1.5, hx, hz + 1.5, hy - 0.5, hy), toneN('#8a5a3a', hz));
+  polyN(wallQuad(bx, bz - 0.8, bx, bz + 0.8, H - 1.8, H), toneN('#6a6a6a', bz));
+  ctx.restore();
 }
 // The camera picture and your hand, bottom right, while the hands are on.
 function drawHandPanel() {
@@ -570,6 +638,9 @@ function drawHandPanel() {
   if (handVideo && handVideo.elt && handVideo.elt.readyState >= 2) { drawingContext.save(); drawingContext.translate(x + w, y); drawingContext.scale(-1, 1); drawingContext.globalAlpha = 0.85; drawingContext.drawImage(handVideo.elt, 0, 0, w, h); drawingContext.restore(); }
   else { fill(40); rect(x, y, w, h, 4); }
   stroke(255, 255, 255, 50); strokeWeight(1); line(x + w / 2, y, x + w / 2, y + h); noStroke();
+  // How high to lift: above the top line builds the biggest things.
+  for (const [hk, lab] of [[0.72, 'TALL'], [0.5, 'MID']]) { const ly = y + (1 - hk) * h; stroke(255, 210, 60, 90); strokeWeight(1); drawingContext.setLineDash([4, 4]); line(x, ly, x + w, ly); drawingContext.setLineDash([]); noStroke(); fill(255, 210, 60, 200); textSize(9); textStyle(BOLD); textAlign(RIGHT, BOTTOM); text(lab, x + w - 4, ly - 1); }
+  fill(255, 210, 60, 200); textAlign(RIGHT, BOTTOM); text('LOW', x + w - 4, y + h - 18);
   // Your steps: how much your body is moving, and what the street does with it.
   const sp = bodySpeed(), mode = sp <= 0 ? 'standing' : sp < WALK_SPD * 1.05 ? 'walking' : 'running';
   fill(0, 120); rect(x, y + h - 16, w, 16); fill(mode === 'running' ? '#e0302a' : mode === 'walking' ? '#ffd23f' : '#888'); rect(x, y + h - 16, w * Math.min(1, motionK / 0.4), 16);
@@ -582,7 +653,7 @@ function drawHandPanel() {
   }
   const s = { ok: hands[-1].ok || hands[1].ok };
   fill(255); textFont('Georgia'); textStyle(BOLD); textSize(10); textAlign(LEFT, TOP);
-  textSize(10); text(s.ok || !handStatus ? 'Swing L / R hand: cut that side\nLift ✋ homes · ☝ shops · ✊ towers\nStep or run on the spot to move' : handStatus, x, y - 46, w + 4);
+  textSize(10); text(s.ok || !handStatus ? 'Swing L / R hand: cut that side\nLift ✋ ☝ ✊ — the higher, the taller\nStep or run on the spot to move' : handStatus, x, y - 46, w + 4);
   // Calibration message over the picture.
   const tNow = performance.now() / 1000, calibMsg = calibState === 'run' ? `Stand still for 2 seconds… ${Math.max(0, 2 - (tNow - calibT0)).toFixed(1)}` : calibState === 'done' && tNow - calibDoneT < 1.8 ? 'Calibrated ✓' : '';
   if (calibMsg) { fill(0, 170); rect(x, y + h / 2 - 16, w, 32); fill(calibState === 'run' ? '#ffd23f' : '#7fdc8a'); textSize(15); textAlign(CENTER, CENTER); text(calibMsg, x + w / 2, y + h / 2); }
@@ -647,7 +718,7 @@ function nextText() {
   if (backWant && !ending) { return 'Looking back  ·  C to turn round'; }
   const z = distanceWalked; let cleared = false, forest = false;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
-  if (cleared) { return 'Lift a hand to build  (✋ homes · ☝ shops · ✊ towers)'; }
+  if (cleared) { return 'Lift a hand to build: the higher, the taller  (✋ ☝ ✊)'; }
   if (forest) { return 'Swing your left or right hand to cut that side'; }
   return 'Walk on  ↑';
 }

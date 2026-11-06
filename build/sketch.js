@@ -417,7 +417,7 @@ function drawWorld(z, side) {
     const cut = L.cutT !== undefined, forestK = L.piece ? 0 : cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
     if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
     if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
-    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
+    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; if (L.born === undefined && L.grow > 0 && typeof drawScaffold === 'function') { drawScaffold(L, g); } }
     if (L.piece) { drawToyPiece(L); }
     if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
     const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && !L.piece && age === age) {drawDust(L, Math.min(age, RISE_T));}
@@ -554,6 +554,9 @@ function drawLot(L) {
   const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
+  // Car parks and petrol stations are open lots: no building box, only what stands on them.
+  const open = L.style === 'carpark' || L.style === 'petrol';
+  if (open) { const nq = P(x, 0, z0); if (nq.rz < FAR_Z) { drawStyled(L, x, z0, z1, H); } return; }
   // Street facade: lit from the low sun at the far end of the street.
   const fq = wallQuad(x, z0, x, z1, 0, H);
   const g = ctx.createLinearGradient(fq[0].x, 0, fq[1].x, 0);
@@ -693,6 +696,10 @@ function styleLot(L, style, r) {
   if (style === 'castle') { Object.assign(L, { H: mixN(8, 10, r()), depth: 26, color: pickN(r, ['#e8dcc8', '#d8cfc0', '#ecd4dc', '#d4dce8', '#e8e0f0']), roof: pickN(r, ['#3a5aa8', '#c84a6a', '#5a3a8a', '#2f7a6a']), flag: pickN(r, ['#e23b3b', '#f2d13a', '#3f8fd6', '#d94f9a']), fountain: false }); }
   else if (style === 'villa') { Object.assign(L, { H: mixN(6.6, 7.6, r()), depth: 14, color: pickN(r, ['#f4ead8', '#f8e4c8', '#fff4e0', '#f0e0d8']), roof: pickN(r, ['#c8643a', '#b8583a', '#d07a4a']), fountain: r() < 0.6 }); }
   else if (style === 'bungalow') { Object.assign(L, { H: mixN(3.2, 3.7, r()), depth: 12, color: pickN(r, ['#f2d8b0', '#d8e8f0', '#f0d0d0', '#e0ecd0', '#fff0c8', '#d8d0e8']), roof: pickN(r, ['#8a5a4a', '#5a6a7a', '#a0583a', '#6a7a5a']), door: pickN(r, ['#c8322a', '#2f6a9a', '#2e7a47', '#f2b23a']), tree: r() < 0.6 }); if (r() < 0.45) { L.brick = true; L.color = pickN(r, ['#b8684a', '#a85a40', '#c47e5a', '#9a5a48', '#c89a78']); } }
+  else if (style === 'apartment') { Object.assign(L, { H: mixN(16, 28, r()), depth: 12, color: pickN(r, ['#e8e0d0', '#d8d4cc', '#e8d0b8', '#c8d0d8', '#f0e4c8']) }); }
+  else if (style === 'factory') { Object.assign(L, { H: mixN(7.5, 10, r()), depth: 20, color: pickN(r, ['#9aa2a8', '#a8a49a', '#8c969c', '#b0a08a']), chimneys: r() < 0.5 ? 2 : 1, name: pickN(r, ['TIMBERLAND MILL', 'FOREST PRODUCTS CO.', 'GREENWOOD PULP & PAPER', 'PROGRESS PLASTICS']) }); }
+  else if (style === 'carpark') { Object.assign(L, { H: 0.6, depth: 16, color: '#3c3c42', name: pickN(r, ['CITY PARKING', 'PARK & SHOP', 'EASY PARK']) }); }
+  else if (style === 'petrol') { Object.assign(L, { H: 5.4, depth: 14, color: '#d8d4cc', name: pickN(r, ['FUEL & GO', 'GREENWAY PETROL', 'OCTANE']), brand: pickN(r, ['#d8322a', '#2a8a4a', '#e8a01a', '#2a5ab8']) }); }
   else if (style === 'caravan') { Object.assign(L, { H: mixN(2.4, 2.7, r()), depth: 3.2, color: pickN(r, ['#f2eee2', '#e8e4d6', '#dfe6ea', '#efe2c8']), band: pickN(r, ['#4a8ab8', '#c86a3a', '#6a9a5a', '#b84a4a']), rust: r(), awn: r() < 0.6 ? pickN(r, ['#3f8fd6', '#e8a030', '#5fa35b', '#c84a4a']) : null, wash: r() < 0.4 }); }
 }
 function drawStyled(L, x, z0, z1, H) {
@@ -700,6 +707,121 @@ function drawStyled(L, x, z0, z1, H) {
   else if (L.style === 'villa') { drawVilla(L, x, z0, z1, H); }
   else if (L.style === 'bungalow') { drawBungalow(L, x, z0, z1, H); }
   else if (L.style === 'caravan') { drawCaravan(L, x, z0, z1, H); }
+  else if (L.style === 'apartment') { drawApartment(L, x, z0, z1, H); }
+  else if (L.style === 'factory') { drawFactory(L, x, z0, z1, H); }
+  else if (L.style === 'carpark') { drawCarpark(L, x, z0, z1, H); }
+  else if (L.style === 'petrol') { drawPetrol(L, x, z0, z1, H); }
+}
+/* ---------- What people build on the cleared forest: apartments, factories, car parks, petrol ---------- */
+// A block of flats: rows of windows, a balcony on every other bay, washing and air conditioners.
+function drawApartment(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), r = rngN(L.seed + 9);
+  const floors = Math.max(3, Math.floor(H / 3)), bays = Math.max(2, Math.round(len / 3.6)), rows = [];
+  for (let f = 1; f < floors; f++) { rows.push([f * 3 + 0.5, f * 3 + 2.3]); }
+  facadeWindows(L, x, z0, z1, rows, bays, { padU: 0.2, lit: 0.35, glass: '#56687a', frame: '#e8e4dc' });
+  polyN(wallQuad(x - s * 0.03, z0, x - s * 0.03, z1, 0, 3), toneN('#4a4f56', mid));
+  facadeWindows(L, x, z0, z1, [[0.3, 2.7]], Math.max(1, Math.round(len / 6)), { padU: 0.1, lit: 0.8, glass: '#ffd98a' });
+  for (let f = 1; f < floors; f++) {
+    const y = f * 3;
+    for (let i = 0; i < bays; i++) {
+      const rv = r(), cv = r(), za = L.z0 + len * (i + 0.08) / bays, zb = L.z0 + len * (i + 0.92) / bays;
+      if ((i + f) % 2 || zb < z0) { continue; }
+      const zA = Math.max(za, z0), d = 1.3;
+      polyN([P(x, y, zA), P(x, y, zb), P(x - s * d, y, zb), P(x - s * d, y, zA)], toneN('#d8d4cc', za, 0.95));
+      polyN(wallQuad(x - s * d, zA, x - s * d, zb, y - 0.25, y), toneN('#bcb8b0', za));
+      if (rv < 0.28) { polyN(wallQuad(x - s * (d - 0.25), zA, x - s * (d - 0.25), Math.min(zb, zA + 1.3), y + 0.95, y + 1.7), toneN(['#e86a6a', '#6aa8e8', '#f2d13a', '#ffffff'][Math.floor(cv * 4)], za)); }
+      else if (rv < 0.55) { polyN(wallQuad(x - s * 0.75, zA, x - s * 0.75, Math.min(zb, zA + 0.8), y + 0.1, y + 0.7), toneN('#ecebe6', za), toneN('#9a9a96', za), 1); }
+      polyN(wallQuad(x - s * d, zA, x - s * d, zb, y, y + 1.05), rgbaN(toneN('#a8c8d8', za), 0.4), toneN('#e8e8e8', za), 1);
+    }
+  }
+  polyN(wallQuad(x - s * 0.1, z0, x - s * 0.1, z1, H - 0.5, H), toneN('#cfcac0', mid));
+}
+// A factory: corrugated shed, sawtooth roof, roller doors, and chimneys pouring smoke into the sky.
+function drawFactory(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1);
+  ctx.strokeStyle = 'rgba(30,30,30,0.16)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let zz = Math.ceil(L.z0 / 0.8) * 0.8; zz < z1; zz += 0.8) { if (zz >= z0) { segN(P(x - s * 0.02, 0, zz), P(x - s * 0.02, H, zz)); } }
+  ctx.stroke();
+  const teeth = Math.max(2, Math.round(len / 4));
+  for (let i = 0; i < teeth; i++) {
+    const za = L.z0 + len * i / teeth, zb = L.z0 + len * (i + 1) / teeth; if (zb < z0) { continue; }
+    const zA = Math.max(za, z0); polyN([P(x, H, zA), P(x, H + 2.6, zA), P(x, H, zb)], toneN('#8a8e94', za, 0.9));
+  }
+  facadeWindows(L, x, z0, z1, [[H - 2.4, H - 1.3]], Math.max(2, Math.round(len / 2.5)), { padU: 0.08, lit: 0.2, glass: '#6a7a86' });
+  const doors = Math.max(1, Math.round(len / 9));
+  for (let i = 0; i < doors; i++) {
+    const zc = L.z0 + len * (i + 0.5) / doors, za = zc - 1.8, zb = zc + 1.8; if (zb < z0) { continue; }
+    polyN(wallQuad(x - s * 0.04, Math.max(za, z0), x - s * 0.04, zb, 0, 4.2), toneN('#9aa0a6', zc, 0.85), toneN('#4a4e52', zc), 1.5);
+    ctx.strokeStyle = 'rgba(20,20,20,0.22)'; ctx.lineWidth = 1; ctx.beginPath(); for (let y = 0.35; y < 4.2; y += 0.35) { segN(P(x - s * 0.05, y, Math.max(za, z0)), P(x - s * 0.05, y, zb)); } ctx.stroke();
+  }
+  facadeSign(L, x, z0, L.z0 + len * 0.12, L.z0 + len * 0.88, 4.7, 5.7, toneN('#f4ecd8', mid), '#2a2a2a', L.name);
+  for (let c = 0; c < (L.chimneys || 1); c++) {
+    const zc = L.z0 + len * (0.3 + c * 0.4), xc = x + s * (L.depth * 0.6), top = H + 16 + c * 4, rw = 0.9;
+    if (zc < cam.z + 2) { continue; }
+    polyN(wallQuad(xc, zc - rw, xc, zc + rw, H, top), toneN('#a85a48', zc));
+    polyN(wallQuad(xc - s * 0.02, zc - rw, xc - s * 0.02, zc + rw, top - 2.4, top - 1.5), toneN('#f2efe6', zc));
+    polyN(wallQuad(xc - s * 0.02, zc - rw, xc - s * 0.02, zc + rw, top - 0.9, top), toneN('#c8322a', zc));
+    for (let i = 0; i < 8; i++) {
+      const t = modN(clockT * 0.16 + i / 8 + c * 0.37, 1), p = P(xc + s * t * 3, top + 0.8 + t * 24, zc - t * 16); if (p.rz < 1) { continue; }
+      ctx.fillStyle = rgbaN(mixHex('#dcd8d0', '#6a6660', t), 0.6 * (1 - t) * Math.min(1, t / 0.06));
+      ctx.beginPath(); ctx.arc(p.x, p.y, (1.3 + t * 6) * p.k, 0, TWO_PI); ctx.fill();
+    }
+  }
+}
+// One parked car, nose to the road: a box with a glass cabin on top.
+function drawCarN(xa, xb, zc, col, mid) {
+  const w = 0.9, top = 1.15, cab = 1.7, k = (xb - xa) > 0 ? 1 : -1;
+  const ca = xa + k * 1.0, cb = xb - k * 0.9;
+  if (zc - w > cam.z + 1) { polyN([P(xa, 0.3, zc - w), P(xb, 0.3, zc - w), P(xb, top, zc - w), P(xa, top, zc - w)], toneN(col, zc, 0.75)); }
+  polyN([P(xa, top, zc - w), P(xa, top, zc + w), P(xb, top, zc + w), P(xb, top, zc - w)], toneN(col, zc, 1.05));
+  polyN(wallQuad(xa, zc - w, xa, zc + w, 0.3, top), toneN(col, zc, 0.9));
+  polyN([P(ca, top, zc - w * 0.85), P(ca, top, zc + w * 0.85), P(ca + k * 0.3, cab, zc + w * 0.8), P(ca + k * 0.3, cab, zc - w * 0.8)], toneN('#7a98b0', zc));
+  polyN([P(ca + k * 0.3, cab, zc - w * 0.8), P(ca + k * 0.3, cab, zc + w * 0.8), P(cb, cab, zc + w * 0.8), P(cb, cab, zc - w * 0.8)], toneN(col, zc, 0.95));
+}
+// A car park: asphalt, white bays, parked cars and a price sign.
+function drawCarpark(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xf = x + s * L.depth, r = rngN(L.seed + 4);
+  polyN([P(x, 0.03, z0), P(x, 0.03, z1), P(xf, 0.03, z1), P(xf, 0.03, z0)], toneN('#3c3c42', mid));
+  ctx.strokeStyle = toneN('#eeeae0', mid); ctx.lineWidth = Math.max(1, Math.min(3, P(x, 0, z0).k * 0.06)); ctx.beginPath();
+  for (let zz = L.z0 + 0.4; zz < L.z1; zz += 2.6) { if (zz < z0) { continue; } segN(P(x + s * 0.8, 0.04, zz), P(x + s * 5.6, 0.04, zz)); segN(P(xf - s * 0.8, 0.04, zz), P(xf - s * 5.6, 0.04, zz)); }
+  ctx.stroke();
+  const cars = [];
+  for (let zz = L.z0 + 0.4; zz + 2.6 <= L.z1; zz += 2.6) { for (const row of [0, 1]) { const rv = r(), cv = r(); if (rv < 0.62 && zz > z0) { cars.push({ zc: zz + 1.3, row, col: ['#c83a3a', '#e8e8e8', '#2a2a30', '#3a6ab8', '#a8a8b0', '#d8b040'][Math.floor(cv * 6)] }); } } }
+  cars.sort((a, b) => b.zc - a.zc || b.row - a.row);
+  for (const c of cars) { if (c.row === 0) { drawCarN(x + s * 1.0, x + s * 5.4, c.zc, c.col, mid); } else { drawCarN(xf - s * 1.0, xf - s * 5.4, c.zc, c.col, mid); } }
+  const zp = L.z0 + 1.2;
+  if (zp > z0) {
+    ctx.strokeStyle = toneN('#4a4a50', zp); ctx.lineWidth = Math.max(1, P(x, 0, zp).k * 0.12); ctx.beginPath(); segN(P(x - s * 0.4, 0, zp), P(x - s * 0.4, 5.6, zp)); ctx.stroke();
+    facadeSign(L, x - s * 0.3, z0, zp - 1.6, zp + 1.6, 4.4, 5.6, '#2a5ab8', '#ffffff', 'P  ' + L.name);
+    facadeSign(L, x - s * 0.3, z0, zp - 1.2, zp + 1.2, 3.5, 4.3, '#f4ecd8', '#2a2a2a', '$18 / HOUR');
+  }
+}
+// A petrol station: forecourt, pumps under a lit canopy, a little shop at the back, a price board.
+function drawPetrol(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), d = L.depth, xc = x + s * (d - 5);
+  polyN([P(x, 0.03, z0), P(x, 0.03, z1), P(x + s * d, 0.03, z1), P(x + s * d, 0.03, z0)], toneN('#8e8e92', mid));
+  const za = Math.max(L.z0 + len * 0.12, z0), zb = L.z1 - len * 0.1;
+  if (zb > za) {
+    const xs = x + s * (d - 3);
+    polyN(wallQuad(xs, za, xs, zb, 0, 3.8), toneN('#f2efe6', mid));
+    polyN(wallQuad(xs - s * 0.03, za, xs - s * 0.03, zb, 0.4, 2.7), toneN('#ffd98a', mid, 1.05));
+    for (let i = 0; i < 2; i++) {
+      const zc = L.z0 + len * (0.32 + 0.36 * i); if (zc - 0.5 < z0) { continue; }
+      polyN(wallQuad(x + s * 3, zc - 0.45, x + s * 3, zc + 0.45, 0, 1.7), toneN('#ecebe6', zc));
+      polyN(wallQuad(x + s * 2.98, zc - 0.45, x + s * 2.98, zc + 0.45, 1.4, 1.7), toneN(L.brand, zc));
+    }
+    ctx.strokeStyle = toneN('#d8d8d8', mid); ctx.lineWidth = Math.max(1, P(x, 0, za).k * 0.18); ctx.beginPath();
+    for (const zz of [za + 0.6, zb - 0.6]) { if (zz > z0) { segN(P(x + s * 1.2, 0, zz), P(x + s * 1.2, 4.6, zz)); segN(P(xc, 0, zz), P(xc, 4.6, zz)); } }
+    ctx.stroke();
+    polyN([P(x + s * 0.5, 4.6, za), P(x + s * 0.5, 4.6, zb), P(xc + s * 0.5, 4.6, zb), P(xc + s * 0.5, 4.6, za)], toneN('#fff4d8', mid, 1.05));
+    polyN(wallQuad(x + s * 0.5, za, x + s * 0.5, zb, 4.6, 5.4), toneN(L.brand, mid));
+    facadeSign(L, x + s * 0.45, z0, za + 0.6, zb - 0.6, 4.65, 5.35, toneN(L.brand, mid), '#ffffff', L.name);
+  }
+  const zp = L.z0 + 0.8;
+  if (zp > z0) {
+    ctx.strokeStyle = toneN('#4a4a50', zp); ctx.lineWidth = Math.max(1, P(x, 0, zp).k * 0.12); ctx.beginPath(); segN(P(x - s * 0.5, 0, zp), P(x - s * 0.5, 3.4, zp)); ctx.stroke();
+    facadeSign(L, x - s * 0.4, z0, zp - 1.1, zp + 1.1, 3.4, 5.4, '#1e1e22', '#ffd040', 'UNLEADED 2.39');
+  }
 }
 // One window on a facade at x, between za..zb along the street and ya..yb up.
 function winN(L, x, z0, za, zb, ya, yb, glass, frame, lit) {
@@ -744,7 +866,8 @@ function windowSill(L, x, z0, za, zb, ya, frame) {
 // What the wall is made of: weatherboards, brick or render.
 function wallMaterial(L) {
   if (L.style === 'bungalow') { return L.brick ? 'brick' : 'board'; }
-  if (L.style === 'caravan' || L.style === 'castle') { return null; }
+  if (L.style === 'caravan' || L.style === 'castle' || L.style === 'factory' || L.style === 'carpark' || L.style === 'petrol') { return null; }
+  if (L.style === 'apartment') { return 'render'; }
   if (L.style === 'villa') { return 'render'; }
   if (L.tier === 0) { return 'board'; }
   if (L.tier === 1 || L.tier === 3 && !L.glass) { return 'brick'; }
