@@ -80,7 +80,7 @@ const PostFX = (() => {
       vec2 fromMid = vUv - 0.5;
       float r2 = dot(fromMid * vec2(uAspect, 1.0), fromMid * vec2(uAspect, 1.0));
       // A hint of lens colour fringing towards the edges (more as the air gets dirty).
-      vec2 ca = fromMid * r2 * (0.004 + 0.006 * uSmog);
+      vec2 ca = fromMid * r2 * (0.0012 + 0.0018 * uSmog);
       vec3 c = vec3(texture2D(uScene, vUv + ca).r, texture2D(uScene, vUv).g, texture2D(uScene, vUv - ca).b);
       c += texture2D(uBloom, vUv).rgb * uBloomK;
       c += texture2D(uRays, vUv).rgb * vec3(1.0, 0.9, 0.72) * uRaysK;
