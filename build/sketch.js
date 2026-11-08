@@ -25,7 +25,7 @@ let lastTier = -1;
 let night = 0, nightTarget = 0;   // 0 = day, 1 = night (the ending dims the light a little)
 const chunks = new Map();   // chunk index -> { lots, props, back } for every 48 m block in view
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
-const APPEAR_Z = 36, RISE_T = 2.4;   // lots build when you come this close; rise time in seconds
+const APPEAR_Z = 36, RISE_T = 1.8;   // lots build when you come this close; rise time in seconds
 let riseK = 1, mouseMoved = false;
 let sunScreen = null, showStats = false;   // sun position on screen for the light rays; I = frame timing
 // Looking back (C, and at the end): you turn round on the spot to see the street behind you.
@@ -197,7 +197,7 @@ function draw() {
   night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5));
   // How built-up is the street around you? 0 = all forest, 1 = all buildings.
   let builtN = 0, lotN = 0;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born)); } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, riseOf(L.born)); } } }
   sound.devK = lotN ? builtN / lotN : 0;
   sound.update({ dt: paused ? 0 : dt, tier, night, moving: Math.abs(stepSpeed) > 0.1 });
 
@@ -383,14 +383,13 @@ function drawWorld(z) {
   }
   const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const g = typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born);
+    const g = riseOf(L.born);
     // Before it is built, every lot is forest; as the building rises, the trees go down
     // (or, with your hands, they fall when you chop them and stumps are left).
     const cut = L.cutT !== undefined, forestK = cut ? 1 - Math.min(1, g * 2) : 1 - Math.min(1, g * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
     if (g <= 0.01) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); continue; }
     if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
     riseK = g; drawLot(L); riseK = 1;
-    if (L.born === undefined && L.grow > 0 && typeof drawScaffold === 'function') { drawScaffold(L, g); }
     const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && age === age) {drawDust(L, Math.min(age, RISE_T));}
   }
   const items = [];

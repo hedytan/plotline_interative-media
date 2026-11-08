@@ -22,24 +22,25 @@ it is every file below joined into one.
 | With the camera (H) | With the keyboard | What happens |
 |---|---|---|
 | Swing your left / right hand | Z / X (or ← / →) | Cut the forest on that side; birds flee |
-| Lift an open hand ✋ | hold B | Homes: bungalow → terrace / villa → apartments |
-| Lift a pointing finger ☝ | hold V | Shops: petrol / corner shop → high street → offices |
-| Lift a fist ✊ | hold N | Industry: car park → factory → empty skyscraper |
+| Lift an open hand ✋ | B | Homes: bungalow → terrace / villa → apartments |
+| Lift a pointing finger ☝ | V | Shops: petrol / corner shop → high street → offices |
+| Lift a fist ✊ | N | Industry: car park → factory → empty skyscraper |
 | Walk or run on the spot | ↑ / W (Shift to run) | Move down the street at your pace |
 | | C | Turn round and look back |
 | | F | The end card: what it cost |
 | | M · P · R | Sound · pause · new street |
 | | G · I | Graphics pass on/off (before/after) · frame timing |
 
-How high you lift chooses the size (low / middle / high on the camera picture). On the keyboard,
-the longer you hold the key, the bigger the building.
+One lift builds straight away (if the land is still forest, it is cleared first). How high you lift
+chooses the size (low / middle / high on the camera picture), and reaching higher in the same lift
+makes it bigger. On the keyboard, a press builds; holding the key makes it bigger.
 
 ## Files
 
 | File | What it does |
 |---|---|
 | `sketch.js` | The street: camera and perspective projection `P(x, y, z)`, near-plane clipping, 48 m chunks generated from a seed (`chunkAt`, `makeLot`), sky, road, every building type, the look-back view (`drawMirrored`), input. |
-| `board.js` | The artwork: forest lots that wait for your hands, chopping (`chopForest`), building floor by floor (`handUpdate`, `growLot`, `makeBuilt`), scaffolding and cranes, hand tracking with ml5 (`startHands`, `gotHands`), body-motion walking (`sampleMotion`, `bodySpeed`), smog, birds, HUD and cards. |
+| `board.js` | The artwork: forest lots that wait for your hands, hand tracking with ml5 (`startHands`, `gotHands`, `handShape`), swings and lifts (`handFeedSide`), chopping (`chopForest`), building (`buildOn`, `raiseLot`, `makeBuilt`), body-motion walking and the swing fallback (`sampleMotion`, `bodySpeed`), smog, birds, HUD and cards. |
 | `postfx.js` | WebGL post-processing over the finished 2D frame: bloom, light rays from the sun, a colour grade that moves from forest to city, vignette and grain. Adapts its own quality to the frame rate. |
 | `dabforest.js` | Grows 12 painted tree sprites at start-up (broadleaf, poplar, gum, pine, bush) from recursive branches and hundreds of leaf dabs. |
 | `trees.js` | Smaller painted street trees for gardens and pavements. |
@@ -58,8 +59,10 @@ the longer you hold the key, the bigger the building.
   cached as sprites; buildings get brick, weatherboard or render textures, weathering, window
   reflections and roof courses, all drawn in code.
 - **Machine-learning interaction.** ml5.js `handPose` (MediaPipe hand landmarks) tracks two hands.
-  The hand shape is read from the landmarks (fingertip-to-wrist distance against palm size:
-  open / pointing / fist), a fast stroke is a chop, and upward movement is building.
+  Each hand keeps its identity between frames (so a swing across the middle stays one hand). The
+  shape is read from which fingers are straight (tip further from the wrist than the middle joint)
+  and smoothed by a vote over 5 frames; a quick sideways stroke is a chop, a rise is a build.
+  If a fast swing blurs the hand out of the tracker, a burst of pixel change on that side still counts.
 - **Computer vision without ML.** Walking on the spot is measured by frame differencing a
   48 × 36 grey copy of the camera picture, after a 2-second stand-still calibration.
 - **GPU post-processing.** A multi-pass GLSL pipeline (quarter-size bright pass, separable
