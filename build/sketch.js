@@ -13,13 +13,13 @@ const DISTRICTS = [
   { name: 'Maple Terrace', tag: 'Rent: modest', stripe: [BOARD_COL.pink, BOARD_COL.orange] },
   { name: 'Gilded Gardens', tag: 'Rent: steep', stripe: [BOARD_COL.red, BOARD_COL.yellow] },
   { name: 'Brick & Glass Quarter', tag: 'Rent: eye-watering', stripe: [BOARD_COL.green, '#7fd1a0'] },
-  { name: 'Pinnacle Heights', tag: 'Rent: if you have to ask…', stripe: [BOARD_COL.navy, '#6f93d8'] }
+  { name: 'Pinnacle Heights', tag: 'Rent: if you have to ask...', stripe: [BOARD_COL.navy, '#6f93d8'] }
 ];
 const SHOP_NAMES = [
   ['Bargain Bin', 'Rusty Nails', 'Patch & Mend', 'Penny Pantry', 'Junk & Co.', 'Second Chance', 'Odd Socks'],
-  ['Corner Café', 'Maple Bakery', 'Paper Moon Books', 'Petal Florist', 'Teapot', 'Little Deli'],
+  ['Corner Cafe', 'Maple Bakery', 'Paper Moon Books', 'Petal Florist', 'Teapot', 'Little Deli'],
   ['', '', '', '', ''],
-  ['Gallery 9', 'Boutique Noir', 'Bistro Lumière', 'The Atelier', 'Velvet Lounge', 'Grand Hotel'],
+  ['Gallery 9', 'Black Door Boutique', 'City Diner', 'The Workshop', 'Velvet Lounge', 'Grand Hotel'],
   ['', '', '']
 ];
 
@@ -387,7 +387,7 @@ function drawGround(z, side) {
   for (const ch of chunks.values()) {
     if (side && ch.z0 < side.fromZ) { continue; }
     continue;   // no painted street names: nothing here is a board game
-    paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO  ➜' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
+    paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO ->' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
 function paintText(label, x, zz, size, col, maxW) {
@@ -1328,7 +1328,7 @@ function drawJail(L, x, z0, z1, H) {
     const tz0 = Math.max(L.z0, z0), tz1 = L.z0 + 4; polyN(wallQuad(x - L.side * 0.3, tz0, x - L.side * 0.3, tz1, H, H + 5), toneN('#6a6c76', tz0, 1.05));
     polyN([P(x - L.side * 1, H + 5, tz0), P(x - L.side * 1, H + 5, tz1), P(x + L.side * 1.5, H + 7.5, (tz0 + tz1) / 2)], toneN('#3f6fd6', tz0));
   }
-  facadeSign(L, x, z0, L.z0 + len * 0.3, L.z0 + len * 0.75, 4.2, 5.0, toneN('#2a2a30', L.z0), '#f2e6c0', 'JAIL · JUST VISITING', null);
+  facadeSign(L, x, z0, L.z0 + len * 0.3, L.z0 + len * 0.75, 4.2, 5.0, toneN('#2a2a30', L.z0), '#f2e6c0', 'JAIL - JUST VISITING', null);
 }
 function drawCasino(L, x, z0, z1, H) {
   const len = L.z1 - L.z0, t = clockT;
