@@ -148,7 +148,7 @@ class WalkSound extends StreetSound {
     const listen = this.listenK || 0;
     // Forest to city: the less built-up the street around you, the more wind and birds; the more
     // built-up, the more traffic hum and the louder the band.
-    this.devSmooth += ((this.devK || 0) - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = typeof ending !== 'undefined' && ending ? 0 : 1 - dev;   // at the end the birds stop for good
+    this.devSmooth += ((this.devK || 0) - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = (1 - dev) * (typeof ending !== 'undefined' && ending ? (builtCount === 0 ? 1 : builtCount <= 5 ? 0.4 : 0) : 1);   // at the end: birds keep singing if you built nothing, a few if you built a little, none after a city
     if (this.wind) { this.wind.gain.setTargetAtTime(0.05 * wild, now, 0.8); this.leaves.gain.setTargetAtTime(0.012 * wild * (0.6 + 0.4 * Math.sin(now * 0.7)), now, 0.5); }
     this.hum.gain.setTargetAtTime((0.03 + (tier >= 3 ? 0.02 : 0)) * (0.15 + dev * 1.2), now, 1);
     if (Math.random() < 0.05 * wild * wild && this.mvoices < 30) {

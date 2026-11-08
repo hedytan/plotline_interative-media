@@ -112,6 +112,18 @@ function boardUpdate(z) {
 
 /* ---------- Start, end, start again ---------- */
 function useHere() { if (intro) { intro = false; } }
+// The end card answers what you actually did: leaving the forest standing, taking a little, or
+// building a city each get their own words, so the ending never judges everyone the same way.
+function endingCard() {
+  const built = `You built ${homesBuilt} homes, ${shopsBuilt} shops and ${towersBuilt} towers.`;
+  if (builtCount === 0) {
+    return { title: 'THE FOREST STAYS', col: '#3f7a3a', lines: [treesCut ? `You cut down ${treesCut} trees, but built nothing on them.` : 'You walked through the forest and cut nothing down.', 'Listen: the birds are still singing.', '', 'Every city was a forest once.', 'This one still is.', 'You chose not to build. That is a choice too.'] };
+  }
+  if (builtCount <= 5) {
+    return { title: 'A LITTLE OF THE WORLD WE WANTED', col: '#5a7a3a', lines: [`You cut down ${treesCut} trees.`, built, 'Listen: fewer birds now, but some are still here.', '', 'Every city was a forest once.', 'You took only a little.', 'How much would have been enough?'] };
+  }
+  return { title: 'THE WORLD WE WANTED', col: '#2f6a3a', lines: [`You cut down ${treesCut} trees.`, built, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'] };
+}
 function endWalk(kind) {
   if (ending) { return; }
   ending = { kind, t: clockT }; sound.go(); baseNight = 0.25; nightTarget = baseNight;
@@ -210,8 +222,8 @@ function drawBoardHud() {
   if (!intro) { drawHandPanel(); }
   if (intro) { drawOpening(); }
   if (ending && ending.kind === 'built') {
-    const lines = [`You cut down ${treesCut} trees.`, `You built ${homesBuilt} homes, ${shopsBuilt} shops and ${towersBuilt} towers.`, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'];
-    storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4.5 ? 'F: keep building   -   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), '#2f6a3a');
+    const card = endingCard();
+    storyCard(card.title, card.lines, clockT - ending.t > 4.5 ? 'F: keep building   -   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), card.col);
   }
   pop();
 }
