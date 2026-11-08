@@ -2257,10 +2257,16 @@ function gotHands(results) {
     }
     seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist: shape });
   }
-  // Two hands: the one further left is your left hand. One hand: whichever half of the picture it is in.
+  // Two hands: the one further left is your left hand. One hand: the hand it already was, if that hand
+  // was seen a moment ago (so a swing across the middle of the picture stays one swing); otherwise
+  // whichever half of the picture it is in.
   seen.sort((a, b) => a.x - b.x);
   if (seen.length === 2) { handFeedSide(-1, seen[0].x, seen[0].y, seen[0].fist); handFeedSide(1, seen[1].x, seen[1].y, seen[1].fist); }
-  else if (seen.length === 1) { handFeedSide(seen[0].x < 0.5 ? -1 : 1, seen[0].x, seen[0].y, seen[0].fist); }
+  else if (seen.length === 1) {
+    const now = performance.now() / 1000, live = [-1, 1].filter(sd => hands[sd].ok && now - hands[sd].seen < 0.5);
+    const side = live.length === 1 ? live[0] : seen[0].x < 0.5 ? -1 : 1;
+    handFeedSide(side, seen[0].x, seen[0].y, seen[0].fist);
+  }
 }
 // One position of your hand (0..1, mirrored like a mirror) from the camera, or from a test.
 function handFeed(nx, ny, fist = false) { handFeedSide(nx < 0.5 ? -1 : 1, nx, ny, fist); }
@@ -2270,10 +2276,12 @@ function handFeedSide(side, nx, ny, fist = false) {
   const now = performance.now() / 1000, s = hands[side], fresh = s.ok && now - s.seen < 0.4;
   if (fresh) { const up = s.y - ny; if (up > 0.004) { s.lift += up; } }   // lifting this hand builds on its side
   s.x = nx; s.y = ny; s.shape = shape; s.fist = shape === 'fist'; s.t = now; s.ok = true; s.seen = now;
-  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.3) { s.trail.shift(); }
-  // A chop: a fast stroke of this hand, sideways or down (not up, which builds), cuts the forest on its side.
-  const a = s.trail[0];
-  if (a && now - s.chopT > 0.28) { const dx = nx - a.x, dy = ny - a.y; if (Math.hypot(dx, dy) > 0.25 && dy > -0.06) { s.chopT = now; s.trail.length = 0; chopForest(side); } }
+  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.4) { s.trail.shift(); }
+  // A chop: a quick sideways stroke of this hand (more sideways than up or down, so lifting to build
+  // never chops) of at least 18% of the picture within 0.4 s cuts the forest on its side.
+  if (now - s.chopT > 0.35) {
+    for (const a of s.trail) { const dx = nx - a.x, dy = ny - a.y; if (Math.abs(dx) > 0.18 && Math.abs(dx) > Math.abs(dy)) { s.chopT = now; s.trail.length = 0; chopForest(side); break; } }
+  }
 }
 function handsActive() { return !intro && !ending; }
 // Land that waits for your hands instead of building itself.
@@ -2289,7 +2297,8 @@ function treesOn(L) { return Math.max(2, Math.round((L.z1 - L.z0) / 2.4)) * 3; }
 function chopForest(side) {
   if (!handsActive()) { return; }
   const z = distanceWalked, pick = s => { let best = null; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side !== s || L.cutT !== undefined || L.born !== undefined || !waitsForHand(L)) { continue; } const d = L.z0 - z; if (d > -2 && d < 45 && (!best || d < best.d)) { best = { L, d }; } } } return best && best.L; };
-  const L = pick(side); if (!L) { return; }
+  const L = pick(side);
+  if (!L) { if (clockT - chopHintT > 4) { chopHintT = clockT; sayToast(`No forest left on the ${side < 0 ? 'left' : 'right'} here. Walk on to find more.`); } return; }
   L.cutT = clockT; L.grow = 0; treesCut += treesOn(L);
   const L2 = pick(side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; treesCut += treesOn(L2); }   // one swing clears a stretch of two lots
   spawnBirds(L, side); if (L2) { spawnBirds(L2, side); }
@@ -2322,31 +2331,43 @@ function handUpdate(dt) {
   const now = performance.now() / 1000; sampleMotion();
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
   // Keys stand in for the camera: B lifts homes, V shops, N industry, on both sides.
-  const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') || keysHeld.has('KeyV') ? dt * 0.6 : 0, keyShape = keysHeld.has('KeyN') ? 'fist' : keysHeld.has('KeyV') ? 'point' : 'open';
+  const keyLift = keysHeld.has('KeyB') || keysHeld.has('KeyN') || keysHeld.has('KeyV') ? dt : 0, keyShape = keysHeld.has('KeyN') ? 'fist' : keysHeld.has('KeyV') ? 'point' : 'open';
   keyHoldT = keyLift ? keyHoldT + dt : 0;
-  const keyLevel = keyHoldT < 1.2 ? 0 : keyHoldT < 2.6 ? 1 : 2;
+  const keyLevel = keyHoldT < 0.6 ? 0 : keyHoldT < 1.4 ? 1 : 2;   // hold longer: bigger
   for (const side of [-1, 1]) {
     const s = hands[side], lift = s.lift + keyLift, shape = keyLift ? keyShape : s.ok ? s.shape || 'open' : 'open'; s.lift = 0;
     if (!handsActive() || lift <= 0) { continue; }
     // The lift raises the cleared lots on this hand's side, nearest first.
     const cleared = [];
-    for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.8 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
+    for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.45 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
     cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
-    if (!cleared.length) { if (clockT - buildHintT > 6 && !keyLift) { buildHintT = clockT; sayToast(`Nothing cleared on the ${side < 0 ? 'left' : 'right'}. Chop the forest there first.`); } continue; }
+    // Nothing cleared on this side: the lift clears the nearest forest itself (the trees fall, and
+    // the building starts as soon as they are down), so a press or a lift always builds.
+    if (!cleared.length) {
+      let falling = false;
+      for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT <= 0.45) { falling = true; } } }
+      if (!falling) {
+        chopForest(side);
+        // Remember what this press or lift asked for, so even a quick tap builds once the trees are down.
+        const kind = shape === 'fist' ? 'tower' : shape === 'point' ? 'shop' : 'home', level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
+        for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && !L.buildKind && clockT - L.cutT <= 0.45) { L.buildKind = kind; L.level = level; makeBuilt(L, kind, level); L.grow = 0.02; L.liftT = clockT; } } }
+      }
+      continue;
+    }
     const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
     for (const L of cleared.slice(0, 2)) {
       if (!L.buildKind) { L.buildKind = shape === 'fist' ? 'tower' : shape === 'point' ? 'shop' : 'home'; L.level = -1; L.grow = 0; }
       // Reaching higher turns it into a bigger building; what is built so far keeps its height.
       if (level > L.level) { const builtM = (L.grow || 0) * (L.H || 0); L.level = level; makeBuilt(L, L.buildKind, level); L.grow = Math.min(0.98, builtM / L.H); }
       // While your hand is still rising it keeps going (it can still get bigger); it tops out
-      // when you stop. Taller buildings need more lifting.
+      // when you stop. Taller buildings need a little more lifting, but not much.
       L.liftT = clockT;
-      growLot(L, lift * 2.4 * Math.pow(8 / Math.max(8, L.H), 0.75), 0.97);
+      growLot(L, lift * 3 * Math.pow(8 / Math.max(8, L.H), 0.3), 0.97);
     }
   }
   // Once you stop lifting, the building tops out at the size your hand reached: the last floors go
-  // up on their own (slower for tall ones, so you see the crane), the scaffolding comes down.
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > 0.35) { growLot(L, dt * 0.9 * Math.sqrt(8 / Math.max(8, L.H)), 1); } } }
+  // up on their own in about half a second, and the scaffolding comes down.
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > 0.25 && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); } } }
 }
 function growLot(L, add, cap) {
   const n = floorsOf(L), before = Math.floor(L.grow * n + 1e-6);
