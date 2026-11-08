@@ -3,7 +3,8 @@
  *   The forest: wind, rustling leaves and birdsong, and slow strings with a harp.
  *   As you build (devK, the share of built lots near you), the wild sounds fade, traffic hum rises
  *   and the music changes at the next bar: town pop, then the city's house beat.
- *   Effects: the axe and a falling tree (chop), birds taking off (flutter), a fanfare or a cold chord when a building is finished (built), and the life
+ *   Effects: the axe and a falling tree (chop), birds taking off (flutter), a clunk per floor
+ *   (floorUp), a fanfare or a cold chord when a building is finished (built), and the life
  *   inside each home (life: kids, a dog, a piano, the TV ...).
  */
 // The band's volume, well above the street hum so it is clearly heard.
@@ -97,6 +98,12 @@ class WalkSound extends StreetSound {
     for (let i = 0; i < 3; i++) { this._m(2600 + Math.random() * 1200, t + 0.1 + i * 0.12, 0.07, 'sine', 0.05, 9000, side * 0.6); }
   }
   // Building up, floor by floor: a heavy "dun" for every floor, a little higher each time.
+  floorUp(i, n, side = 0) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, p = ctx.createStereoPanner(), out = ctx.createGain(); p.pan.value = side * 0.5; out.gain.value = 1.3; p.connect(out); out.connect(this.master);
+    const f0 = 70 + i / n * 90, o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(f0 * 1.8, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.12); g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(p); o.start(t); o.stop(t + 0.37);
+    const s2 = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g2 = ctx.createGain(); s2.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 1800 + i / n * 1500; f.Q.value = 5; g2.gain.setValueAtTime(0.35, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); s2.connect(f); f.connect(g2); g2.connect(p); s2.start(t, Math.random()); s2.stop(t + 0.1);
+  }
   // Finished: a big landing thump and a bright, hollow fanfare (a home) or a cold, glassy chord (a tower).
   built(tower) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
