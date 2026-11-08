@@ -5,67 +5,42 @@
  * street turns into a city: traffic instead of birds, music instead of wind. Build enough and the
  * last bird stops singing, and the card counts what it cost.
  */
-const START_AGE = 24;
-const RENT_WEEK = 380;     // the base weekly rent that town rents are scaled from
-// Six towns, one for each class. ← turns to a poorer town, → to a richer one. You start in the middle.
-// Each block of a town is a building type: a number is a district tier (0 shacks, 1 shops and
-// terraces, 2 mansions, 3 brick and glass, 4 towers); a word is a town's own type.
-const TOWNS = [
-  { name: 'Castle Hill', cls: 'Royalty', price: 9.5e6, rent: 4200, green: true, slots: ['villa', 'castle', 'castle', 'villa', 'castle', 'villa', 'castle', 'castle', 'villa', 'castle'] },
-  { name: 'Mansion Row', cls: 'The rich', price: 3.4e6, rent: 1900, green: true, slots: [2, 2, 'villa', 2, 2, 'villa', 2, 'villa', 2, 2] },
-  { name: 'The City', cls: 'Upper middle class', price: 1.4e6, rent: 820, slots: [1, 3, 3, 4, 4, 3, 1, 4, 4, 3] },
-  { name: 'Leafy Suburbs', cls: 'Middle class', price: 760000, rent: 520, green: true, slots: ['bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow'] },
-  { name: 'Working Town', cls: 'Working class', price: 430000, rent: 360, slots: [0, 1, 0, 0, 1, 0, 1, 0, 0, 1] },
-  { name: 'The Fringe', cls: 'The poorest', price: 175000, rent: 190, slots: ['caravan', 0, 'caravan', 'caravan', 0, 'caravan', 'caravan', 0, 'caravan', 'caravan'] }
-];
-const ZONE_NAMES = TOWNS.map(t => t.name), START_ZONE = 3;
-// The building types that only some towns have: their district (for colours and the ground), lot size and title-deed name.
+// The street plan for one run of 10 blocks. A number is a district tier (0 small shops, 1 terraces
+// and shops, ...); a word is a building style from STYLES_LOT. Every lot starts as forest: the plan
+// only sets how the land is divided (lot sizes and back rows). Your hands decide what is built.
+const STREET_PLAN = ['bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow', 1, 'bungalow', 'bungalow', 'bungalow'];
+const zone = 3;   // seeds the street, its people and the music: the same number always gives the same street
+// Building styles: their district tier (colours, ground, sounds), lot length range and setback, in metres.
 const STYLES_LOT = {
-  castle: { tier: 2, len: [28, 33], setback: 8, name: 'A castle', moved: 1, priceK: 1.6, col: ['#8a4a9a', '#d8b0e8'] },
-  villa: { tier: 2, len: [20, 26], setback: 6, name: 'Grand villa', moved: 1, priceK: 0.8, col: ['#c8322a', '#f2d13a'] },
-  bungalow: { tier: 1, len: [11, 14], setback: 4.5, name: 'Family bungalow', moved: 1, priceK: 1, col: ['#3f8fd6', '#a9d8f0'] },
-  apartment: { tier: 3, len: [12, 20], setback: 3, name: 'Apartments', moved: 6, priceK: 1, col: ['#c8c0b0', '#e8e0d0'] },
-  factory: { tier: 3, len: [16, 24], setback: 2, name: 'Factory', moved: 0, priceK: 1, col: ['#8a9096', '#c0c4c8'] },
-  carpark: { tier: 1, len: [12, 20], setback: 0.6, name: 'Car park', moved: 0, priceK: 1, col: ['#3c3c42', '#8a8a90'] },
-  petrol: { tier: 1, len: [12, 18], setback: 0.8, name: 'Petrol station', moved: 0, priceK: 1, col: ['#d8322a', '#f2efe6'] },
-  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] },
-  // More things your hands can build (see makeBuilt).
-  cabin: { tier: 0, len: [8, 12], setback: 3, name: 'Log cabin', moved: 1, priceK: 1, col: ['#8a5a3a', '#d8c0a0'] },
-  canal: { tier: 1, len: [8, 14], setback: 0.4, name: 'Row houses', moved: 3, priceK: 1, col: ['#c8584a', '#e8b04a'] },
-  modern: { tier: 2, len: [10, 14], setback: 4, name: 'Modern house', moved: 1, priceK: 1, col: ['#3a3e44', '#c8b49a'] },
-  greencondo: { tier: 3, len: [12, 20], setback: 3, name: 'Green condos', moved: 8, priceK: 1, col: ['#4f8a3a', '#d8d4cc'] },
-  diner: { tier: 0, len: [8, 12], setback: 1.5, name: 'Diner', moved: 0, priceK: 1, col: ['#d8322a', '#d8dce0'] },
-  supermarket: { tier: 1, len: [12, 20], setback: 3, name: 'Supermarket', moved: 0, priceK: 1, col: ['#2a8a4a', '#e8e4dc'] },
-  cinema: { tier: 1, len: [10, 16], setback: 0.6, name: 'Cinema', moved: 0, priceK: 1, col: ['#c8322a', '#f4ecd8'] },
-  mall: { tier: 3, len: [14, 24], setback: 4, name: 'Mall', moved: 0, priceK: 1, col: ['#e0d8c8', '#2a5ab8'] },
-  substation: { tier: 1, len: [8, 14], setback: 0.6, name: 'Substation', moved: 0, priceK: 1, col: ['#9a968e', '#f2d13a'] },
-  powerplant: { tier: 3, len: [12, 20], setback: 2, name: 'Power station', moved: 0, priceK: 1, col: ['#a8a49a', '#2a5a3a'] },
-  datacentre: { tier: 3, len: [12, 20], setback: 2, name: 'Data centre', moved: 0, priceK: 1, col: ['#c8ccd2', '#2a5ab8'] },
-  slanttop: { tier: 4, len: [12, 20], setback: 2, name: 'Glass tower', moved: 0, priceK: 1, col: ['#7fa8c8', '#c8dcea'] }
+  villa: { tier: 2, len: [20, 26], setback: 6 },
+  bungalow: { tier: 1, len: [11, 14], setback: 4.5 },
+  apartment: { tier: 3, len: [12, 20], setback: 3 },
+  factory: { tier: 3, len: [16, 24], setback: 2 },
+  carpark: { tier: 1, len: [12, 20], setback: 0.6 },
+  petrol: { tier: 1, len: [12, 18], setback: 0.8 },
+  caravan: { tier: 0, len: [6, 7.5], setback: 1.2 },
+  cabin: { tier: 0, len: [8, 12], setback: 3 },
+  canal: { tier: 1, len: [8, 14], setback: 0.4 },
+  modern: { tier: 2, len: [10, 14], setback: 4 },
+  greencondo: { tier: 3, len: [12, 20], setback: 3 },
+  diner: { tier: 0, len: [8, 12], setback: 1.5 },
+  supermarket: { tier: 1, len: [12, 20], setback: 3 },
+  cinema: { tier: 1, len: [10, 16], setback: 0.6 },
+  mall: { tier: 3, len: [14, 24], setback: 4 },
+  substation: { tier: 1, len: [8, 14], setback: 0.6 },
+  powerplant: { tier: 3, len: [12, 20], setback: 2 },
+  datacentre: { tier: 3, len: [12, 20], setback: 2 },
+  slanttop: { tier: 4, len: [12, 20], setback: 2 }
 };
-function townSlot(slot) { return TOWNS[zone].slots[slot]; }
-function chunkStyle(slot) { const v = townSlot(slot); return typeof v === 'string' ? v : null; }
-const SHARE_COL = '#3f9e6a';
+function chunkStyle(slot) { const v = STREET_PLAN[slot]; return typeof v === 'string' ? v : null; }
+function chunkTier(slot) { const v = STREET_PLAN[slot]; return typeof v === 'string' ? STYLES_LOT[v].tier : v; }
 
-let lifeAge = START_AGE, zone = START_ZONE, market = 1, rentWeek = TOWNS[START_ZONE].rent, rentBase = RENT_WEEK;
-let turnAnim = null, turnYaw = 0, streetT = 0, baseNight = 0, fadeA = 0, queuedTurn = 0, nameBox = null;
-let ownedFromC = Infinity, home = null, ending = null, intro = true;
-let rules = 1;   // always 1 in this world (the old two-round game is gone)
-let owned = [], walkedTotal = 0;
-const toasts = [];
-// How alive the street is (1 = full of people); nothing empties it in this world.
-function streetLife() { return 1; }
-const streetMemory = new Map();
-
-const money = v => '$' + Math.round(v).toLocaleString('en-AU');
-const COMMUTE = [15, 20, 10, 35, 55, 95];   // minutes to work in the city, by town
-function commuteShort(zn) { const m = COMMUTE[zn]; return m < 60 ? `${m} min to work` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} to work`; }
+let streetT = 0, baseNight = 0, ending = null, intro = true;   // streetT: when this street began
+const toasts = [];   // short messages near the bottom of the screen
 function sayToast(text) { toasts.push({ text, t: clockT }); }
-function chunkTier(slot) { const v = townSlot(slot); return typeof v === 'string' ? STYLES_LOT[v].tier : v; }
-function rentFor(zn) { return Math.round(TOWNS[zn].rent * rentBase / RENT_WEEK); }
 
-/* ---------- Generated billboards ---------- */
-// The artwork's own slogans, in red bars of white type, on billboards and across the buildings.
+/* ---------- The artwork's words ---------- */
+// Slogans painted by hand on one wall per block side (paintSlogan), and the names of empty towers.
 const ART = ['FORMERLY: FOREST', 'NATURE, NOW WITH PARKING', 'WE KEPT ONE TREE. FOR THE BROCHURE.', 'THE VIEW USED TO BE TREES', 'PROGRESS', 'BIRDS NOT INCLUDED', 'GREEN LIVING (THE PAINT IS GREEN)', 'WE BUILT THIS. WHAT WAS HERE BEFORE?'];
 const VOID_NAMES = ['FOREST VIEW APARTMENTS', 'GREENWOOD TOWER (NO WOOD)', 'THE CANOPY RESIDENCES', 'OAK HEIGHTS - NO OAKS', 'NATURE\'S EDGE - 300 UNITS'];
 
@@ -83,28 +58,27 @@ function plotsForChunk(ch, r) {
     if (ch.style === 'bungalow') { b.h = mixN(5, 7.5, r()); b.color = pickN(r, ['#c8a890', '#b8a898', '#a8b0a0']); }
   }
   // A slogan painted on one wall a side, once that wall exists.
-  for (const side of [-1, 1]) { const walls = ch.lots.filter(L => L.side === side && !L.special && L.H > 3 && L.z1 - L.z0 > 6); if (walls.length && r() < 0.7) { pickN(r, walls).art = ART[(ch.slot * 2 + (side > 0 ? 1 : 0)) % ART.length]; } }
+  for (const side of [-1, 1]) { const walls = ch.lots.filter(L => L.side === side && L.H > 3 && L.z1 - L.z0 > 6); if (walls.length && r() < 0.7) { pickN(r, walls).art = ART[(ch.slot * 2 + (side > 0 ? 1 : 0)) % ART.length]; } }
 }
 // Street life waits for buildings: nobody lives in the forest.
 function propWaits(ch, p) {
-  if (p.kind === 'turnsign') { return true; }
   const side = p.x < 0 ? -1 : 1;
   return !ch.lots.some(L => L.side === side && L.born !== undefined && Math.abs((L.z0 + L.z1) / 2 - p.z) < 16);
 }
 
 /* ---------- The sound of the homes ---------- */
 // Every lived-in home has its own sound: kids, a dog, a piano, the TV. Walk past and you hear it
-// through the wall; stand still and it comes through clearly. Buy it and it goes quiet for good.
+// through the wall; stand still and it comes through clearly. Industry and empty towers are silent.
 function lifeKind(L) {
   const pool = L.style === 'caravan' || L.tier === 0 ? ['dog', 'radio', 'baby', 'tv', 'kids'] : L.tier >= 3 ? ['tv', 'piano', 'baby', 'talk'] : L.tier === 2 ? ['piano', 'dog', 'kids', 'talk'] : ['kids', 'dog', 'piano', 'cook', 'tv', 'baby'];
   return pool[Math.abs(L.seed >> 3) % pool.length];
 }
-function lived(L) { return !L.special && !L.vacant && !['carpark', 'petrol', 'factory', 'substation', 'powerplant', 'datacentre'].includes(L.style) && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
+function lived(L) { return !L.vacant && !['carpark', 'petrol', 'factory', 'substation', 'powerplant', 'datacentre'].includes(L.style) && riseOf(L.born) > 0.9; }
 function houseLife() {
   if (!sound || !sound.life) { return; }
-  const listen = intro || ending || turnAnim ? 0 : easeN((stillT - 0.6) / 1.2);
+  const listen = intro || ending ? 0 : easeN((stillT - 0.6) / 1.2);
   sound.listenK = listen;
-  if (intro || paused || turnAnim) { return; }
+  if (intro || paused) { return; }
   const near = [];
   for (const ch of chunks.values()) {
     for (const L of ch.lots) {
@@ -128,135 +102,33 @@ let devBar = 0;
 // Smog: every building you put up greys the sky a little, wherever you are (0 = clean, 1 = after ~30).
 let smogK = 0, lookHint = false;
 function boardUpdate(z) {
-  updateTurn(); houseLife(); handUpdate(Math.min(deltaTime / 1000, 0.05));
   const dt = Math.min(deltaTime / 1000, 0.05);
+  houseLife(); handUpdate(dt);
   const devNow = sound && sound.devK ? sound.devK : 0; devBar += (devNow - devBar) * (1 - Math.exp(-dt * 1.5));
   smogK += (Math.min(1, (builtCount + factoriesBuilt * 3) / 30) - smogK) * (1 - Math.exp(-dt * 0.6));
   if (!lookHint && builtCount >= 6 && !ending) { lookHint = true; sayToast('Press C to look back at what you have done.'); }
-  // Time is the walk: standing still, nothing changes.
-  const walked = distanceWalked - lastWalkZ; lastWalkZ = distanceWalked;
-  if (!paused && !intro && !ending && walked > 0 && walked < 5) { walkedTotal += walked; lifeAge = START_AGE + Math.floor(walkedTotal / 120); }
-  for (const ch of chunks.values()) {
-    evolveStreet(ch);
-    // People carrying their boxes away, and new neighbours walking in.
-    for (let i = ch.props.length - 1; i >= 0; i--) {
-      const p = ch.props[i];
-      if (p.mover) { p.z += 1.25 * dt; p.ph += dt * 4; if (clockT > p.until) { ch.props.splice(i, 1); } }
-      else if (p.arrive) { if (p.z > p.tz) { p.z = Math.max(p.tz, p.z - 1.3 * dt); p.ph += dt * 4; } else { p.arrive = false; } }
-    }
-  }
   if (builtCount >= nextThought) { sayToast(THOUGHTS[Math.floor(nextThought / 10 - 1) % THOUGHTS.length]); nextThought += 10; }
 }
-// Hooks the sketch calls on GO and Chance squares: nothing happens on them in this world.
-function onPassGo() { }
-function onChance(kind) { }
 
-/* ---------- The plot beside you ---------- */
-function plotHere(z) { return null; }   // no plots for sale: nothing to turn and face
+/* ---------- Start, end, start again ---------- */
 function useHere() { if (intro) { intro = false; } }
 function endWalk(kind) {
   if (ending) { return; }
   ending = { kind, t: clockT }; sound.go(); baseNight = 0.25; nightTarget = baseNight;
   backWant = true;   // turn round and see the street you made, then the card
 }
-function resetLife() {
-  streetMemory.clear(); nameBox = null; sideSt = null; queuedTurn = 0; turnAnim = null; turnYaw = 0;
-  lifeAge = START_AGE; zone = START_ZONE; market = 1; rentBase = RENT_WEEK; rentWeek = rentFor(START_ZONE); home = null; ending = null;
-  owned = []; walkedTotal = 0; smogK = 0; lookHint = false; backWant = false; backT = 0; treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; factoriesBuilt = 0; nextThought = 10;
-  baseNight = 0; nightTarget = 0; ownedFromC = Infinity; intro = true; toasts.length = 0;
-  chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; lastChunk = -1; buildSkyline();
-}
-function restartWalk() { seed += 97; resetLife(); }
-
-/* ---------- Side streets ---------- */
-// The sketch draws a side street when one exists. In this world you never turn (← / → chop), so
-// sideSt stays null and these return early; they are kept because the sketch calls them.
-let sideSt = null;   // the side street: { chunks, zone, dir, zc (its crossing in this street), s0 (that crossing in its own street), c }
-// The camera, seen from inside the side street's own coordinates.
-function camInSide(w) {
-  const dz = cam.z - w.zc;
-  return { x: -dz * w.dir, z: w.s0 + cam.x * w.dir, yaw: cam.yaw - w.dir * HALF_PI };
-}
-// Draw (or update) the side street by swapping it in as the street for a moment.
-function withSide(w, fn) {
-  const keepChunks = [...chunks.entries()], keepZone = zone, keepCam = { x: cam.x, z: cam.z, yaw: cam.yaw };
-  chunks.clear(); for (const [k, v] of w.chunks) { chunks.set(k, v); } zone = w.zone;
-  const v = camInSide(w); cam.x = v.x; cam.z = v.z; cam.yaw = v.yaw;
-  try { fn(v.z); }
-  finally {
-    w.chunks.clear(); for (const [k, ch] of chunks) { w.chunks.set(k, ch); }
-    chunks.clear(); for (const [k, ch] of keepChunks) { chunks.set(k, ch); } zone = keepZone; Object.assign(cam, keepCam);
-  }
-}
-function drawSideStreet() {
-  if (!sideSt) { return; }
-  withSide(sideSt, z2 => {
-    for (let c = sideSt.c; c <= sideSt.c + 5; c++) {
-      const fresh = !chunks.has(c), ch = chunkAt(c);
-      // Most of the new town stands already; its first block waits for the turn and then rises.
-      if (fresh) {
-        for (const L of ch.lots) { if (L.z0 >= sideSt.minLot && !L.forSale) { L.born = clockT - 10; L.thud = true; } }
-        for (const b of ch.back) { if (b.z0 >= sideSt.minLot) { b.born = clockT - 10; } }
-        for (const p of ch.props) { if (p.z >= sideSt.minLot) { p.born = clockT - 10; } }
-      }
-    }
-    drawGround(z2, sideSt); drawWorld(z2, sideSt);
-  });
-}
-// Corner buildings of this street on the turning side make way for the side street.
-function sinkCorner(k) {
-  if (!sideSt) { return; }
-  for (const ch of chunks.values()) {
-    for (const L of ch.lots) { if (L.side === sideSt.dir && Math.abs((L.z0 + L.z1) / 2 - sideSt.zc) < 34) { L.sinkK = Math.min(L.sinkK === undefined ? 1 : L.sinkK, k); } }
-    for (const b of ch.back) { if (b.side === sideSt.dir && b.z0 < sideSt.zc + 40 && b.z1 > sideSt.zc - 40) { b.sinkK = Math.min(b.sinkK === undefined ? 1 : b.sinkK, Math.max(0, 1 - (clockT - sideSt.t) / 1.2)); } }
-  }
-}
-function updateTurn() {
-  if (!turnAnim) {
-    turnYaw = 0; fadeA = 0;
-    if (sideSt) {
-      sinkCorner(1);
-      // Walk past the corner without turning, or back away from it, and the turn is called off.
-      if (distanceWalked > sideSt.zc + CROSS_W || distanceWalked < sideSt.zc - 120) { cancelSide(); }
-      else if (queuedTurn && Math.abs(distanceWalked - sideSt.zc) < 3.5) { turnAnim = { dir: sideSt.dir, t: clockT, z0: distanceWalked }; queuedTurn = 0; sound.turn(sideSt.dir); startCornerRise(); }
-    }
-    return;
-  }
-  // Turning on the spot: step to the middle of the crossing and swing round 90 degrees.
-  const u = Math.min(1, (clockT - turnAnim.t) / 1.4), e = easeN(u);
-  turnYaw = turnAnim.dir * HALF_PI * e; fadeA = 0;
-  distanceWalked = mixN(turnAnim.z0, sideSt.zc, easeN(u * 1.6));
-  sinkCorner(1 - easeN(u * 1.3));
-  if (u >= 1) { finishTurn(); }
-}
-function startCornerRise() {
-  sideSt.turning = true;
-  withSide(sideSt, () => { for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.z0 < sideSt.minLot && !L.forSale) { L.born = clockT + 0.15 + (L.z0 - sideSt.zc) / 60; L.thud = false; } } for (const p of ch.props) { if (p.z < sideSt.minLot) { p.born = clockT + 0.4 + (p.z - sideSt.zc) / 60; } } for (const b of ch.back) { if (b.z0 < sideSt.minLot) { b.born = clockT + 0.5; } } } });
-}
-function cancelSide() {
-  for (const ch of chunks.values()) { for (const L of ch.lots) { delete L.sinkK; } for (const b of ch.back) { delete b.sinkK; } }
-  sideSt = null; queuedTurn = 0;
-}
-// The side street becomes the street: same view, new coordinates.
-function finishTurn() {
-  const w = sideSt, v = camInSide(w), dir = w.dir;
-  turnAnim = null; turnYaw = 0; sideSt = null; queuedTurn = 0;
-  chunks.clear(); for (const [k, ch] of w.chunks) { chunks.set(k, ch); }
-  zone = w.zone; rentWeek = rentFor(zone);
-  distanceWalked = v.z; cam.x = v.x;
-  firedCasinos.clear(); visitedJails.clear();
-  lastChunk = Math.floor(distanceWalked / CHUNK_LEN); lastTier = -1; ownedFromC = lastChunk + 1;
-  stepSpeed = 0; dashTarget = null; streetT = clockT - 5; buildSkyline();
-  sayToast(`${ZONE_NAMES[zone]} - ${TOWNS[zone].cls} - ${commuteShort(zone)}`);
+// A new street: a new seed, the forest back, every count back to zero, and the opening card.
+function restartWalk() {
+  seed += 97;
+  ending = null; intro = true; backWant = false; backT = 0; baseNight = 0; nightTarget = 0; smogK = 0; lookHint = false; toasts.length = 0;
+  treesCut = 0; builtCount = 0; homesBuilt = 0; towersBuilt = 0; shopsBuilt = 0; factoriesBuilt = 0; nextThought = 10;
+  chunks.clear(); distanceWalked = 0; streetT = clockT; lastTier = -1; buildSkyline();
 }
 
 /* ---------- Drawing on the street ---------- */
-function drawForSale(L) { }
-function drawTurnSign(q, p) { }
-function drawOpenHome(q, p) { }
 // A slogan painted straight onto a wall by hand, in red, with drips: the artwork talking.
 function paintSlogan(L, x, z0, H) {
-  if (!L.art || L.owned || L.vacant || L.piece) { return; }
+  if (!L.art || L.vacant) { return; }
   const za = Math.max(L.z0 + 0.4, z0), zb = L.z1 - 0.4; if (zb <= za + 1.5) { return; }
   const ya = Math.max(0.6, H * 0.28), yb = Math.min(H * 0.92, ya + Math.max(1.5, Math.min(4, (zb - za) * 0.3)));
   const q = wallQuad(x - L.side * 0.06, za, x - L.side * 0.06, zb, ya, yb);
@@ -283,100 +155,24 @@ function paintSlogan(L, x, z0, H) {
   });
   ctx.restore();
 }
-// Hooks the sketch calls for game pieces and kerbside things: none in this world.
-function pieceSink(L) { return 1; }
-function drawBoardSquare(L) { }
-function drawToyPiece(L) { }
-
-
-// People on the pavement: residents, queues, people moving out with their boxes, new neighbours.
-// People on the street notice you. What they say depends on whose home it is, the rules,
-// and how many homes you already own.
-let talkT = -9;
-const SAY = {
-  family1: ['Are you buying our house?', 'We could never afford to buy it.', 'Please... we\'ve got nowhere else.', 'The kids grew up here.'],
-  family2: ['Come and have a look!', 'Buy it, we\'re staying either way.', 'You\'ll like the neighbours.'],
-  renter: ['Looking for a place too?', 'Rent went up again.', 'Good luck. Everything\'s so dear.', 'Forty people at the last inspection.'],
-  wary: ['You\'re the one buying everything.', 'Are you our new landlord?', 'My landlord sold up last week.', 'We\'re next, aren\'t we?'],
-  cold: ['Landlord.', 'Don\'t buy ours too.', 'Happy now?', 'There used to be kids on this street.'],
-  moving: ['Priced out too?', 'Forty people at the last inspection.', 'Our landlord sold up as well.', 'Try further out. That\'s what we did.', 'Need a hand with that box?'],
-  shared: ['Morning, neighbour!', 'The kids play outside again.', 'Nice to have you here.', 'The land tax fixed the park.']
-};
-function moodN() { return owned.length === 0 ? 'renter' : owned.length < 3 ? 'wary' : 'cold'; }
-function noticeYou(q, p) {
-  if (p.mover || p.arrive || p.talked || intro || ending || turnAnim) { return; }
-  const dz = p.z - distanceWalked; if (dz < 1.5 || dz > 8 || q.k < 3 || q.x < 40 || q.x > width - 40) { return; }
-  if (clockT - talkT < 3.2) { return; }
-  p.talked = true; if (!p.lotRef) { return; }
-  const pool = p.lotRef ? SAY.family1 : SAY[moodN()];
-  p.say = pool[Math.floor(Math.random() * pool.length)]; p.sayT = clockT; p.mood = p.lotRef ? (rules === 1 ? 'sad' : 'warm') : moodN(); talkT = clockT;
-  if (sound && sound.enabled && sound.context && sound._note) { const t = sound.context.currentTime, warm = p.mood === 'shared' || p.mood === 'renter' || p.mood === 'warm' || p.mood === 'moving'; sound._note(warm ? 620 : 300, t, 0.12, 'triangle', 0.03); sound._note(warm ? 780 : 260, t + 0.1, 0.16, 'triangle', 0.03); }
-}
+// People on the pavement. They only come once there are buildings near them (propWaits).
 function drawPerson(q, p) {
   const k = q.k; if (k < 1.5) { return; }
-  noticeYou(q, p);
-  const looking = p.say && !p.mover && clockT > p.sayT && clockT < p.sayT + 6;
-  const h = p.h, walking = p.mover || p.arrive, sway = Math.sin(clockT * 1.5 + p.ph) * 0.03 * k, step = walking ? Math.sin(p.ph * 2) * 0.12 * k : 0;
+  const h = p.h, sway = Math.sin(clockT * 1.5 + p.ph) * 0.03 * k;
   const coats = ['#3f5a7a', '#7a3f4a', '#4a6a4a', '#8a6a3a', '#5a4a6a', '#2a3a4a', '#9a5a3a'], skin = ['#e8c4a0', '#c8946a', '#8a5a3a', '#f0d0b0'];
-  ctx.save(); ctx.globalAlpha = (1 - fogFor(p.z) * 0.8) * (p.mover ? Math.min(1, (p.until - clockT) / 3) : 1);
-  ctx.fillStyle = 'rgba(30,20,10,0.22)'; ctx.beginPath(); ctx.ellipse(q.x + 0.15 * k, q.y, 0.42 * k, 0.1 * k, 0, 0, TWO_PI); ctx.fill();
-  ctx.fillStyle = toneN('#2a2a30', p.z); ctx.fillRect(q.x - 0.14 * k + step, q.y - 0.8 * k, 0.11 * k, 0.8 * k); ctx.fillRect(q.x + 0.03 * k - step, q.y - 0.8 * k, 0.11 * k, 0.8 * k);
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
+  ctx.fillStyle = 'rgba(30,20,10,0.22)'; ctx.beginPath(); ctx.ellipse(q.x + 0.15 * k, q.y, 0.42 * k, 0.1 * k, 0, 0, TWO_PI); ctx.fill();   // shadow
+  ctx.fillStyle = toneN('#2a2a30', p.z); ctx.fillRect(q.x - 0.14 * k, q.y - 0.8 * k, 0.11 * k, 0.8 * k); ctx.fillRect(q.x + 0.03 * k, q.y - 0.8 * k, 0.11 * k, 0.8 * k);   // legs
   ctx.fillStyle = toneN(coats[Math.floor(p.tone * coats.length)], p.z);
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k, 0.12 * k) : ctx.rect(q.x - 0.24 * k + sway, q.y - (h - 0.25) * k, 0.48 * k, (h - 1.05) * k); ctx.fill();
   ctx.fillStyle = toneN(skin[Math.floor(p.tone * 7) % skin.length], p.z); ctx.beginPath(); ctx.arc(q.x + sway, q.y - (h - 0.12) * k, 0.13 * k, 0, TWO_PI); ctx.fill();
-  if (looking && k > 6) {
-    // They turn to look at you: eyes, and a wave if they are friendly, arms folded if not.
-    const hx = q.x + sway, hy2 = q.y - (h - 0.1) * k, cold = p.mood === 'wary' || p.mood === 'cold';
-    ctx.fillStyle = '#2a1e18';
-    if (cold) { ctx.fillRect(hx - 0.07 * k, hy2 - 0.01 * k, 0.05 * k, 0.015 * k + 1); ctx.fillRect(hx + 0.02 * k, hy2 - 0.01 * k, 0.05 * k, 0.015 * k + 1); }
-    else { ctx.beginPath(); ctx.arc(hx - 0.045 * k, hy2, 0.018 * k + 0.5, 0, TWO_PI); ctx.arc(hx + 0.045 * k, hy2, 0.018 * k + 0.5, 0, TWO_PI); ctx.fill(); }
-    ctx.strokeStyle = toneN(coats[Math.floor(p.tone * coats.length)], p.z); ctx.lineCap = 'round'; ctx.lineWidth = Math.min(8, 0.12 * k);
-    ctx.beginPath();
-    if (p.mood === 'shared' || p.mood === 'renter' || p.mood === 'warm' || p.mood === 'moving') { const wv = Math.sin(clockT * 9) * 0.12 * k; ctx.moveTo(hx + 0.22 * k, q.y - (h - 0.35) * k); ctx.lineTo(hx + 0.42 * k + wv, q.y - (h + 0.2) * k); }
-    else { ctx.moveTo(hx - 0.22 * k, q.y - (h - 0.6) * k); ctx.lineTo(hx + 0.22 * k, q.y - (h - 0.7) * k); }
-    ctx.stroke(); ctx.lineCap = 'butt';
-  }
-  if (p.box) {
-    // A moving box held in front, taped across the top.
-    const bw = 0.62 * k, bh = 0.46 * k, by = q.y - (h - 0.55) * k;
-    ctx.fillStyle = toneN('#c09060', p.z); ctx.fillRect(q.x - bw / 2 + sway, by, bw, bh);
-    ctx.fillStyle = toneN('#e8d8b0', p.z); ctx.fillRect(q.x - bw / 2 + sway, by + bh * 0.08, bw, bh * 0.14);
-    ctx.strokeStyle = toneN('#7a5a3a', p.z); ctx.lineWidth = Math.max(1, 0.03 * k); ctx.strokeRect(q.x - bw / 2 + sway, by, bw, bh);
-  } else if (p.tone > 0.6 && !walking) { ctx.fillStyle = '#e8e8f0'; ctx.fillRect(q.x + 0.15 * k + sway, q.y - (h - 0.55) * k, 0.12 * k, 0.2 * k); }   // a phone, checking listings
-  ctx.restore();
-  if (p.say && clockT > p.sayT && clockT < p.sayT + 6 && k > 2.5) { speechBubble(q.x + sway, q.y - (h + 0.25) * k, p.say, Math.min(1, (clockT - p.sayT) / 0.3, (p.sayT + 6 - clockT) / 0.5), p.mover || p.mood === 'sad' || p.mood === 'wary' || p.mood === 'cold' ? '#c8322a' : SHARE_COL); }
-}
-// What a person says, in a white bubble above their head.
-function speechBubble(x, y, txt, a, col) {
-  ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.font = 'italic 15px Georgia, serif';
-  const w = ctx.measureText(txt).width + 24, h = 30, bx = Math.max(8, Math.min(width - w - 8, x - w / 2)), by = y - h - 10;
-  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(bx + 3, by + 4, w, h);
-  ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = col; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, w, h, 12) : ctx.rect(bx, by, w, h); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x - 7, by + h - 1); ctx.lineTo(x, by + h + 9); ctx.lineTo(x + 7, by + h - 1); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#2a1e18'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + w / 2, by + h / 2 + 1);
+  if (p.tone > 0.6) { ctx.fillStyle = '#e8e8f0'; ctx.fillRect(q.x + 0.15 * k + sway, q.y - (h - 0.55) * k, 0.12 * k, 0.2 * k); }   // looking at a phone
   ctx.restore();
 }
-// A light grey wash over the street (streetLife() is always 1 here).
+// A grey wash that mutes the colours of the whole street a little (part of the look).
 function drawStreetLife() {
-  const a = 0.3 + (1 - streetLife()) * 0.8;
-  ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = a; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.3; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
 }
-// A bed of flowers in front of a shared-street home.
-function drawFlowers(q, p) {
-  const k = q.k; if (k < 2) { return; }
-  const r = rngN(p.seed), cols = ['#ff7aa8', '#ffd23f', '#ff9a4a', '#c88aff', '#ffffff', '#ff5a6a'];
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(p.z) * 0.8;
-  ctx.fillStyle = toneN('#5a8a3a', p.z); ctx.beginPath(); ctx.ellipse(q.x, q.y, 1.6 * k, 0.35 * k, 0, 0, TWO_PI); ctx.fill();
-  for (let i = 0; i < 18; i++) {
-    const fx = q.x + (r() - 0.5) * 2.8 * k, hh = (0.25 + r() * 0.45) * k, fy = q.y - hh + (r() - 0.5) * 0.3 * k;
-    ctx.strokeStyle = toneN('#3f7a3a', p.z); ctx.lineWidth = Math.max(1, 0.04 * k); ctx.beginPath(); ctx.moveTo(fx, q.y); ctx.lineTo(fx, fy); ctx.stroke();
-    ctx.fillStyle = toneN(cols[Math.floor(r() * cols.length)], p.z); ctx.beginPath(); ctx.arc(fx, fy, Math.max(1.5, 0.12 * k), 0, TWO_PI); ctx.fill();
-  }
-  ctx.restore();
-}
-function drawYours(L) { }
-
 /* ---------- HUD ---------- */
 function drawBoardHud() {
   const z = distanceWalked;
@@ -418,7 +214,6 @@ function drawBoardHud() {
     storyCard('THE WORLD WE WANTED', lines, clockT - ending.t > 4.5 ? 'F: keep building   -   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), '#2f6a3a');
   }
   pop();
-  if (fadeA > 0.01) { ctx.fillStyle = `rgba(255,236,200,${fadeA * 0.85})`; ctx.fillRect(0, 0, width, height); }
 }
 // The first thing anyone sees: what this is, what to do, and what it costs, in three lines.
 function drawOpening() {
@@ -436,7 +231,6 @@ function drawOpening() {
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
-let lastWalkZ = 0;   // distance at the last frame: time passes only as you walk
 // A centred card: the opening and the ending.
 function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
   if (a <= 0.001) { return; }
@@ -452,9 +246,6 @@ function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
   textStyle(BOLD); fill(col); textSize(14); text(foot, width / 2, y + h - 24);
   pop();
 }
-
-
-function drawJunk(q, p) { }
 
 
 /* ---------- Your hands: chop the forest, raise the city (webcam + ml5 handPose) ---------- */
@@ -530,7 +321,7 @@ function handFeedSide(side, nx, ny, fist = false) {
 }
 function handsActive() { return !intro && !ending; }
 // Land that waits for your hands instead of building itself.
-function waitsForHand(L) { return !L.special && !L.owned && !L.piece; }
+function waitsForHand(L) { return true; }   // in this world nothing builds itself
 // How far a lot's building has risen: floor by floor under your hand once cleared, otherwise on its own.
 function lotRise(L) {
   if (L.cutT === undefined || L.born !== undefined) { return riseOf(L.born); }
@@ -566,7 +357,7 @@ function makeBuilt(L, kind, level = 0) {
   if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark'], ['style', 'substation']] : level === 1 ? [['style', 'datacentre']].concat(len >= 9 ? [['style', 'factory'], ['tier', 3]] : [['tier', 3]], big ? [['style', 'powerplant']] : []) : [['tier', 4], ['style', 'slanttop'], ['tier', 3]]; }
   else if (kind === 'shop') { opts = level === 0 ? [['tier', 0], ['style', 'diner']].concat(len >= 11 ? [['style', 'petrol']] : []) : level === 1 ? [['tier', 1]].concat(big ? [['style', 'supermarket'], ['style', 'cinema']] : [['style', 'cinema']]) : [['tier', 3]].concat(big ? [['style', 'mall']] : []); }
   else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0], ['style', 'cabin']].concat(big ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1], ['style', 'canal'], ['style', 'modern']].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment'], ['style', 'greencondo']]; }
-  const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(null, tier, L.side, L.z0, len, r);
+  const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
   if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, formerName: 'FOREST', name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
@@ -753,7 +544,7 @@ function boardKey(e) {
 function nextText() {
   if (backWant && !ending) { return 'Looking back  -  C to turn round'; }
   const z = distanceWalked; let cleared = false, forest = false;
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.special) { continue; } const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { const d = L.z0 - z; if (L.cutT !== undefined && L.born === undefined && Math.abs(d) < 50) { cleared = true; } if (L.cutT === undefined && L.born === undefined && d > -2 && d < 45) { forest = true; } } }
   if (cleared) { return 'Lift a hand to build: open = homes, point = shops, fist = towers'; }
   if (forest) { return 'Swing your left or right hand to cut that side'; }
   return 'Walk on';
@@ -775,7 +566,7 @@ function spawnBirds(L, side) {
       vx: side * (2 + Math.random() * 3), vy: 2.5 + Math.random() * 2.5, vz: -1 + Math.random() * 5, t0: clockT + Math.random() * 0.25, ph: Math.random() * 6.28 });
   }
 }
-function drawTargetMarker() {
+function drawBirds() {
   if (!birds.length || mirrorView) { return; }
   const dt = Math.min(deltaTime / 1000, 0.05), LIFE = 2.2;
   push(); strokeCap(ROUND); noFill();
@@ -797,20 +588,8 @@ function boardClick(mx, my) {
   return false;
 }
 
-function rememberStreet(ch) {
-  ch.zoneId = zone;
-  ch.lots.forEach((L, i) => {
-    L.memoryKey = zone + ':' + ch.slot + ':' + i;
-    L.formerName = L.name || 'NEIGHBOURHOOD HOMES';
-    L.redevelopYear = L.seed % 3 === 0 ? Infinity : START_AGE + 2 + (Math.abs(L.seed) % 5);
-    const saved = streetMemory.get(L.memoryKey);
-    if (saved) { Object.assign(L, saved); }
-  });
-  // Ordinary residents, rather than only open-home queues, make the loss visible.
+// A dozen people per block on the pavements. They wait (propWaits) until there are buildings near them.
+function addResidents(ch) {
   const rr = rngN(seed + ch.slot * 83 + zone * 761);
-  for (let i = 0; i < 12; i++) { ch.props.push({ kind: 'person', x: (i % 2 ? 1 : -1) * (EDGE_X - 0.8), z: ch.z0 + CROSS_W + 2 + rr() * (CHUNK_LEN - CROSS_W - 4), tone: rr(), h: 1.55 + rr() * 0.3, ph: rr() * 6, residentRank: (i + 1) / 13 }); }
-  ch.props.filter(p => p.kind === 'person').forEach((p, i) => { if (p.residentRank === undefined) { p.residentRank = (i % 12 + 1) / 13; } });
-  evolveStreet(ch);
+  for (let i = 0; i < 12; i++) { ch.props.push({ kind: 'person', x: (i % 2 ? 1 : -1) * (EDGE_X - 0.8), z: ch.z0 + CROSS_W + 2 + rr() * (CHUNK_LEN - CROSS_W - 4), tone: rr(), h: 1.55 + rr() * 0.3, ph: rr() * 6 }); }
 }
-// Nothing is redeveloped on its own here: only your hands change the street.
-function evolveStreet(ch) { ch.residentShare = 1; }

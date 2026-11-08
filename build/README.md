@@ -65,6 +65,32 @@ street. With the keys, both sides build at once.
   style at the end of a bar as the street becomes a city.
 - **No assets.** There are no image or sound files: everything is generated in code.
 
+## How the code is organised
+
+Each file has one job (see the table above). Inside them, functions are grouped under banner comments
+(`/* ---------- Camera ---------- */`, `/* ---------- Your hands ---------- */` ...), and the comments
+explain *why* things work the way they do, not just what they do. The two big files talk to each other
+through a small set of named hooks: the street (`sketch.js`) calls `boardUpdate`, `plotsForChunk`,
+`waitsForHand`, `lotRise`, `drawScaffold`, `drawBirds`, `drawBoardHud` and `boardKey` in `board.js`,
+so the street engine knows nothing about the artwork's rules.
+
+## Performance
+
+Measured in Chrome at 1024 x 768 (1.5x pixel density) on a built-up street, median of 60 frames:
+
+| | Time to draw one frame |
+|---|---|
+| Before | 9.1 ms |
+| After | 4.7 ms |
+
+Profiling showed that almost half of each frame went on mixing colours (fog, night and smog blend
+thousands of colours a frame through p5's `color()` objects). Colours are now parsed once into RGB
+numbers (`rgbOf`) and blended with plain arithmetic, and the haze colour is worked out only when it
+changes (`hazeHex`). The picture is identical; each frame takes about half the time. Other savings:
+trees are painted once and kept as sprites, blocks of street are only generated when they come into
+view and dropped once they are far behind, and the camera picture for walking detection is shrunk to
+48 x 36 pixels before it is compared.
+
 ## Libraries and alternatives
 
 | Option | Used? | Notes |

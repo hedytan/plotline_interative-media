@@ -1,12 +1,11 @@
-/* WalkSound — the Landlord's Walk soundscape: StreetSound's footsteps, street hum and effects,
- * with music that sounds like the money on the street you are walking down.
- *   The rich (Castle Hill, Mansion Row): strings and a harp, slow and lush, celesta, champagne glasses.
- *   The City: a house beat, kick on every beat, off-beat hi-hats, claps, a jumping synth bass.
- *   The suburbs (Leafy Suburbs): bright pop, plucked chords and a bouncing bass.
- *   The poor edge (Working Town, The Fringe): a slow, broken, out-of-tune piano, record crackle,
- *     no beat at all, and now and then a lonely whistle.
- * The style is set by the town you are in; on a turn the music changes at the next bar.
- * Native Web Audio, no files.
+/* WalkSound - the sound of We Build Our World (extends StreetSound from street-sound.js).
+ * Everything is synthesised with the Web Audio API; there are no sound files.
+ *   The forest: wind, rustling leaves and birdsong, and slow strings with a harp.
+ *   As you build (devK, the share of built lots near you), the wild sounds fade, traffic hum rises
+ *   and the music changes at the end of a bar: town pop, then the city's house beat.
+ *   Effects: the axe and a falling tree (chop), birds taking off (flutter), a clunk for every floor
+ *   (floorUp), a fanfare or a cold chord when a building is finished (built), and the life inside
+ *   each home (life: kids, a dog, a piano, the TV ...).
  */
 // The band's volume, well above the street hum so it is clearly heard.
 const MUSIC_VOL = 6;
@@ -21,7 +20,7 @@ const STYLES = {
 };
 
 class WalkSound extends StreetSound {
-  constructor() { super(); this.style = null; this.nextStyle = 'mid'; this.step = 0; this.nextAt = 0; this.mvoices = 0; this.wealth = 0.5; }
+  constructor() { super(); this.style = null; this.nextStyle = 'mid'; this.step = 0; this.nextAt = 0; this.mvoices = 0; }
   _build() {
     super._build(); if (!this.context) { return; }
     // The old district pad is kept silent: the band below replaces it.
@@ -71,11 +70,6 @@ class WalkSound extends StreetSound {
     setTimeout(() => { made.forEach(nd => { try { nd.disconnect(); } catch (e) { } }); }, (len + 3) * 1000);
     return len;
   }
-  // Round 2: you carry a box, and the plates in it rattle with each step.
-  footstep(pace = 0.4) {
-    super.footstep(pace);
-    if (typeof rules !== 'undefined' && rules === 2 && this._ok && this.context && this.context.state === 'running' && Math.random() < 0.7) { const t = this.context.currentTime + 0.03; this._m(2600 + Math.random() * 900, t, 0.09, 'sine', 0.02, 9000); if (Math.random() < 0.5) { this._m(3400 + Math.random() * 600, t + 0.05, 0.07, 'sine', 0.012, 9000); } }
-  }
   // A tree comes down, loud: the axe bites, the wood cracks, branches crash, and the trunk thumps down.
   chop(side) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
@@ -118,12 +112,6 @@ class WalkSound extends StreetSound {
     const notes = tower ? [59, 62, 66, 71, 74] : [60, 64, 67, 72, 76];
     notes.forEach((n, i) => { const v = ctx.createOscillator(), vg = ctx.createGain(); v.type = tower ? 'sine' : 'triangle'; v.frequency.value = MIDI(n + 12); vg.gain.setValueAtTime(0.0001, t + 0.15 + i * 0.07); vg.gain.linearRampToValueAtTime(0.12, t + 0.17 + i * 0.07); vg.gain.exponentialRampToValueAtTime(0.0001, t + 1.4 + i * 0.07); v.connect(vg); vg.connect(out); v.start(t + 0.15 + i * 0.07); v.stop(t + 1.5 + i * 0.07); });
   }
-  // A phone notification: your application was turned down.
-  ding() {
-    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const t = this.context.currentTime, ctx = this.context;
-    [[1320, 0], [990, 0.14]].forEach(([f, dt]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + dt); g.gain.linearRampToValueAtTime(0.09, t + dt + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.5); o.connect(g); g.connect(this.master); o.start(t + dt); o.stop(t + dt + 0.55); });
-  }
   // One synth note through its own filter and pan, with an envelope.
   _m(freq, when, dur, type, gain, cutoff = 3000, pan = 0, attack = 0.01) {
     if (this.mvoices > 40) { return; }
@@ -154,13 +142,9 @@ class WalkSound extends StreetSound {
   update(opts = {}) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
     const ctx = this.context, now = ctx.currentTime, tier = opts.tier || 0;
-    // How rich is this street? The town counts most, then the block's district.
-    const z = typeof zone === 'number' ? zone : 0;
-    this.wealth = constrain((5 - z) / 5 * 0.8 + tier * 0.05, 0, 1);   // Castle Hill ~0.9, the suburbs ~0.37, the Fringe ~0
     // The music follows how built-up the street is: forest strings, then town pop, then the city's beat.
     const dv = this.devSmooth || 0; this.nextStyle = dv < 0.3 ? 'rich' : dv < 0.65 ? 'mid' : 'city';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
-    const life = typeof streetLife === 'function' ? streetLife() : 1;
     const listen = this.listenK || 0;
     // Forest to city: the less built-up the street around you, the more wind and birds; the more
     // built-up, the more traffic hum and the louder the band.
@@ -172,7 +156,7 @@ class WalkSound extends StreetSound {
       const f0 = 2400 + Math.random() * 2200, n = 2 + Math.floor(Math.random() * 4), p = (Math.random() - 0.5) * 1.6, t0 = now + 0.02;
       for (let i = 0; i < n; i++) { const o = this.context.createOscillator(), g = this.context.createGain(), pn = this.context.createStereoPanner(); pn.pan.value = p; o.type = 'sine'; o.frequency.setValueAtTime(f0, t0 + i * 0.11); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, t0 + i * 0.11 + 0.07); g.gain.setValueAtTime(0, t0 + i * 0.11); g.gain.linearRampToValueAtTime(0.025 * wild, t0 + i * 0.11 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.11 + 0.09); o.connect(g); g.connect(pn); pn.connect(this.master); o.start(t0 + i * 0.11); o.stop(t0 + i * 0.11 + 0.1); o.onended = () => { o.disconnect(); g.disconnect(); pn.disconnect(); }; }
     }
-    this.muffle.frequency.setTargetAtTime(350 + life * life * 15000, now, 0.8);
+    this.muffle.frequency.setTargetAtTime(15350, now, 0.8);   // the band's low-pass filter, fully open
     // Stop and listen: the band and the street fade back, the homes beside you come through the wall.
     this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen) * (0.35 + 0.65 * dev), now, 0.4);
     if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
@@ -180,36 +164,6 @@ class WalkSound extends StreetSound {
     if (this.style === 'poor' && Math.random() < 0.8) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
     // Schedule the band a little ahead, an eighth note at a time.
     while (this.nextAt < now + 0.15) { this._play(this.nextAt); }
-  }
-  // A family leaves: the band stops for a moment, a door shuts, and a falling minor phrase.
-  evict() {
-    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const t = this.context.currentTime, g = this.styleGain.gain;
-    g.cancelScheduledValues(t); g.setTargetAtTime(0, t, 0.05); g.setTargetAtTime(STYLES[this.style || 'mid'].gain, t + 2.6, 0.6);
-    this._kick(t + 0.05, 0.35); this._hit(t + 0.05, 0.25, 400, 0.15, 'lowpass');
-    [64, 60, 57, 52].forEach((n, i) => { this._m(MIDI(n), t + 0.4 + i * 0.42, 1.4, 'triangle', 0.05, 1600); this._m(MIDI(n) * 1.006, t + 0.4 + i * 0.42, 1.4, 'triangle', 0.025, 1200); });
-  }
-  // A plastic piece lands on the board: a hollow click and a little rattle, straight to the speakers
-  // (the band may be silent just then).
-  clack(kind) {
-    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const ctx = this.context, t = ctx.currentTime, out = this.master || ctx.destination, lo = kind === 'grey' ? 0.7 : kind === 'hotel' ? 0.85 : 1;
-    [0, 0.07, 0.11].forEach((dt, i) => {
-      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), gain = [0.22, 0.08, 0.04][i];
-      s.buffer = this.noise; f.type = 'bandpass'; f.frequency.value = 2400 * lo; f.Q.value = 4;
-      g.gain.setValueAtTime(gain, t + dt); g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.05);
-      s.connect(f); f.connect(g); g.connect(out); s.start(t + dt, Math.random()); s.stop(t + dt + 0.07);
-    });
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(900 * lo, t); o.frequency.exponentialRampToValueAtTime(320 * lo, t + 0.08);
-    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.14);
-  }
-  // New neighbours arrive (Rule 2): a rising major phrase and a ring of a bike bell.
-  welcome() {
-    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const t = this.context.currentTime;
-    [60, 64, 67, 72, 76].forEach((n, i) => this._m(MIDI(n + 12), t + 0.1 + i * 0.12, 0.9, 'triangle', 0.04, 5000, -0.4 + i * 0.2));
-    this._m(2637, t + 0.8, 0.6, 'sine', 0.02, 9000); this._m(2637, t + 1.0, 0.6, 'sine', 0.02, 9000);
   }
   _play(t) {
     const S = STYLES[this.style], eighth = 60 / S.bpm / 2, step = this.step % 32, bar = Math.floor(step / 8), beat8 = step % 8;

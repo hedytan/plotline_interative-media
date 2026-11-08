@@ -4,17 +4,12 @@
  * generated in code.
  */
 const EYE_H = 1.6, ROAD_W = 4.2, PAVE_W = 3.4, EDGE_X = ROAD_W + PAVE_W;   // building line at 7.6 m
-const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;
-const STROLL_SPD = 3, WALK_SPD = 4.5, RUN_SPD = 9, DASH_SPD = 11;   // metres per second
-const TIER_OF = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
-const BOARD_COL = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '#f28c28', red: '#e23b3b', yellow: '#f2d13a', green: '#1fa35b', navy: '#1f4fa8' };
-const DISTRICTS = [
-  { name: 'Rusty Row', tag: 'Rent: almost nothing', stripe: [BOARD_COL.brown, BOARD_COL.sky] },
-  { name: 'Maple Terrace', tag: 'Rent: modest', stripe: [BOARD_COL.pink, BOARD_COL.orange] },
-  { name: 'Gilded Gardens', tag: 'Rent: steep', stripe: [BOARD_COL.red, BOARD_COL.yellow] },
-  { name: 'Brick & Glass Quarter', tag: 'Rent: eye-watering', stripe: [BOARD_COL.green, '#7fd1a0'] },
-  { name: 'Pinnacle Heights', tag: 'Rent: if you have to ask...', stripe: [BOARD_COL.navy, '#6f93d8'] }
-];
+const CHUNK_LEN = 48, CROSS_W = 10, LAP_LEN = 10, FAR_Z = 230;   // block length, crossing width, blocks in the street plan, view distance (m)
+const STROLL_SPD = 3, WALK_SPD = 4.5, RUN_SPD = 9;   // metres per second
+// Bright accent colours: the kerb bands and shop awnings.
+const PALETTE = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '#f28c28', red: '#e23b3b', yellow: '#f2d13a', green: '#1fa35b', navy: '#1f4fa8' };
+// The thin coloured band along the kerb, one colour per district tier.
+const KERB_COL = [PALETTE.brown, PALETTE.pink, PALETTE.red, PALETTE.green, PALETTE.navy];
 const SHOP_NAMES = [
   ['Bargain Bin', 'Rusty Nails', 'Patch & Mend', 'Penny Pantry', 'Junk & Co.', 'Second Chance', 'Odd Socks'],
   ['Corner Cafe', 'Maple Bakery', 'Paper Moon Books', 'Petal Florist', 'Teapot', 'Little Deli'],
@@ -26,9 +21,9 @@ const SHOP_NAMES = [
 let seed = 2718, distanceWalked = 0, clockT = 0, paused = false, stepSpeed = 0, autoWalk = false, pointerHeld = false;
 let stillT = 0, mouseMoveT = -9, lastMX = 0, lastMY = 0;
 let stepPhase = 0, bobAmp = 0, lookYaw = 0, lookPitch = 0, canvasNode, sound, audioStarted = false, grain;
-let dashTarget = null, card = null, districtCard = null, lastTier = -1, lastChunk = -1;
-let economy = 1, economyTarget = 1, economyUntil = 0, night = 0, nightTarget = 0, crash = 0, crashTarget = 0;
-const chunks = new Map(), firedCasinos = new Set(), visitedJails = new Set();
+let lastTier = -1;
+let night = 0, nightTarget = 0;   // 0 = day, 1 = night (the ending dims the light a little)
+const chunks = new Map();   // block index -> { lots, props, back } for every 48 m block in view
 let cam = { x: 0, z: 0, yaw: 0, f: 700, cx: 0, hy: 0, eye: EYE_H }, ctx, skyline = [];
 const APPEAR_Z = 36, RISE_T = 2.4;   // lots build when you come this close; rise time in seconds
 let riseK = 1, mouseMoved = false;
@@ -36,7 +31,10 @@ let riseK = 1, mouseMoved = false;
 // backT runs 0 -> 1 over the turn; past halfway the world is drawn mirrored (drawMirrored).
 let backT = 0, backS = 0, backWant = false, mirrorView = false;
 function smogNow() { return typeof smogK === 'number' ? Math.min(1, smogK) : 0; }
-function hazeHex() { return mixHex(mixHex('#ffd79a', '#5a4a70', night), '#a8a49e', smogNow() * 0.65); }
+// The colour of the haze far down the street. It is asked for hundreds of times a frame but only
+// changes with night and smog, so it is worked out once per change.
+let hazeKey = '', hazeVal = '';
+function hazeHex() { const hk = night.toFixed(3) + smogNow().toFixed(3); if (hk !== hazeKey) { hazeKey = hk; hazeVal = mixHex(mixHex('#ffd79a', '#5a4a70', night), '#a8a49e', smogNow() * 0.65); } return hazeVal; }
 // Held keys are tracked directly from the browser, so walking works the same in p5.js 1.x and 2.x.
 const keysHeld = new Set();
 window.addEventListener('keydown', e => keysHeld.add(e.code));
@@ -50,15 +48,27 @@ function mixN(a, b, t) { return a + (b - a) * t; }
 function easeN(a) { a = constrain(a, 0, 1); return a * a * (3 - 2 * a); }
 function modN(a, n) { return ((a % n) + n) % n; }
 function pickN(r, list) { return list[Math.floor(r() * list.length)]; }
-function shadeN(hexCol, k) { const c = color(hexCol); return `rgb(${constrain(red(c) * k, 0, 255) | 0},${constrain(green(c) * k, 0, 255) | 0},${constrain(blue(c) * k, 0, 255) | 0})`; }
-function mixHex(a, b, t) { const c = lerpColor(color(a), color(b), t); return `rgb(${red(c) | 0},${green(c) | 0},${blue(c) | 0})`; }
-function rgbaN(hexCol, a) { const c = color(hexCol); return `rgba(${red(c) | 0},${green(c) | 0},${blue(c) | 0},${a})`; }
+// Colours. The street mixes thousands of colours a frame (fog, night, smog), so each colour string
+// is parsed once into [r, g, b] and blended with plain arithmetic instead of p5's color() objects.
+// The results are the same as p5's lerpColor in RGB mode, about twice as fast for the whole frame.
+const rgbCache = new Map();
+function rgbOf(col) {
+  let v = rgbCache.get(col);
+  if (!v) { if (rgbCache.size > 4000) { rgbCache.clear(); } const c = color(col); v = [red(c), green(c), blue(c)]; rgbCache.set(col, v); }
+  return v;
+}
+function shadeN(hexCol, k) { const [r, g, b] = rgbOf(hexCol); return `rgb(${constrain(r * k, 0, 255) | 0},${constrain(g * k, 0, 255) | 0},${constrain(b * k, 0, 255) | 0})`; }
+function mixHex(a, b, t) {
+  const A = rgbOf(a), B = rgbOf(b); t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return `rgb(${(A[0] + (B[0] - A[0]) * t) | 0},${(A[1] + (B[1] - A[1]) * t) | 0},${(A[2] + (B[2] - A[2]) * t) | 0})`;
+}
+function rgbaN(hexCol, a) { const [r, g, b] = rgbOf(hexCol); return `rgba(${r | 0},${g | 0},${b | 0},${a})`; }
 
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'Plotline, a first-person board-game street. Hold W or the mouse to walk, Shift to hurry, E or Space to buy or build, Left or Right arrow to turn at a crossing, Enter to stroll, M for sound.');
-  sound = new (window.WalkSound || StreetSound)(); textFont('Georgia');   // walk/music.js: music that sounds like the street's money
+  canvasNode.setAttribute('aria-label', 'We Build Our World, a first-person street that starts as forest. Press H to use your hands with the camera, or use the keys: Z and X cut the forest on the left or right; B, V or N build homes, shops or towers (hold for bigger). C looks back, F ends, M sound.');
+  sound = new (window.WalkSound || StreetSound)(); textFont('Georgia');   // music.js: wind and birds that give way to traffic and a band
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
   grain.updatePixels(); buildSkyline();
@@ -107,18 +117,15 @@ function clipZ(z) { return Math.max(z, cam.z + NEAR_Z); }
 /* ---------- The board: chunks of street ---------- */
 function chunkAt(c) {
   if (chunks.has(c)) {return chunks.get(c);}
-  const lap = Math.floor(c / LAP_LEN), slot = modN(c, LAP_LEN), tier = chunkTier(slot), z0 = c * CHUNK_LEN;
-  const r = rngN(seed + slot * 7919 + zone * 104729);
+  const slot = modN(c, LAP_LEN), tier = chunkTier(slot), z0 = c * CHUNK_LEN;
+  const r = rngN(seed + slot * 7919 + zone * 104729);   // the same seed always grows the same street
   const style = typeof chunkStyle === 'function' ? chunkStyle(slot) : null, sty = style ? STYLES_LOT[style] : null;
-  const ch = { c, slot, tier, z0, lots: [], props: [], back: [], style, green: typeof TOWNS !== 'undefined' && TOWNS[zone] && TOWNS[zone].green };
+  const ch = { c, slot, tier, z0, lots: [], props: [], back: [], style, green: true };
   for (const side of [-1, 1]) {
     let z = z0 + CROSS_W + 0.5;
-    const special = null;   // no casinos or jail: the walk is about rent, not luck
-    let specialAt = special ? z0 + CROSS_W + 6 + r() * 6 : Infinity;
     while (z < z0 + CHUNK_LEN - 3) {
-      if (z >= specialAt - 0.5) { const len = special === 'jail' ? 20 : 18; ch.lots.push(makeLot(special, tier, side, z, len, r)); z += len + 0.6; specialAt = Infinity; continue; }
       const len = sty ? mixN(sty.len[0], sty.len[1], r()) : lotLength(tier, r); if (z + len > z0 + CHUNK_LEN - 1) {break;}
-      const L = makeLot(null, tier, side, z, len, r); if (sty) {styleLot(L, style, r);}
+      const L = makeLot(tier, side, z, len, r); if (sty) {styleLot(L, style, r);}
       ch.lots.push(L); z += len + (style === 'caravan' ? mixN(1, 2.5, r()) : style === 'bungalow' ? 1.6 : tier === 2 ? 2.5 : tier >= 3 ? 1.2 : r() < 0.3 ? 1 : 0.15);
     }
     // A taller back row seen through the cross streets.
@@ -128,19 +135,18 @@ function chunkAt(c) {
   for (let z = z0 + CROSS_W + 2; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'lamp', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), side, flick: r() });}}
   if (tier === 1 || tier === 2) {for (let z = z0 + CROSS_W + 5; z < z0 + CHUNK_LEN - 2; z += 9) {for (const side of [-1, 1]) {if (r() < 0.8) {ch.props.push({ kind: 'tree', x: side * (ROAD_W + 2.3), z: z + r() * 2, h: mixN(4, 6.5, r()), tone: r() });}}}}
   if (tier === 0) {for (let i = 0; i < 5; i++) { const side = r() < 0.5 ? -1 : 1; ch.props.push({ kind: 'bin', x: side * (EDGE_X - 0.6), z: z0 + CROSS_W + r() * (CHUNK_LEN - CROSS_W), tone: r() }); }}
-  if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, DISTRICTS[tier].stripe) });}}}
+  if (tier >= 3) {for (let z = z0 + CROSS_W + 4; z < z0 + CHUNK_LEN; z += 12) {for (const side of [-1, 1]) {ch.props.push({ kind: 'banner', x: side * (ROAD_W + 0.55), z: z + (side > 0 ? 6 : 0), color: pickN(r, [KERB_COL[tier], '#6f93d8']) });}}}
   plotsForChunk(ch, r);
-  rememberStreet(ch);
+  addResidents(ch);
   chunks.set(c, ch); return ch;
 }
 function lotLength(tier, r) { return [mixN(5, 7.5, r()), mixN(6, 8.5, r()), mixN(14, 18, r()), mixN(10, 15, r()), mixN(16, 24, r())][tier]; }
-function makeLot(special, tier, side, z, len, r) {
-  const L = { special, tier, side, z0: z, z1: z + len, seed: Math.floor(r() * 1e9), setback: 0, econ: 1, econNow: 1 };
-  const lap = Math.floor(z / (CHUNK_LEN * LAP_LEN));
-  if (special === 'jail') {Object.assign(L, { H: 9, depth: 14, color: '#7a7c86', accent: '#f28c28' });}
-  else if (special === 'casino') {Object.assign(L, { H: 11, depth: 14, color: '#7b2b6e', accent: '#ffcf3a' });}
-  else if (tier === 0) {Object.assign(L, { H: mixN(3.4, 5.4, r()), depth: mixN(6, 9, r()), color: pickN(r, ['#7d8f8a', '#9b7b5a', '#8a6a4a', '#6f8399', '#a08060', '#7a6a5e', '#8f9a7a']), accent: pickN(r, ['#c9b48a', '#b3c4c0', '#c78f6a']), crooked: (r() - 0.5) * 0.5, name: pickN(r, SHOP_NAMES[0]), sign: r() < 0.75 });}
-  else if (tier === 1) {Object.assign(L, { H: mixN(6.8, 9.2, r()), depth: mixN(8, 11, r()), color: pickN(r, ['#e8a0a8', '#f2c28a', '#a8d0c8', '#c8b8e0', '#f0d890', '#9cc0e0', '#e6b8a2']), accent: '#fbf6ee', awning: pickN(r, [BOARD_COL.pink, BOARD_COL.orange, '#3f8fd6', '#5fb36b']), name: pickN(r, SHOP_NAMES[1]), sign: r() < 0.6 });}
+// One lot: its size, colours and details by district tier (0 small shops .. 4 skyscrapers).
+// Building styles from board.js (cabin, cinema, factory ...) are applied on top by styleLot.
+function makeLot(tier, side, z, len, r) {
+  const L = { tier, side, z0: z, z1: z + len, seed: Math.floor(r() * 1e9), setback: 0 };
+  if (tier === 0) {Object.assign(L, { H: mixN(3.4, 5.4, r()), depth: mixN(6, 9, r()), color: pickN(r, ['#7d8f8a', '#9b7b5a', '#8a6a4a', '#6f8399', '#a08060', '#7a6a5e', '#8f9a7a']), accent: pickN(r, ['#c9b48a', '#b3c4c0', '#c78f6a']), crooked: (r() - 0.5) * 0.5, name: pickN(r, SHOP_NAMES[0]), sign: r() < 0.75 });}
+  else if (tier === 1) {Object.assign(L, { H: mixN(6.8, 9.2, r()), depth: mixN(8, 11, r()), color: pickN(r, ['#e8a0a8', '#f2c28a', '#a8d0c8', '#c8b8e0', '#f0d890', '#9cc0e0', '#e6b8a2']), accent: '#fbf6ee', awning: pickN(r, [PALETTE.pink, PALETTE.orange, '#3f8fd6', '#5fb36b']), name: pickN(r, SHOP_NAMES[1]), sign: r() < 0.6 });}
   else if (tier === 2) {Object.assign(L, { H: mixN(9, 12, r()), depth: mixN(12, 15, r()), setback: mixN(5, 7, r()), color: pickN(r, ['#f2ead8', '#e8dcc0', '#f0e4d0', '#efe2c4']), accent: '#5a6b7e', fountain: r() < 0.45 });}
   else if (tier === 3) {Object.assign(L, { H: mixN(15, 34, r()), depth: mixN(12, 16, r()), color: r() < 0.65 ? pickN(r, ['#a8483a', '#b85a40', '#8c3e34', '#9a5038']) : pickN(r, ['#5e8fa8', '#6aa0b8', '#4f7f98']), glass: false, name: pickN(r, SHOP_NAMES[3]), sign: r() < 0.7 });}
   else {Object.assign(L, { H: mixN(45, 120, r()), depth: mixN(16, 22, r()), color: pickN(r, ['#7fa8c8', '#8fb6d0', '#a7bcd0', '#6f98bc']), crown: r() < 0.7, spire: r() < 0.5 });}
@@ -155,35 +161,32 @@ function draw() {
   const focus = document.activeElement === canvasNode, back = held('KeyS') || held('ArrowDown');
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
-  if (dashTarget !== null) { target = DASH_SPD; if (distanceWalked >= dashTarget - 2) {target = mixN(1.5, DASH_SPD, easeN((dashTarget - distanceWalked) / 6));} if (distanceWalked >= dashTarget) { dashTarget = null; target = 0; } }
-  else if (turnAnim || nameBox || intro || ending || backT > 0.01) { target = 0; }
+  const busy = intro || ending || backT > 0.01;   // a card is up, or you are turning round: stand still
+  if (busy) { target = 0; }
   else if (!paused && focus) { if (back) {target = -WALK_SPD * 0.7;} else if (fwd) {target = hurry ? RUN_SPD : WALK_SPD;} else if (autoWalk) {target = hurry ? RUN_SPD : STROLL_SPD;} }
   // With the camera on, walking or running on the spot moves you down the street at that pace.
-  if (target === 0 && !paused && dashTarget === null && !turnAnim && !nameBox && !intro && !ending && backT <= 0.01 && typeof bodySpeed === 'function') { target = bodySpeed(); }
-  stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * (dashTarget !== null ? 4 : 4.5)));
+  if (target === 0 && !paused && !busy && typeof bodySpeed === 'function') { target = bodySpeed(); }
+  stepSpeed = paused ? 0 : lerp(stepSpeed, target, 1 - Math.exp(-dt * 4.5));
   distanceWalked = Math.max(0, distanceWalked + stepSpeed * dt);
   // Footsteps drive the head bob.
   const ratio = Math.min(1.5, Math.abs(stepSpeed) / WALK_SPD);
-  if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b && dashTarget === null) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
-  bobAmp = lerp(bobAmp, dashTarget !== null ? 0.4 : ratio, 1 - Math.exp(-dt * 4));
+  if (!paused && Math.abs(stepSpeed) > 0.08) { const b = Math.floor(stepPhase); stepPhase += dt * (1.6 + Math.min(Math.abs(stepSpeed), 7) * 0.3); if (Math.floor(stepPhase) !== b) {sound.footstep(Math.abs(stepSpeed) / RUN_SPD);} }
+  bobAmp = lerp(bobAmp, ratio, 1 - Math.exp(-dt * 4));
   const mx = mouseMoved ? mouseX / width - 0.5 : 0, my = mouseMoved ? mouseY / height - 0.5 : 0;
   // Stop walking and you can stop and look: the mouse turns your head much further, and if you
   // stand still beside a home for sale, you turn to face it.
   if (mouseX !== lastMX || mouseY !== lastMY) { lastMX = mouseX; lastMY = mouseY; mouseMoveT = clockT; }
-  stillT = Math.abs(stepSpeed) < 0.15 && !turnAnim && !intro ? stillT + dt : 0;
+  stillT = Math.abs(stepSpeed) < 0.15 && !intro ? stillT + dt : 0;
   const lookRange = mixN(0.3, 1.2, easeN((stillT - 0.3) / 0.8));
-  let yawAim = constrain(mx, -0.5, 0.5) * 2 * lookRange;
-  const facing = stillT > 0.9 && clockT - mouseMoveT > 1.2 && typeof plotHere === 'function' ? plotHere(distanceWalked) : null;
-  if (facing) { yawAim = facing.side * 0.85; }
-  lookYaw = lerp(lookYaw, yawAim, facing ? 0.035 : 0.05);
+  const yawAim = constrain(mx, -0.5, 0.5) * 2 * lookRange;
+  lookYaw = lerp(lookYaw, yawAim, 0.05);
   lookPitch = lerp(lookPitch, constrain(my, -0.5, 0.5) * 0.2, 0.05);
   backT = constrain(backT + (backWant ? 1 : -1) * dt / 1.1, 0, 1); backS = backT * backT * (3 - 2 * backT);
-  updateTurn();
   const z = distanceWalked, swing = Math.sin(PI * stepPhase), dip = Math.abs(Math.sin(PI * stepPhase));
-  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + turnYaw + (backS < 0.5 ? backS * PI : 0); cam.cx = width / 2;
+  cam.f = Math.max(height * 0.85, width * 0.55); cam.z = z; cam.x = swing * 0.05 * bobAmp; cam.yaw = lookYaw + (backS < 0.5 ? backS * PI : 0); cam.cx = width / 2;
   cam.eye = EYE_H + (0.045 * dip - 0.03) * bobAmp; cam.hy = height * 0.52 - lookPitch * cam.f + Math.cos(TWO_PI * stepPhase) * 0.005 * bobAmp * cam.f;
 
-  // World state: chunks in view, district changes, landmarks, economy.
+  // World state: blocks in view, what is due to appear, your hands and the sound.
   const c0 = Math.floor((z - 6) / CHUNK_LEN), c1 = Math.floor((z + FAR_Z) / CHUNK_LEN);
   for (let c = c0; c <= c1; c++) {chunkAt(c);}
   // The street behind you is kept (with everything you cut and built) so you can look back at it.
@@ -191,22 +194,18 @@ function draw() {
   if (backT > 0) { for (let c = cb; c < c0; c++) {chunkAt(c);} }
   for (const [c] of chunks) {if (c < cb - 1 || c > c1 + 1) {chunks.delete(c);}}
   const here = chunkAt(Math.floor(z / CHUNK_LEN)), tier = here.tier;
-  canvasNode.dataset.year=lifeAge;canvasNode.dataset.vacant=here.lots.filter(l=>l.vacant).length;
-  if (here.c !== lastChunk) { if (here.slot % 5 === 0 && lastChunk >= 0 && here.c > lastChunk) { sound.go(); onPassGo(); } lastChunk = here.c; }
-  if (tier !== lastTier) { districtCard = { tier, t: clockT, lap: Math.floor(here.c / LAP_LEN) + 1 }; lastTier = tier; }
+  lastTier = tier;
   updateLandmarks(z); boardUpdate(z);
-  if (economyUntil && clockT > economyUntil) { economyTarget = 1; nightTarget = baseNight; crashTarget = 0; economyUntil = 0; }
-  economy = lerp(economy, economyTarget, 1 - Math.exp(-dt * 0.8)); night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5)); crash = lerp(crash, crashTarget, 1 - Math.exp(-dt * 0.8));
-  let casinoDist = 1; for (const ch of chunks.values()) {for (const L of ch.lots) {if (L.special === 'casino') {casinoDist = Math.min(casinoDist, constrain(Math.abs((L.z0 + L.z1) / 2 - z) / 45, 0, 1));}}}
+  night = lerp(night, nightTarget, 1 - Math.exp(-dt * 0.5));
   // How built-up is the street around you? 0 = all forest, 1 = all buildings.
   let builtN = 0, lotN = 0;
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (Math.abs((L.z0 + L.z1) / 2 - z) < 60) { lotN++; builtN += Math.min(1, typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born)); } } }
   sound.devK = lotN ? builtN / lotN : 0;
-  sound.update({ dt: paused ? 0 : dt, tier, casino: casinoDist, night, moving: Math.abs(stepSpeed) > 0.1 });
+  sound.update({ dt: paused ? 0 : dt, tier, night, moving: Math.abs(stepSpeed) > 0.1 });
 
   push(); translate(width / 2, height / 2); rotate(swing * 0.005 * bobAmp); translate(-width / 2, -height / 2);
   // Drawing is wrapped so one bad shape (say, mid-turn) can never freeze the sketch.
-  try { mirrorView = backS >= 0.5; drawSky(); if (mirrorView) { drawMirrored(z); } else { drawSkyline(); drawGround(z); drawSideStreet(); drawWorld(z); } if (typeof drawStreetLife === 'function') { drawStreetLife(); } } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
+  try { mirrorView = backS >= 0.5; drawSky(); if (mirrorView) { drawMirrored(z); } else { drawSkyline(); drawGround(z); drawWorld(z); } drawStreetLife(); } catch (err) { if (!window.plotlineWarned) { window.plotlineWarned = true; console.warn(err); } }
   pop();
   // A quick blink hides the moment the view swaps to the street behind you.
   const blink = backT > 0 && backT < 1 ? Math.max(0, 1 - Math.abs(backS - 0.5) / 0.14) : 0;
@@ -252,37 +251,14 @@ function updateLandmarks(z) {
     const mid = (L.z0 + L.z1) / 2;
     if (L.born === undefined && L.z0 - z < APPEAR_Z && !(typeof waitsForHand === 'function' && waitsForHand(L))) {L.born = clockT + birthDelay(L.seed, L.z0 - z);}
     if (L.born !== undefined && !L.thud && clockT >= L.born) { L.thud = true; if (L.z1 > z) {sound.rise(L.tier, L.side, Math.max(0, L.z0 - z));} }
-    // Buildings far ahead follow the economy; once you are close they keep what they became.
-    if (mid - z > 40) {L.econ = economy;}
-    L.econNow = lerp(L.econNow, L.econ, 0.04);
-    if (L.special === 'casino' && Math.abs(mid - z) < 7 && !firedCasinos.has(L.seed)) { firedCasinos.add(L.seed); drawChance(L.seed); }
-    if (L.special === 'jail' && Math.abs(mid - z) < 8 && !visitedJails.has(L.seed)) { visitedJails.add(L.seed); sound.jail(); showCard('jail'); }
   }}
 }
-function drawChance(s) {
-  const kinds = ['boom', 'crash', 'night'], kind = kinds[modN(s, 3)];
-  if (kind === 'boom') { economyTarget = 1.55; crashTarget = 0; nightTarget = baseNight; }
-  if (kind === 'crash') { economyTarget = 0.6; crashTarget = 1; nightTarget = baseNight; }
-  if (kind === 'night') { economyTarget = 1; crashTarget = 0; nightTarget = 1; }
-  economyUntil = clockT + 45; sound.chance(kind); showCard(kind); onChance(kind);
-}
-function showCard(kind) {
-  const cardText = {
-    boom: ['CHANCE', 'Market boom!', 'The street ahead grows taller.'],
-    crash: ['CHANCE', 'Market crash!', 'The street ahead shrinks and fades.'],
-    night: ['CHANCE', 'Night on the town', 'The lights come on early.'],
-    jail: ['JAIL', 'Just visiting', 'Wave to the guard and keep walking.'],
-    go: ['GO', 'Another year', 'Pay day. Rent day. Birthday.']
-  }[kind];
-  card = { kind, text: cardText, t: clockT };
-}
-
 /* ---------- Sky and skyline ---------- */
 function skyColors() {
   const dayCols = ['#c9a46e', '#d9c194', '#e8dcbc', '#8a96a6'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
   // Smog: the more you have built, the greyer the sky (smogK, from board.js).
   const smog = ['#8e8a84', '#a19d95', '#b7b0a3', '#5e6168'], sm = smogNow() * 0.8;
-  return dayCols.map((c, i) => mixHex(mixHex(mixHex(c, dusk[i], night * 0.85), '#9a9aa0', crash * 0.45), smog[i], sm));
+  return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), smog[i], sm));
 }
 function drawSky() {
   const [low, mid, glow, top] = skyColors(), hy = cam.hy;
@@ -322,7 +298,7 @@ function drawSkyline() {
   // Distant city at the end of the street, always out of reach, with the landmark tower in the middle.
   const hy = cam.hy, H = height, haze = skyColors()[0];
   // Urban sprawl: the further out the town, the smaller and further away the city you work in.
-  const ck = typeof zone === 'number' ? [1.15, 1.1, 1.3, 1, 0.55, 0.3][zone] : 1;
+  const ck = 1;   // size of the distant city
   for (const b of skyline) {
     const x = cam.cx + Math.tan(b.a * Math.min(1, ck + 0.2) - cam.yaw) * cam.f, w = b.w * H * ck, h = b.h * H * ck;
     const g = ctx.createLinearGradient(0, hy - h, 0, hy);
@@ -353,41 +329,35 @@ function drawSkyline() {
 }
 
 /* ---------- Ground: road, pavements, crossings ---------- */
-// side: drawing the side street you are turning into, which starts at its crossing (fromZ).
-function drawGround(z, side) {
+// The road is drawn in 90 strips from far to near, longer strips further away.
+function drawGround(z) {
   const hy = cam.hy;
-  if (!side) { ctx.fillStyle = mixHex('#b89a78', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80); }
+  ctx.fillStyle = mixHex('#b89a78', '#3a3448', night); ctx.fillRect(-80, hy, width + 160, height - hy + 80);
   const steps = 90;
   for (let i = steps; i > 0; i--) {
     const d0 = NEAR_Z + Math.pow((i - 1) / steps, 2.2) * FAR_Z, d1 = NEAR_Z + Math.pow(i / steps, 2.2) * FAR_Z;
-    const za = z + d0, zb = z + d1; if (side && za < side.fromZ) { continue; }
+    const za = z + d0, zb = z + d1;
     const ch = chunkAt(Math.floor(za / CHUNK_LEN)), local = ch.mir ? ch.z0 + CHUNK_LEN - za : za - ch.z0, crossing = local < CROSS_W;
     const fog = easeN(d0 / FAR_Z), fogC = hazeHex();
     const f = (hex) => mixHex(mixHex(hex, '#2a2440', night * 0.55), fogC, fog * 0.8);
     // Road.
-    polyN([P(-ROAD_W, 0, za), P(ROAD_W, 0, za), P(ROAD_W, 0, zb), P(-ROAD_W, 0, zb)], f(crossing ? '#5a5a62' : mixHex('#4a4a52', '#7a7a80', crash * 0.4)));
+    polyN([P(-ROAD_W, 0, za), P(ROAD_W, 0, za), P(ROAD_W, 0, zb), P(-ROAD_W, 0, zb)], f(crossing ? '#5a5a62' : '#4a4a52'));
     for (const side of [-1, 1]) {
       if (crossing) {
         // Cross street running off to the sides.
         polyN([P(side * ROAD_W, 0, za), P(side * 90, 0, za), P(side * 90, 0, zb), P(side * ROAD_W, 0, zb)], f('#55555d'));
       } else {
-        const tile = Math.floor(za / 1.6) % 2, stripe = DISTRICTS[ch.tier].stripe;
+        const tile = Math.floor(za / 1.6) % 2;
         polyN([P(side * ROAD_W, 0.12, za), P(side * EDGE_X, 0.12, za), P(side * EDGE_X, 0.12, zb), P(side * ROAD_W, 0.12, zb)], f(tile ? '#d6d0c4' : '#cdc6b8'));
         // Board-colour band along the kerb.
         polyN([P(side * ROAD_W, 0.13, za), P(side * (ROAD_W + 0.3), 0.13, za), P(side * (ROAD_W + 0.3), 0.13, zb), P(side * ROAD_W, 0.13, zb)], f('#b4ada2'));
-        polyN([P(side * (ROAD_W + 0.3), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, zb), P(side * (ROAD_W + 0.3), 0.13, zb)], f(mixHex(stripe[0], '#b4ada2', 0.35)));
+        polyN([P(side * (ROAD_W + 0.3), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, za), P(side * (ROAD_W + 0.42), 0.13, zb), P(side * (ROAD_W + 0.3), 0.13, zb)], f(mixHex(KERB_COL[ch.tier], '#b4ada2', 0.35)));
         polyN([P(side * EDGE_X, 0.05, za), P(side * (EDGE_X + 40), 0.05, za), P(side * (EDGE_X + 40), 0.05, zb), P(side * EDGE_X, 0.05, zb)], f(ch.tier === 2 || ch.park || ch.green ? '#6f9a52' : ch.style === 'caravan' ? '#b8a27a' : '#a89478'));
       }
     }
     // Centre line and zebra crossings.
     if (!crossing && Math.floor(za / 3) % 2 === 0) {polyN([P(-0.08, 0.01, za), P(0.08, 0.01, za), P(0.08, 0.01, zb), P(-0.08, 0.01, zb)], f('#f4e6b0'));}
     if (local > 1 && local < 4) {for (let x = -ROAD_W + 0.3; x < ROAD_W; x += 0.9) {polyN([P(x, 0.01, za), P(x + 0.5, 0.01, za), P(x + 0.5, 0.01, zb), P(x, 0.01, zb)], f('#f2efe6'));}}
-  }
-  // Painted street names and the GO arrow.
-  for (const ch of chunks.values()) {
-    if (side && ch.z0 < side.fromZ) { continue; }
-    continue;   // no painted street names: nothing here is a board game
-    paintText(ch.park ? 'PARK' : ch.slot === 0 ? 'GO ->' : 'PLOTLINE', 0, ch.z0 + CROSS_W + 3, ch.slot === 0 ? 4.5 : 2.2, ch.slot === 0 ? '#e23b3b' : '#f4ead0');
   }
 }
 function paintText(label, x, zz, size, col, maxW) {
@@ -398,34 +368,30 @@ function paintText(label, x, zz, size, col, maxW) {
 }
 
 /* ---------- Buildings and everything on the street ---------- */
-function drawWorld(z, side) {
-  const all = [...chunks.values()], minZ = side ? side.fromZ : -Infinity, minLot = side ? side.minLot : -Infinity;
+function drawWorld(z) {
+  const all = [...chunks.values()];
   // Back row first, then buildings far to near, then pavement life far to near.
-  const backs = all.flatMap(ch => ch.back).filter(b => b.z1 > z + NEAR_Z && b.z0 >= minLot).sort((a, b) => b.z0 - a.z0);
+  const backs = all.flatMap(ch => ch.back).filter(b => b.z1 > z + NEAR_Z).sort((a, b) => b.z0 - a.z0);
   for (const b of backs) {
-    const g = riseOf(b.born) * (b.sinkK === undefined ? 1 : b.sinkK), fk = 1 - Math.min(1, riseOf(b.born) * 1.4);
-    if (fk > 0.02 && b.sinkK === undefined) { drawForest({ seed: Math.floor(b.z0 * 13) + b.side, z0: b.z0, z1: b.z1, side: b.side, depth: 14, setback: 0, special: null }, fk * 1.0, b.x - EDGE_X - 4); }
+    const g = riseOf(b.born), fk = 1 - Math.min(1, g * 1.4);   // the back row is forest until it rises
+    if (fk > 0.02) { drawForest({ seed: Math.floor(b.z0 * 13) + b.side, z0: b.z0, z1: b.z1, side: b.side, depth: 14, setback: 0 }, fk, b.x - EDGE_X - 4); }
     if (g > 0.01) { riseK = g; drawBack(b); riseK = 1; }
   }
-  const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z && L.z0 >= minLot - (side && side.turning ? 30 : 0)).sort((a, b) => b.z0 - a.z0);
+  const lots = all.flatMap(ch => ch.lots).filter(L => L.z1 > z + NEAR_Z && L.z0 < z + FAR_Z).sort((a, b) => b.z0 - a.z0);
   for (const L of lots) {
-    const rise = typeof lotRise === 'function' ? lotRise(L) : riseOf(L.born);
-    const g = rise * (L.sinkK === undefined ? 1 : L.sinkK) * (L.piece ? pieceSink(L) : 1);
-    if (L.piece) { drawBoardSquare(L); }
+    const rise = lotRise(L), g = rise;   // 0 = forest .. 1 = built (board.js: floor by floor under your hand)
     // Before it is built, every lot is forest; as the building rises, the trees go down
     // (or, with your hands, they fall when you chop them and stumps are left).
-    const cut = L.cutT !== undefined, forestK = L.piece ? 0 : cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
-    if (g <= 0.01 && !L.piece) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); if (L.forSale && !L.owned) {drawForSale(L);} continue; }
+    const cut = L.cutT !== undefined, forestK = cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
+    if (g <= 0.01) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); continue; }
     if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
-    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; if (L.born === undefined && L.grow > 0 && typeof drawScaffold === 'function') { drawScaffold(L, g); } }
-    if (L.piece) { drawToyPiece(L); }
-    if (L.owned) { drawYours(L); } else if (L.forSale && g > 0.01) { drawForSale(L); }
-    const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && !L.piece && age === age) {drawDust(L, Math.min(age, RISE_T));}
+    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; if (L.born === undefined && L.grow > 0) { drawScaffold(L, g); } }
+    const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8 && age === age) {drawDust(L, Math.min(age, RISE_T));}
   }
   const items = [];
   for (const ch of all) {
-    for (const p of ch.props) { if (p.z < minZ) {continue;} if(p.kind === "person" && p.residentRank > ch.residentShare){continue;} const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
-    for (const L of ch.lots) {if (L.tier === 2 && !L.special) { const g = riseOf(L.born); if (g <= 0.01) {continue;} const q = P(L.side * (EDGE_X + 0.3), 0, (L.z0 + L.z1) / 2); if (q.rz > 0.8) {items.push({ q, p: L, kind: 'yard', g });} }}
+    for (const p of ch.props) { const g = riseOf(p.born); if (g <= 0.01) {continue;} const q = P(p.x, 0, p.z); if (q.rz > 0.8 && q.rz < FAR_Z * 0.7) {items.push({ q, p, kind: p.kind, g });} }
+    for (const L of ch.lots) {if (L.tier === 2) { const g = riseOf(L.born); if (g <= 0.01) {continue;} const q = P(L.side * (EDGE_X + 0.3), 0, (L.z0 + L.z1) / 2); if (q.rz > 0.8) {items.push({ q, p: L, kind: 'yard', g });} }}
   }
   items.sort((a, b) => b.q.rz - a.q.rz);
   for (const it of items) {
@@ -433,10 +399,10 @@ function drawWorld(z, side) {
     if (it.kind === 'yard') { riseK = it.g; drawYard(it.p); riseK = 1; continue; }
     ctx.save(); ctx.translate(it.q.x, it.q.y); ctx.scale(Math.min(1, 0.4 + it.g * 0.6), it.g); ctx.translate(-it.q.x, -it.q.y);
     if (it.kind === 'lamp') {drawLamp(it.q, it.p);} else if (it.kind === 'tree') {drawTree(it.q, it.p);} else if (it.kind === 'bin') {drawBin(it.q, it.p);}
-    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);} else if (it.kind === 'openhome') {drawOpenHome(it.q, it.p);} else if (it.kind === 'flowers') {drawFlowers(it.q, it.p);} else if (it.kind === 'turnsign') {drawTurnSign(it.q, it.p);} else if (it.kind === 'junk') {drawJunk(it.q, it.p);}
+    else if (it.kind === 'banner') {drawBanner(it.q, it.p);} else if (it.kind === 'person') {drawPerson(it.q, it.p);}
     ctx.restore();
   }
-  if (!side) {drawTargetMarker();}
+  drawBirds();
 }
 // An unbuilt lot: its plot outlined on the ground in the district's board colour.
 function drawPlot(L) {
@@ -478,7 +444,7 @@ function drawWildTree(q, t) {
 // The forest that stood here before the street was built: a stand of trees on every lot,
 // sinking into the ground as the building rises (k = how much forest is left, 1 to 0).
 function drawForest(L, k, back = 0, fall = 0, cut = false) {
-  if (k <= 0.02 || L.special) { return; }
+  if (k <= 0.02) { return; }
   const r = rngN(L.seed + 77), len = L.z1 - L.z0, n = Math.max(2, Math.round(len / 2.4)), rows = 3, list = [];
   for (let row = rows - 1; row >= 0; row--) {
     for (let i = 0; i < n; i++) {
@@ -517,7 +483,7 @@ function drawDust(L, age) {
 }
 function fogFor(zz) { return easeN((zz - cam.z - 40) / (FAR_Z - 40)) * 0.85; }
 function toneN(hexCol, zz, k = 1) {
-  let c = mixHex(shadeN(hexCol, k), '#8a8a90', crash * 0.5);
+  let c = shadeN(hexCol, k);
   c = mixHex(c, '#2a2a48', night * 0.5);
   return mixHex(c, hazeHex(), fogFor(zz));
 }
@@ -550,8 +516,7 @@ function drawBack(b) {
   if (b.z0 > cam.z + NEAR_Z) {polyN(wallQuad(x, b.z0, x + b.side * 20, b.z0, 0, b.h), toneN(b.color, b.z0, 0.6));}
 }
 function drawLot(L) {
-  // Your own home stays the real house it was; a YOUR HOME sign (drawYours) marks it.
-  const H = L.H * (L.special ? 1 : L.econNow), x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
+  const H = L.H, x = L.side * (EDGE_X + L.setback), xo = L.side * (EDGE_X + L.setback + L.depth);
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
   // Car parks and petrol stations are open lots: no building box, only what stands on them.
@@ -568,8 +533,6 @@ function drawLot(L) {
     ctx.strokeStyle = rgbaN('#ffd9a0', 0.55 * (1 - night)); ctx.lineWidth = 1.2; ctx.beginPath(); segN(nq[3], nq[2]); ctx.stroke();
   }
   const near = P(x, 0, z0); if (near.rz > FAR_Z) {return;}
-  if (L.special === 'jail') {return drawJail(L, x, z0, z1, H);}
-  if (L.special === 'casino') {return drawCasino(L, x, z0, z1, H);}
   drawMaterial(L, x, z0, z1, H);
   if (L.style) { drawStyled(L, x, z0, z1, H); } else { [drawShack, drawTownhouse, drawMansion, drawBrick, drawTower][L.tier](L, x, z0, z1, H); }
   drawWeathering(L, x, z0, z1, H);
@@ -689,12 +652,11 @@ function drawTower(L, x, z0, z1, H) {
     if (zb > za) { polyN(wallQuad(xc, za, xc, zb, H, H + Hc), toneN(L.color, midN(za, zb), 1.1)); if (L.spire) { const s = P(xc + L.side * 4, H + Hc + 26, midN(za, zb)), a = P(xc, H + Hc, midN(za, zb) - 1), b = P(xc, H + Hc, midN(za, zb) + 1); polyN([a, b, s], toneN('#fff0c0', L.z0, 1.1)); } }
   }
 }
-/* ---------- Building types that only some towns have: castles, villas, bungalows, caravans ---------- */
+/* ---------- Building styles (board.js STYLES_LOT): each one's size and colours, and which function draws it ---------- */
 function styleLot(L, style, r) {
   const st = STYLES_LOT[style];
   Object.assign(L, { style, setback: st.setback, sign: false, name: '', crooked: 0 });
-  if (style === 'castle') { Object.assign(L, { H: mixN(8, 10, r()), depth: 26, color: pickN(r, ['#e8dcc8', '#d8cfc0', '#ecd4dc', '#d4dce8', '#e8e0f0']), roof: pickN(r, ['#3a5aa8', '#c84a6a', '#5a3a8a', '#2f7a6a']), flag: pickN(r, ['#e23b3b', '#f2d13a', '#3f8fd6', '#d94f9a']), fountain: false }); }
-  else if (style === 'villa') { Object.assign(L, { H: mixN(6.6, 7.6, r()), depth: 14, color: pickN(r, ['#f4ead8', '#f8e4c8', '#fff4e0', '#f0e0d8']), roof: pickN(r, ['#c8643a', '#b8583a', '#d07a4a']), fountain: r() < 0.6 }); }
+  if (style === 'villa') { Object.assign(L, { H: mixN(6.6, 7.6, r()), depth: 14, color: pickN(r, ['#f4ead8', '#f8e4c8', '#fff4e0', '#f0e0d8']), roof: pickN(r, ['#c8643a', '#b8583a', '#d07a4a']), fountain: r() < 0.6 }); }
   else if (style === 'bungalow') { Object.assign(L, { H: mixN(3.2, 3.7, r()), depth: 12, color: pickN(r, ['#f2d8b0', '#d8e8f0', '#f0d0d0', '#e0ecd0', '#fff0c8', '#d8d0e8']), roof: pickN(r, ['#8a5a4a', '#5a6a7a', '#a0583a', '#6a7a5a']), door: pickN(r, ['#c8322a', '#2f6a9a', '#2e7a47', '#f2b23a']), tree: r() < 0.6 }); if (r() < 0.45) { L.brick = true; L.color = pickN(r, ['#b8684a', '#a85a40', '#c47e5a', '#9a5a48', '#c89a78']); } }
   else if (style === 'apartment') { Object.assign(L, { H: mixN(16, 28, r()), depth: 12, color: pickN(r, ['#e8e0d0', '#d8d4cc', '#e8d0b8', '#c8d0d8', '#f0e4c8']) }); }
   else if (style === 'factory') { Object.assign(L, { H: mixN(7.5, 10, r()), depth: 20, color: pickN(r, ['#9aa2a8', '#a8a49a', '#8c969c', '#b0a08a']), chimneys: r() < 0.5 ? 2 : 1, name: pickN(r, ['TIMBERLAND MILL', 'FOREST PRODUCTS CO.', 'GREENWOOD PULP & PAPER', 'PROGRESS PLASTICS']) }); }
@@ -715,8 +677,7 @@ function styleLot(L, style, r) {
   else if (style === 'caravan') { Object.assign(L, { H: mixN(2.4, 2.7, r()), depth: 3.2, color: pickN(r, ['#f2eee2', '#e8e4d6', '#dfe6ea', '#efe2c8']), band: pickN(r, ['#4a8ab8', '#c86a3a', '#6a9a5a', '#b84a4a']), rust: r(), awn: r() < 0.6 ? pickN(r, ['#3f8fd6', '#e8a030', '#5fa35b', '#c84a4a']) : null, wash: r() < 0.4 }); }
 }
 function drawStyled(L, x, z0, z1, H) {
-  if (L.style === 'castle') { drawCastle(L, x, z0, z1, H); }
-  else if (L.style === 'villa') { drawVilla(L, x, z0, z1, H); }
+  if (L.style === 'villa') { drawVilla(L, x, z0, z1, H); }
   else if (L.style === 'bungalow') { drawBungalow(L, x, z0, z1, H); }
   else if (L.style === 'caravan') { drawCaravan(L, x, z0, z1, H); }
   else if (L.style === 'apartment') { drawApartment(L, x, z0, z1, H); }
@@ -1115,7 +1076,7 @@ function windowSill(L, x, z0, za, zb, ya, frame) {
 // What the wall is made of: weatherboards, brick or render.
 function wallMaterial(L) {
   if (L.style === 'bungalow') { return L.brick ? 'brick' : 'board'; }
-  if (L.style === 'caravan' || L.style === 'castle' || L.style === 'factory' || L.style === 'carpark' || L.style === 'petrol') { return null; }
+  if (L.style === 'caravan' || L.style === 'factory' || L.style === 'carpark' || L.style === 'petrol') { return null; }
   if (L.style === 'apartment') { return 'render'; }
   if (L.style === 'cabin') { return 'board'; }
   if (L.style === 'canal' || L.style === 'cinema') { return 'brick'; }
@@ -1157,7 +1118,7 @@ function drawWeathering(L, x, z0, z1, H) {
   if (base.rz < 1) { return; }
   let g = ctx.createLinearGradient(base.x, base.y, up.x, up.y); g.addColorStop(0, 'rgba(20,12,6,0.32)'); g.addColorStop(1, 'rgba(20,12,6,0)');
   polyN(wallQuad(x - s * 0.2, z0, x - s * 0.2, z1, 0, 0.8), g);
-  if (L.style !== 'castle' && L.style !== 'caravan' && L.style !== 'slanttop' && L.style !== 'diner' && !(L.tier === 4 && !L.style)) {
+  if (L.style !== 'caravan' && L.style !== 'slanttop' && L.style !== 'diner' && !(L.tier === 4 && !L.style)) {
     const e0 = P(x, H, mid), e1 = P(x, H - 1, mid);
     g = ctx.createLinearGradient(e0.x, e0.y, e1.x, e1.y); g.addColorStop(0, 'rgba(20,12,6,0.34)'); g.addColorStop(1, 'rgba(20,12,6,0)');
     polyN(wallQuad(x - s * 0.21, z0, x - s * 0.21, z1, H - 1, H), g);
@@ -1173,53 +1134,6 @@ function roofCourses(ex, ey, ez0, ez1, rx, ry, rz0, rz1, col, z, n = 9) {
   for (let i = 1; i < n; i++) { const t = i / n, p0 = P(lerp(ex, rx, t), lerp(ey, ry, t), lerp(ez0, rz0, t)), p1 = P(lerp(ex, rx, t), lerp(ey, ry, t), lerp(ez1, rz1, t)); segN(p0, p1); }
   ctx.stroke();
   const g0 = P(ex, ey - 0.05, ez0), g1 = P(ex, ey - 0.05, ez1); ctx.strokeStyle = toneN('#e8e4dc', z, 0.9); ctx.lineWidth = Math.min(5, Math.max(1.5, P(ex, ey, (ez0 + ez1) / 2).k * 0.1)); ctx.beginPath(); segN(g0, g1); ctx.stroke();
-}
-function drawCastle(L, x, z0, z1, H) {
-  const s = L.side, len = L.z1 - L.z0, stone = L.color, gz = L.z0 + len / 2, r = rngN(L.seed + 3);
-  // The keep, behind the curtain wall: only its upper part shows above it.
-  const xk = x + s * 7, ka = L.z0 + len * 0.28, kb = L.z1 - len * 0.28, KH = H + 10;
-  if (kb > z0) {
-    polyN(wallQuad(xk, Math.max(ka, z0), xk, kb, H - 0.5, KH), toneN(stone, midN(ka, kb), 0.9));
-    for (let zz = ka; zz < kb - 0.6; zz += 1.4) { if (zz + 0.7 > z0) { polyN(wallQuad(xk, Math.max(zz, z0), xk, zz + 0.7, KH, KH + 0.9), toneN(stone, zz, 0.95)); } }
-    for (let i = 0; i < 4; i++) { const wa = ka + (kb - ka) * (0.12 + i * 0.22); winN(L, xk, z0, wa, wa + 0.7, H + 3.5, H + 5.6, '#3a3048', null, r() < 0.3 + night * 0.6); }
-  }
-  // Stone courses and battlements along the wall.
-  ctx.strokeStyle = toneN(shadeN(stone, 0.82), midN(z0, z1)); ctx.lineWidth = 1;
-  for (let y = 1.1; y < H; y += 1.1) { const a = P(x - s * 0.02, y, z0), b = P(x - s * 0.02, y, z1); ctx.beginPath(); segN(a, b); ctx.stroke(); }
-  for (let zz = L.z0; zz < L.z1 - 0.6; zz += 1.4) { if (zz + 0.7 > z0) { polyN(wallQuad(x, Math.max(zz, z0), x, zz + 0.7, H, H + 0.9), toneN(stone, zz, 1.02)); } }
-  // Arrow-slit windows.
-  for (let zz = L.z0 + 3; zz < L.z1 - 2; zz += 3.2) { if (Math.abs(zz - gz) > 4) { winN(L, x, z0, zz, zz + 0.35, H * 0.45, H * 0.72, '#2a2430', null, false); } }
-  // The gate: an arch with a portcullis, and a moat with a drawbridge in front.
-  if (gz + 1.8 > z0) {
-    const pts = []; for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; pts.push(P(x - s * 0.05, 3.2 + Math.sin(a) * 1.8, gz - Math.cos(a) * 1.8)); }
-    if (gz - 1.8 > z0) { polyN([P(x - s * 0.05, 0, gz - 1.8), ...pts, P(x - s * 0.05, 0, gz + 1.8)], toneN('#2a2018', gz)); }
-    ctx.strokeStyle = toneN('#c8a040', gz); ctx.lineWidth = 1.2;
-    for (let zz = gz - 1.5; zz <= gz + 1.5; zz += 0.5) { if (zz > z0) { const a = P(x - s * 0.06, 0.4, zz), b = P(x - s * 0.06, 3.6 + Math.cos((zz - gz) / 1.8 * HALF_PI) * 1.2, zz); ctx.beginPath(); segN(a, b); ctx.stroke(); } }
-  }
-  const ma = x - s * 0.4, mb = x - s * 2.8;
-  polyN([P(ma, 0.06, z0), P(mb, 0.06, z0), P(mb, 0.06, z1), P(ma, 0.06, z1)], toneN('#5aa0c8', midN(z0, z1)));
-  if (gz + 1.6 > z0) { polyN([P(ma, 0.1, Math.max(gz - 1.6, z0)), P(mb - s * 0.3, 0.1, Math.max(gz - 1.6, z0)), P(mb - s * 0.3, 0.1, gz + 1.6), P(ma, 0.1, gz + 1.6)], toneN('#8a6040', gz)); }
-  // Round towers with pointed roofs and flags, far ones first.
-  const towers = [L.z0 + 1.8, gz - 4, gz + 4, L.z1 - 1.8].sort((a, b) => b - a);
-  for (const zt of towers) {
-    const ta = zt - 1.6, tb = zt + 1.6, xt = x - s * 1.4, TH = H + 5 + (Math.abs(zt - gz) < 5 ? 1.5 : 0);
-    if (tb < z0) { continue; }
-    if (ta > cam.z + NEAR_Z) { polyN(wallQuad(xt, ta, x + s * 1.6, ta, 0, TH), toneN(stone, ta, 0.62)); }
-    const fq = wallQuad(xt, Math.max(ta, z0), xt, tb, 0, TH), g = ctx.createLinearGradient(fq[0].x, 0, fq[1].x, 0);
-    g.addColorStop(0, toneN(stone, zt, 0.8)); g.addColorStop(0.5, toneN(stone, zt, 1.12)); g.addColorStop(1, toneN(stone, zt, 0.86));
-    polyN(fq, g);
-    winN(L, xt, z0, zt - 0.3, zt + 0.3, TH - 3.2, TH - 1.6, '#2a2430', '#f4ead0', r() < night);
-    if (zt > cam.z + NEAR_Z + 1) {
-      const a1 = P(xt - s * 0.5, TH, Math.max(ta - 0.5, cam.z + NEAR_Z)), a2 = P(xt - s * 0.5, TH, tb + 0.5), apex = P(xt + s * 1.4, TH + 5.5, zt);
-      polyN([a1, a2, apex], toneN(L.roof, zt));
-      polyN([a1, P(xt + s * 1.4, TH, zt), apex], toneN(L.roof, zt, 0.75));
-      // A flag on a pole, rippling.
-      const top = P(xt + s * 1.4, TH + 8, zt); ctx.strokeStyle = toneN('#4a4048', zt); ctx.lineWidth = Math.min(5, Math.max(1, apex.k * 0.06)); ctx.beginPath(); segN(apex, top); ctx.stroke();
-      const fl = []; for (let i = 0; i <= 6; i++) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 7.9 + wv, zt + u * 2)); }
-      for (let i = 6; i >= 0; i--) { const u = i / 6, wv = Math.sin(clockT * 4 + u * 5 + L.seed) * 0.25 * u; fl.push(P(xt + s * 1.4, TH + 6.9 + wv, zt + u * 2)); }
-      polyN(fl, toneN(L.flag, zt));
-    }
-  }
 }
 function drawVilla(L, x, z0, z1, H) {
   const s = L.side, len = L.z1 - L.z0, cols = Math.max(4, Math.round(len / 2.6)), r = rngN(L.seed + 4);
@@ -1309,53 +1223,6 @@ function drawCaravan(L, x, z0, z1, H) {
     }
   }
 }
-function drawJail(L, x, z0, z1, H) {
-  const len = L.z1 - L.z0;
-  // Stone blocks.
-  ctx.strokeStyle = toneN('#55565e', midN(z0, z1)); ctx.lineWidth = 1;
-  for (let y = 0.6; y < H; y += 0.6) { const a = P(x - L.side * 0.02, y, z0), b = P(x - L.side * 0.02, y, z1); ctx.beginPath(); segN(a, b); ctx.stroke(); }
-  // Barred windows in orange and blue stripes.
-  const r = rngN(L.seed);
-  for (let i = 0; i < 5; i++) {for (const [ya, yb] of [[2.2, 3.8], [5.2, 6.8]]) {
-    const za = L.z0 + len * (0.12 + i * 0.17), zb = za + 1.3; if (zb < z0) {continue;}
-    polyN(wallQuad(x - L.side * 0.05, Math.max(za, z0), x - L.side * 0.05, zb, ya, yb), toneN('#1e2a40', za));
-    for (let b = 0; b < 5; b++) { const zz = za + 0.1 + b * 0.27; if (zz < z0) {continue;} polyN(wallQuad(x - L.side * 0.1, zz, x - L.side * 0.1, zz + 0.1, ya, yb), toneN(b % 2 ? BOARD_COL.orange : '#3f6fd6', zz)); }
-  }}
-  // Arched gate and a guard tower on the near corner.
-  const gz = L.z0 + len * 0.45; if (gz + 2.4 > z0) {polyN(wallQuad(x - L.side * 0.06, Math.max(gz, z0), x - L.side * 0.06, gz + 2.4, 0, 3.4), toneN('#3a2a20', gz));}
-  polyN(wallQuad(x - L.side * 0.2, z0, x - L.side * 0.2, z1, H - 0.7, H), toneN(BOARD_COL.orange, midN(z0, z1)));
-  if (L.z0 + 4 > z0) {
-    const tz0 = Math.max(L.z0, z0), tz1 = L.z0 + 4; polyN(wallQuad(x - L.side * 0.3, tz0, x - L.side * 0.3, tz1, H, H + 5), toneN('#6a6c76', tz0, 1.05));
-    polyN([P(x - L.side * 1, H + 5, tz0), P(x - L.side * 1, H + 5, tz1), P(x + L.side * 1.5, H + 7.5, (tz0 + tz1) / 2)], toneN('#3f6fd6', tz0));
-  }
-  facadeSign(L, x, z0, L.z0 + len * 0.3, L.z0 + len * 0.75, 4.2, 5.0, toneN('#2a2a30', L.z0), '#f2e6c0', 'JAIL - JUST VISITING', null);
-}
-function drawCasino(L, x, z0, z1, H) {
-  const len = L.z1 - L.z0, t = clockT;
-  // Chase lights along the top and around the entrance.
-  for (let i = 0; i < 40; i++) {
-    const zz = L.z0 + len * i / 40; if (zz < z0) {continue;}
-    const on = (Math.floor(t * 8) + i) % 3 === 0, p = P(x - L.side * 0.1, H - 0.4, zz);
-    ctx.fillStyle = on ? '#fff4b0' : '#c8902a'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.k * 0.12), 0, TWO_PI); ctx.fill();
-  }
-  polyN(wallQuad(x - L.side * 0.05, z0, x - L.side * 0.05, z1, 0.3, 3.6), toneN('#ffb04a', midN(z0, z1), 1.1), '#ff4a3a', 2);
-  facadeSign(L, x, z0, L.z0 + len * 0.15, L.z0 + len * 0.85, 4.2, 5.6, '#2a0a20', '#ffe08a', 'CHANCE CASINO', '#ff5a3a');
-  // A big marquee facing down the street: question mark, bulbs and a spinning wheel.
-  const mz = L.z0 + 3; if (mz < cam.z + NEAR_Z) {return;}
-  const xa = x - L.side * 4.5, xb = x - L.side * 0.2, a = P(xa, 5.5, mz), b = P(xb, 5.5, mz), c = P(xb, 15, mz), d = P(xa, 15, mz);
-  if ([a, b, c, d].some(q => q.rz < 1)) {return;}
-  polyN([a, b, c, d], '#3a0a2a', '#ffcf3a', Math.max(1, a.k * 0.08));
-  const cx = (a.x + b.x) / 2, w = Math.abs(b.x - a.x), top = c.y, hgt = a.y - c.y;
-  ctx.save(); ctx.font = `bold ${hgt * 0.62}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#ff3a3a'; ctx.shadowBlur = 18; ctx.fillStyle = Math.sin(t * 6) > -0.7 ? '#ffe36a' : '#ff8a3a'; ctx.fillText('?', cx, top + hgt * 0.42);
-  ctx.font = `bold ${hgt * 0.1}px Georgia, serif`; ctx.fillStyle = '#fff'; ctx.shadowColor = '#ff8a3a'; ctx.fillText('CHANCE', cx, top + hgt * 0.86, w * 0.9); ctx.restore();
-  for (let i = 0; i < 28; i++) { const u = i / 28, per = u < 0.25 ? [mixN(a.x, b.x, u * 4), a.y] : u < 0.5 ? [b.x, mixN(b.y, c.y, (u - 0.25) * 4)] : u < 0.75 ? [mixN(c.x, d.x, (u - 0.5) * 4), c.y] : [d.x, mixN(d.y, a.y, (u - 0.75) * 4)]; ctx.fillStyle = (Math.floor(t * 10) + i) % 2 ? '#fff6c0' : '#ff7a3a'; ctx.beginPath(); ctx.arc(per[0], per[1], Math.max(1.2, a.k * 0.1), 0, TWO_PI); ctx.fill(); }
-  const wc = P((xa + xb) / 2, 17.5, mz), wr = a.k * 2.2;
-  for (let s = 0; s < 8; s++) { ctx.fillStyle = s % 2 ? '#e23b3b' : '#ffcf3a'; ctx.beginPath(); ctx.moveTo(wc.x, wc.y); ctx.arc(wc.x, wc.y, wr, t * 1.5 + s * PI / 4, t * 1.5 + (s + 1) * PI / 4); ctx.fill(); }
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(wc.x, wc.y, wr * 0.18, 0, TWO_PI); ctx.fill();
-}
-
-/* ---------- Pavement life ---------- */
 function drawLamp(q, p) {
   const k = q.k, h = 4.2, glow = night > 0.2 || p.flick < 0.3;
   ctx.fillStyle = toneN('#26332e', p.z); ctx.fillRect(q.x - 0.06 * k, q.y - h * k, 0.12 * k, h * k);
@@ -1400,35 +1267,14 @@ function drawBin(q, p) {
   ctx.fillStyle = toneN('#4a5a4a', p.z); ctx.beginPath(); ctx.ellipse(q.x + 0.5 * k, q.y - 0.05 * k, 0.25 * k, 0.08 * k, 0, 0, TWO_PI); ctx.fill();
 }
 
-/* ---------- Overlays: district deed card and Chance card ---------- */
+/* ---------- Overlays: vignette, film grain, then the HUD (board.js) ---------- */
 function drawOverlays() {
   // Vignette and grain.
   const vg = ctx.createRadialGradient(width / 2, height * 0.5, Math.min(width, height) * 0.4, width / 2, height * 0.5, Math.max(width, height) * 0.8);
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(30,14,6,0.35)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, width, height);
   image(grain, 0, 0, width, height);
-  if (districtCard && false) {   // the NEXT bar sits here now
-    const age = clockT - districtCard.t, a = easeN(age / 0.5) * (1 - easeN((age - 4) / 0.8));
-    if (a > 0) { const d = DISTRICTS[districtCard.tier]; deedCard(width / 2, 30, a, d.stripe[0], d.name.toUpperCase(), d.tag, `Age ${lifeAge}`); }
-  }
-  if (card) {
-    const age = clockT - card.t, a = easeN(age / 0.4) * (1 - easeN((age - 4.2) / 0.6));
-    if (a > 0) {
-      const col = card.kind === 'jail' ? BOARD_COL.orange : card.kind === 'go' ? BOARD_COL.red : '#f28c28';
-      push(); const w = Math.min(340, width - 32), h = 150, x = width / 2 - w / 2, y = height * 0.5 - h / 2 + (1 - a) * 30;
-      drawingContext.globalAlpha = a; noStroke(); fill(255, 248, 232); rect(x, y, w, h, 10); fill(col); rect(x, y, w, 38, 10, 10, 0, 0);
-      fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(18); text(card.text[0], width / 2, y + 20);
-      fill(40, 30, 24); textSize(22); text(card.text[1], width / 2, y + 70); textStyle(NORMAL); textSize(14); fill(90, 70, 60); text(card.text[2], width / 2, y + 104);
-      pop();
-    }
-  }
   drawBoardHud();
 
-}
-function deedCard(cx, y, a, col, title, tag, foot) {
-  push(); const w = Math.min(280, width - 32), x = cx - w / 2; drawingContext.globalAlpha = a; noStroke();
-  fill(0, 60); rect(x + 3, y + 4, w, 92, 8); fill(255, 250, 238); rect(x, y, w, 92, 8); fill(col); rect(x + 8, y + 8, w - 16, 36, 4);
-  fill(255); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(15); text(title, cx, y + 26);
-  textStyle(NORMAL); fill(60, 50, 44); textSize(13); text(tag, cx, y + 60); fill(130, 110, 100); textSize(11); text(foot, cx, y + 79); pop();
 }
 /* ---------- Input ---------- */
 async function beginSound() { if (audioStarted) {return;} audioStarted = true; try { await sound.start(); } catch (e) { console.warn(e); } }
@@ -1442,7 +1288,6 @@ function keyPressed(e) {
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
-  if (k === 'r') { seed += 97; chunks.clear(); firedCasinos.clear(); visitedJails.clear(); distanceWalked = 0; streetT = clockT; ownedFromC = Infinity; lastTier = -1; lastChunk = -1; economyTarget = 1; nightTarget = 0; crashTarget = 0; buildSkyline(); return false; }
   if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(e.code)) {return false;}
 }
 function touchStarted() { canvasNode.focus(); pointerHeld = true; beginSound(); return false; }
