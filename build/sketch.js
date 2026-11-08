@@ -34,7 +34,7 @@ let backT = 0, backS = 0, backWant = false, mirrorView = false;
 function smogNow() { return typeof smogK === 'number' ? Math.min(1, smogK) : 0; }
 // The colour of the haze far down the street (asked for hundreds of times a frame, so it is kept).
 let hazeKey = '', hazeVal = '';
-function hazeHex() { const key = night.toFixed(3) + smogNow().toFixed(3); if (key !== hazeKey) { hazeKey = key; hazeVal = mixHex(mixHex('#ffd79a', '#5a4a70', night), '#a8a49e', smogNow() * 0.65); } return hazeVal; }
+function hazeHex() { const hk = night.toFixed(3) + smogNow().toFixed(3); if (hk !== hazeKey) { hazeKey = hk; hazeVal = mixHex(mixHex('#ffd79a', '#5a4a70', night), '#a8a49e', smogNow() * 0.65); } return hazeVal; }
 // Held keys are tracked directly from the browser, so walking works the same in p5.js 1.x and 2.x.
 const keysHeld = new Set();
 window.addEventListener('keydown', e => keysHeld.add(e.code));
