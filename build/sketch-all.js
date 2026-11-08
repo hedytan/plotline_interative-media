@@ -1,3 +1,6 @@
+// noprotect
+// Plotline - We Build Our World: combined file for the p5.js Web Editor (works with p5.js 1.x and 2.x).
+// Paste this whole file into sketch.js. It is street-sound.js, build/music.js, build/trees.js, build/dabforest.js, build/sketch.js and build/board.js in one.
 
 /* StreetSound — procedural soundscape for Plotline. Native Web Audio, no files.
  * Each district has its own small band: a pad chord and an arpeggio whose timbre
