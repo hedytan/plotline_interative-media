@@ -281,10 +281,16 @@ function gotHands(results) {
     }
     seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist: shape });
   }
-  // Two hands: the one further left is your left hand. One hand: whichever half of the picture it is in.
+  // Two hands: the one further left is your left hand. One hand: the hand it already was, if that hand
+  // was seen a moment ago (so a swing across the middle of the picture stays one swing); otherwise
+  // whichever half of the picture it is in.
   seen.sort((a, b) => a.x - b.x);
   if (seen.length === 2) { handFeedSide(-1, seen[0].x, seen[0].y, seen[0].fist); handFeedSide(1, seen[1].x, seen[1].y, seen[1].fist); }
-  else if (seen.length === 1) { handFeedSide(seen[0].x < 0.5 ? -1 : 1, seen[0].x, seen[0].y, seen[0].fist); }
+  else if (seen.length === 1) {
+    const now = performance.now() / 1000, live = [-1, 1].filter(sd => hands[sd].ok && now - hands[sd].seen < 0.5);
+    const side = live.length === 1 ? live[0] : seen[0].x < 0.5 ? -1 : 1;
+    handFeedSide(side, seen[0].x, seen[0].y, seen[0].fist);
+  }
 }
 // One position of your hand (0..1, mirrored like a mirror) from the camera, or from a test.
 function handFeed(nx, ny, fist = false) { handFeedSide(nx < 0.5 ? -1 : 1, nx, ny, fist); }
@@ -294,10 +300,12 @@ function handFeedSide(side, nx, ny, fist = false) {
   const now = performance.now() / 1000, s = hands[side], fresh = s.ok && now - s.seen < 0.4;
   if (fresh) { const up = s.y - ny; if (up > 0.004) { s.lift += up; } }   // lifting this hand builds on its side
   s.x = nx; s.y = ny; s.shape = shape; s.fist = shape === 'fist'; s.t = now; s.ok = true; s.seen = now;
-  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.3) { s.trail.shift(); }
-  // A chop: a fast stroke of this hand, sideways or down (not up, which builds), cuts the forest on its side.
-  const a = s.trail[0];
-  if (a && now - s.chopT > 0.28) { const dx = nx - a.x, dy = ny - a.y; if (Math.hypot(dx, dy) > 0.25 && dy > -0.06) { s.chopT = now; s.trail.length = 0; chopForest(side); } }
+  s.trail.push({ x: nx, y: ny, t: now }); while (s.trail.length && now - s.trail[0].t > 0.4) { s.trail.shift(); }
+  // A chop: a quick sideways stroke of this hand (more sideways than up or down, so lifting to build
+  // never chops) of at least 18% of the picture within 0.4 s cuts the forest on its side.
+  if (now - s.chopT > 0.35) {
+    for (const a of s.trail) { const dx = nx - a.x, dy = ny - a.y; if (Math.abs(dx) > 0.18 && Math.abs(dx) > Math.abs(dy)) { s.chopT = now; s.trail.length = 0; chopForest(side); break; } }
+  }
 }
 function handsActive() { return !intro && !ending; }
 // Land that waits for your hands instead of building itself.
@@ -313,7 +321,8 @@ function treesOn(L) { return Math.max(2, Math.round((L.z1 - L.z0) / 2.4)) * 3; }
 function chopForest(side) {
   if (!handsActive()) { return; }
   const z = distanceWalked, pick = s => { let best = null; for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side !== s || L.cutT !== undefined || L.born !== undefined || !waitsForHand(L)) { continue; } const d = L.z0 - z; if (d > -2 && d < 45 && (!best || d < best.d)) { best = { L, d }; } } } return best && best.L; };
-  const L = pick(side); if (!L) { return; }
+  const L = pick(side);
+  if (!L) { if (clockT - chopHintT > 4) { chopHintT = clockT; sayToast(`No forest left on the ${side < 0 ? 'left' : 'right'} here. Walk on to find more.`); } return; }
   L.cutT = clockT; L.grow = 0; treesCut += treesOn(L);
   const L2 = pick(side); if (L2) { L2.cutT = clockT + 0.12; L2.grow = 0; treesCut += treesOn(L2); }   // one swing clears a stretch of two lots
   spawnBirds(L, side); if (L2) { spawnBirds(L2, side); }
