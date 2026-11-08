@@ -1,6 +1,3 @@
-// noprotect
-// Plotline — We Build Our World: combined file for the p5.js Web Editor (works with p5.js 1.x and 2.x).
-// Paste this whole file into sketch.js. It is street-sound.js, build/music.js, build/trees.js, build/dabforest.js, build/sketch.js and build/board.js in one.
 
 /* StreetSound — procedural soundscape for Plotline. Native Web Audio, no files.
  * Each district has its own small band: a pad chord and an arpeggio whose timbre
@@ -1125,7 +1122,7 @@ function drawLot(L) {
   const z0 = clipZ(L.z0), z1 = L.z1, mid = (z0 + z1) / 2;
   if (z1 <= z0) {return;}
   // Car parks and petrol stations are open lots: no building box, only what stands on them.
-  const open = L.style === 'carpark' || L.style === 'petrol';
+  const open = L.style === 'carpark' || L.style === 'petrol' || L.style === 'substation';
   if (open) { const nq = P(x, 0, z0); if (nq.rz < FAR_Z) { drawStyled(L, x, z0, z1, H); } return; }
   // Street facade: lit from the low sun at the far end of the street.
   const fq = wallQuad(x, z0, x, z1, 0, H);
@@ -1270,6 +1267,18 @@ function styleLot(L, style, r) {
   else if (style === 'factory') { Object.assign(L, { H: mixN(7.5, 10, r()), depth: 20, color: pickN(r, ['#9aa2a8', '#a8a49a', '#8c969c', '#b0a08a']), chimneys: r() < 0.5 ? 2 : 1, name: pickN(r, ['TIMBERLAND MILL', 'FOREST PRODUCTS CO.', 'GREENWOOD PULP & PAPER', 'PROGRESS PLASTICS']) }); }
   else if (style === 'carpark') { Object.assign(L, { H: 0.6, depth: 16, color: '#3c3c42', name: pickN(r, ['CITY PARKING', 'PARK & SHOP', 'EASY PARK']) }); }
   else if (style === 'petrol') { Object.assign(L, { H: 5.4, depth: 14, color: '#d8d4cc', name: pickN(r, ['FUEL & GO', 'GREENWAY PETROL', 'OCTANE']), brand: pickN(r, ['#d8322a', '#2a8a4a', '#e8a01a', '#2a5ab8']) }); }
+  else if (style === 'cabin') { Object.assign(L, { H: mixN(2.6, 3, r()), depth: 8, color: pickN(r, ['#8a5a3a', '#9a6a42', '#7a4e32']), roof: pickN(r, ['#3a4a3a', '#4a3a32', '#2f3a44']), door: pickN(r, ['#c8322a', '#2e7a47', '#f2b23a']) }); }
+  else if (style === 'canal') { Object.assign(L, { H: mixN(8.5, 10, r()), depth: 10, color: '#d8c8b0' }); }
+  else if (style === 'modern') { Object.assign(L, { H: mixN(6.2, 7, r()), depth: 12, color: pickN(r, ['#a8744a', '#8a5a3a', '#3a3e44', '#c8b49a']) }); }
+  else if (style === 'greencondo') { Object.assign(L, { H: mixN(30, 48, r()), depth: 14, color: pickN(r, ['#d8d4cc', '#e0dcd2']), name: pickN(r, ['THE TREE RESIDENCES', 'CANOPY LIVING', 'FOREST TOWER']) }); }
+  else if (style === 'diner') { Object.assign(L, { H: 3.6, depth: 12, color: '#d8dce0', brand: pickN(r, ['#d8322a', '#2a9a9a', '#e86a2a']), name: pickN(r, ['DINER', 'MOONLIGHT DINER', 'STAR DINER']) }); }
+  else if (style === 'supermarket') { Object.assign(L, { H: 6.5, depth: 24, color: pickN(r, ['#e8e4dc', '#d8d4cc']), brand: pickN(r, ['#d8322a', '#2a8a4a', '#e8a01a']), name: pickN(r, ['MEGA MART', 'VALUE WORLD', 'FRESH CO.', 'BIG SAVE']) }); }
+  else if (style === 'cinema') { Object.assign(L, { H: 10, depth: 18, color: pickN(r, ['#a8483a', '#8c3e34', '#9a5038']), name: pickN(r, ['ROYAL', 'PALACE', 'REGAL', 'STAR']), film: pickN(r, ['NOW SHOWING: THE LAST TREE', 'NOW SHOWING: CONCRETE JUNGLE', 'NOW SHOWING: GONE WITH THE WOOD']) }); }
+  else if (style === 'mall') { Object.assign(L, { H: mixN(14, 18, r()), depth: 30, color: pickN(r, ['#e0d8c8', '#d0ccc4']), name: pickN(r, ['FOREST PLAZA', 'GREENFIELD MALL', 'THE GROVE CENTRE']) }); }
+  else if (style === 'substation') { Object.assign(L, { H: 0.5, depth: 14, color: '#9a968e' }); }
+  else if (style === 'powerplant') { Object.assign(L, { H: mixN(10, 12, r()), depth: 16, color: pickN(r, ['#a8a49a', '#9aa2a8']), name: pickN(r, ['GREENPOWER STATION', 'CLEAN ENERGY CO.']) }); }
+  else if (style === 'datacentre') { Object.assign(L, { H: mixN(8, 10, r()), depth: 22, color: pickN(r, ['#c8ccd2', '#b8bcc4']), name: pickN(r, ['THE CLOUD', 'CLOUD CAMPUS', 'DATA FOREST']) }); }
+  else if (style === 'slanttop') { Object.assign(L, { depth: 20, color: pickN(r, ['#7fa8c8', '#8fb6d0', '#6f98bc']), crown: false, spire: false, glass: true }); }
   else if (style === 'caravan') { Object.assign(L, { H: mixN(2.4, 2.7, r()), depth: 3.2, color: pickN(r, ['#f2eee2', '#e8e4d6', '#dfe6ea', '#efe2c8']), band: pickN(r, ['#4a8ab8', '#c86a3a', '#6a9a5a', '#b84a4a']), rust: r(), awn: r() < 0.6 ? pickN(r, ['#3f8fd6', '#e8a030', '#5fa35b', '#c84a4a']) : null, wash: r() < 0.4 }); }
 }
 function drawStyled(L, x, z0, z1, H) {
@@ -1281,6 +1290,10 @@ function drawStyled(L, x, z0, z1, H) {
   else if (L.style === 'factory') { drawFactory(L, x, z0, z1, H); }
   else if (L.style === 'carpark') { drawCarpark(L, x, z0, z1, H); }
   else if (L.style === 'petrol') { drawPetrol(L, x, z0, z1, H); }
+  else {
+    const fn = { cabin: drawCabin, canal: drawCanal, modern: drawModern, greencondo: drawGreenCondo, diner: drawDiner, supermarket: drawSupermarket, cinema: drawCinema, mall: drawMall, substation: drawSubstation, powerplant: drawPowerPlant, datacentre: drawDataCentre, slanttop: drawSlantTop }[L.style];
+    if (fn) { fn(L, x, z0, z1, H); }
+  }
 }
 /* ---------- What people build on the cleared forest: apartments, factories, car parks, petrol ---------- */
 // A block of flats: rows of windows, a balcony on every other bay, washing and air conditioners.
@@ -1393,6 +1406,239 @@ function drawPetrol(L, x, z0, z1, H) {
     facadeSign(L, x - s * 0.4, z0, zp - 1.1, zp + 1.1, 3.4, 5.4, '#1e1e22', '#ffd040', 'UNLEADED 2.39');
   }
 }
+/* ---------- More things to build: cabins, row houses, modern houses, green condos, diners, supermarkets,
+   cinemas, malls, substations, power stations, data centres and slant-topped towers ---------- */
+// A log cabin: a deck, small windows and a steep A-frame roof that reaches almost to the ground.
+function drawCabin(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), r = rngN(L.seed + 21), d = L.depth, ridge = x + s * d / 2, RH = H + d * 0.85;
+  const lit = [r(), r()];
+  polyN([P(x, 0.45, z0), P(x, 0.45, z1), P(x - s * 1.6, 0.45, z1), P(x - s * 1.6, 0.45, z0)], toneN('#a07850', mid));
+  polyN(wallQuad(x - s * 1.6, z0, x - s * 1.6, z1, 0, 0.45), toneN('#6a4a30', mid));
+  const dz = L.z0 + len * 0.45;
+  if (dz + 1 > z0) { polyN(wallQuad(x - s * 0.05, Math.max(dz, z0), x - s * 0.05, dz + 1, 0.45, 2.3), toneN(L.door, dz)); }
+  [0.12, 0.68].forEach((u, i) => { const za = L.z0 + len * u; winN(L, x, z0, za, za + len * 0.16, 1.1, 2.1, '#4a5a60', '#e8d8b0', lit[i] < 0.4 + night * 0.6); });
+  polyN([P(x - s * 0.8, H - 0.3, z0), P(x - s * 0.8, H - 0.3, z1 + 0.3), P(ridge, RH, z1 + 0.3), P(ridge, RH, z0)], toneN(L.roof, mid));
+  roofCourses(x - s * 0.8, H - 0.3, z0, z1 + 0.3, ridge, RH, z0, z1 + 0.3, L.roof, mid, 7);
+  if (L.z0 > cam.z + NEAR_Z) {
+    const xo = x + s * (d + 0.8), zg = L.z0 - 0.3;
+    polyN([P(x - s * 0.8, H - 0.3, zg), P(xo, H - 0.3, zg), P(ridge, RH, zg)], toneN(L.color, L.z0, 0.8));
+    polyN([P(x + s * 1.4, H + 0.2, zg - 0.02), P(xo - s * 2.2, H + 0.2, zg - 0.02), P(ridge, RH - 1.8, zg - 0.02)], toneN(night > 0.3 ? '#ffd98a' : '#7a98a8', L.z0));
+  }
+  // A stove pipe with a thread of smoke.
+  const pz = L.z0 + len * 0.75; if (pz > z0) {
+    polyN(wallQuad(ridge - s * 1.2, pz, ridge - s * 1.2, pz + 0.3, RH - 2.4, RH + 0.8), toneN('#3a3a3a', pz));
+    for (let i = 0; i < 5; i++) { const t = modN(clockT * 0.2 + i / 5, 1), p = P(ridge - s * 1.2, RH + 1 + t * 5, pz - t * 3); if (p.rz > 1) { ctx.fillStyle = rgbaN('#e8e4dc', 0.45 * (1 - t)); ctx.beginPath(); ctx.arc(p.x, p.y, (0.3 + t * 1.2) * p.k, 0, TWO_PI); ctx.fill(); } }
+  }
+}
+// Canal row houses: narrow, tall houses side by side, each its own colour, with stepped or pointed gables.
+function drawCanal(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, n = Math.max(2, Math.round(len / 3.4)), w = len / n, r = rngN(L.seed + 22), xf = x - s * 0.03;
+  const COLS = ['#c8584a', '#e8b04a', '#4a7ab8', '#5a9a6a', '#efe6cf', '#b86a8a', '#2f5a6a', '#d8784a', '#8a5a9a'];
+  for (let i = 0; i < n; i++) {
+    const za = L.z0 + w * i, zb = za + w, col = COLS[Math.floor(r() * COLS.length)], h = H + r() * 1.4, stepped = r() < 0.5, lit = [r(), r(), r(), r(), r(), r()];
+    if (zb < z0) { continue; }
+    const Z = zz => Math.max(zz, z0);
+    polyN(wallQuad(xf, Z(za), xf, zb, 0, h), toneN(col, za));
+    // The gable on top.
+    const g = stepped
+      ? [[0, 0], [0.1, 0], [0.1, 0.7], [0.25, 0.7], [0.25, 1.4], [0.4, 1.4], [0.4, 2.1], [0.6, 2.1], [0.6, 1.4], [0.75, 1.4], [0.75, 0.7], [0.9, 0.7], [0.9, 0], [1, 0]]
+      : [[0, 0], [0.5, 2.2], [1, 0]];
+    polyN(g.map(([u, dy]) => P(xf, h + dy, Z(za + w * u))), toneN(col, za, 1.04), toneN('#fbf6ee', za), 1.5);
+    polyN(wallQuad(xf - s * 0.05, Z(za), xf - s * 0.05, zb, h - 0.25, h), toneN('#fbf6ee', za));
+    // Three floors of tall windows, white frames, and a door on the ground floor.
+    const fh = (h - 1) / 3;
+    for (let f = 0; f < 3; f++) {
+      for (let k = 0; k < 2; k++) {
+        const ua = 0.16 + k * 0.42; if (f === 0 && k === 0) { continue; }
+        winN(L, x, z0, za + w * ua, za + w * (ua + 0.26), 0.8 + f * fh, 0.8 + f * fh + fh * 0.62, '#3a4a5a', '#ffffff', lit[f * 2 + k] < 0.25 + night * 0.6);
+      }
+    }
+    if (za + w * 0.42 > z0) { polyN(wallQuad(xf - s * 0.02, Z(za + w * 0.16), xf - s * 0.02, za + w * 0.42, 0, 2.2), toneN(['#2f4a3a', '#5a2a2a', '#2a3a5a'][i % 3], za)); }
+  }
+}
+// A modern house: flat roof, a glass ground floor, and a timber-clad upper floor that juts out.
+function drawModern(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xc = x - s * 1.5, ua = Math.max(L.z0 + len * 0.22, z0), lit = rngN(L.seed + 23)() < 0.5 + night * 0.5;
+  const gq = wallQuad(x - s * 0.05, z0, x - s * 0.05, L.z0 + len * 0.8, 0.15, 2.9);
+  polyN(gq, glassFill(gq, '#6a8494', lit, mid), toneN('#2a2a2a', mid), 2);
+  if (L.z0 + len * 0.8 > z0) { ctx.strokeStyle = toneN('#2a2a2a', mid); ctx.lineWidth = 2; ctx.beginPath(); for (let u = 0.2; u < 0.8; u += 0.2) { const zz = L.z0 + len * u; if (zz > z0) { segN(P(x - s * 0.06, 0.15, zz), P(x - s * 0.06, 2.9, zz)); } } ctx.stroke(); }
+  if (L.z1 > ua) {
+    polyN([P(x, 3.1, ua), P(x, 3.1, L.z1), P(xc, 3.1, L.z1), P(xc, 3.1, ua)], toneN('#3a3a3a', mid, 0.7));
+    polyN(wallQuad(xc, ua, xc, L.z1, 3.1, H), toneN(L.color, mid));
+    ctx.strokeStyle = toneN(shadeN(L.color, 0.75), mid); ctx.lineWidth = 1; ctx.beginPath();
+    for (let zz = Math.ceil(ua / 0.18) * 0.18; zz < L.z1; zz += 0.18) { segN(P(xc - s * 0.01, 3.1, zz), P(xc - s * 0.01, H, zz)); }
+    ctx.stroke();
+    const sq = wallQuad(xc - s * 0.03, Math.max(ua + 0.6, z0), xc - s * 0.03, L.z1 - len * 0.12, 3.9, H - 0.7);
+    polyN(sq, glassFill(sq, '#5a7484', lit, mid), toneN('#1e1e1e', mid), 2);
+    if (ua > cam.z + NEAR_Z) { polyN(wallQuad(x, ua, xc, ua, 3.1, H), toneN(L.color, ua, 0.6)); }
+    polyN(wallQuad(xc - s * 0.04, ua, xc - s * 0.04, L.z1, H - 0.25, H), toneN('#1e1e1e', mid));
+  }
+}
+// A "vertical forest" condo: a tall concrete block with trees planted on every balcony.
+function drawGreenCondo(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), floors = Math.max(4, Math.floor(H / 3.4)), bays = Math.max(2, Math.round(len / 3.4)), r = rngN(L.seed + 24);
+  const rows = []; for (let f = 1; f < floors; f++) { rows.push([f * 3.4 + 0.4, f * 3.4 + 2.6]); }
+  facadeWindows(L, x, z0, z1, rows, bays, { padU: 0.12, lit: 0.3, glass: '#5a7080' });
+  polyN(wallQuad(x - s * 0.03, z0, x - s * 0.03, z1, 0, 3.2), toneN('#3a3e44', mid));
+  facadeWindows(L, x, z0, z1, [[0.3, 2.9]], Math.max(1, Math.round(len / 5)), { padU: 0.08, lit: 0.8, glass: '#ffd98a' });
+  const greens = ['#4f8a3a', '#6aa04a', '#3f7a4a', '#8ab04a', '#5a9a5a'];
+  for (let f = 1; f < floors; f++) {
+    const y = f * 3.4;
+    polyN([P(x, y, z0), P(x, y, z1), P(x - s * 1.4, y, z1), P(x - s * 1.4, y, z0)], toneN('#d8d4cc', mid, 0.9));
+    polyN(wallQuad(x - s * 1.4, z0, x - s * 1.4, z1, y - 0.3, y + 0.5), toneN('#c8c4bc', mid));
+    for (let i = 0; i < bays * 2; i++) {
+      const zc = L.z0 + len * (i + 0.5) / (bays * 2), sz = 0.6 + r() * 0.7, gc = greens[Math.floor(r() * greens.length)];
+      if (zc < z0 + 0.4) { continue; }
+      const p = P(x - s * 1.1, y + 0.6 + sz * 0.6, zc); if (p.rz < 1 || p.k * sz < 1.2) { continue; }
+      ctx.fillStyle = toneN(gc, zc, 0.8); ctx.beginPath(); ctx.arc(p.x, p.y + p.k * sz * 0.2, sz * p.k, 0, TWO_PI); ctx.fill();
+      ctx.fillStyle = toneN(gc, zc, 1.1); ctx.beginPath(); ctx.arc(p.x - p.k * sz * 0.25, p.y - p.k * sz * 0.2, sz * p.k * 0.65, 0, TWO_PI); ctx.fill();
+    }
+  }
+  facadeSign(L, x, z0, L.z0 + len * 0.15, L.z0 + len * 0.85, 2.4, 3.1, toneN('#2f5a3a', mid), '#e8f0d8', L.name);
+}
+// A retro diner: chrome walls, a red stripe, a long window, a chequered skirt and a neon sign on the roof.
+function drawDiner(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xf = x - s * 0.04, flick = Math.sin(clockT * 19 + L.seed) > -0.92;
+  const wq = wallQuad(xf, z0, xf, z1, 1.1, 2.9); polyN(wq, glassFill(wq, '#ffe4a8', true, mid), toneN('#b8bcc0', mid), 2);
+  polyN(wallQuad(xf - s * 0.02, z0, xf - s * 0.02, z1, 3.0, 3.45), toneN(L.brand, mid));
+  for (let zz = Math.floor(L.z0 / 0.5) * 0.5, i = 0; zz < L.z1; zz += 0.5, i++) { if (zz + 0.5 < z0) { continue; } polyN(wallQuad(xf - s * 0.02, Math.max(zz, z0), xf - s * 0.02, Math.min(zz + 0.5, L.z1), i % 2 ? 0 : 0.5, i % 2 ? 0.5 : 1), toneN('#1e1e1e', zz)); }
+  polyN(wallQuad(xf - s * 0.02, z0, xf - s * 0.02, z1, 0, 1), rgbaN('#ffffff', 0.0), toneN('#1e1e1e', mid), 1);
+  const dz = L.z0 + len * 0.82; if (dz + 1 > z0) { polyN(wallQuad(xf - s * 0.02, Math.max(dz, z0), xf - s * 0.02, dz + 1, 0, 2.9), toneN('#c8ccd0', dz), toneN('#7a7e82', dz), 1); }
+  facadeSign(L, x, z0, L.z0 + len * 0.15, L.z0 + len * 0.75, H + 0.3, H + 1.7, '#1e1e24', flick ? '#ff6a9a' : '#5a3040', L.name, flick ? '#ff3a7a' : null, 'bold 15px Georgia, serif');
+  facadeSign(L, x, z0, L.z0 + len * 0.76, L.z0 + len * 0.96, H + 0.4, H + 1.1, '#1e1e24', '#7affd8', 'OPEN 24H', '#3affc8', 'bold 11px Georgia, serif');
+}
+// A supermarket: a long low box, a huge brand band, sliding glass doors and trolleys out the front.
+function drawSupermarket(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xf = x - s * 0.04;
+  polyN(wallQuad(xf, z0, xf, z1, H - 2, H), toneN(L.brand, mid));
+  facadeSign(L, x - s * 0.02, z0, L.z0 + len * 0.1, L.z0 + len * 0.9, H - 1.8, H - 0.2, toneN(L.brand, mid), '#ffffff', L.name, null, 'bold 15px Georgia, serif');
+  const ea = L.z0 + len * 0.38, eb = L.z0 + len * 0.62;
+  if (eb > z0) { const q = wallQuad(xf - s * 0.02, Math.max(ea, z0), xf - s * 0.02, eb, 0, 3.2); polyN(q, glassFill(q, '#8aa4b4', true, ea), toneN('#e8e8e8', ea), 2); }
+  const posters = ['SALE', '2 FOR 1', 'BIG DEALS', 'BUY MORE'];
+  for (const [u, i] of [[0.08, 0], [0.22, 1], [0.7, 2], [0.84, 3]]) { const za = L.z0 + len * u; if (za + len * 0.1 > z0) { facadeSign(L, x, z0, za, za + len * 0.1, 0.9, 2.4, toneN(i % 2 ? '#f2d13a' : '#e8322a', za), '#1e1e1e', posters[i], null, 'bold 14px Georgia, serif'); } }
+  // A row of trolleys.
+  ctx.strokeStyle = toneN('#a8acb0', mid); ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let i = 0; i < 6; i++) { const zz = L.z0 + len * 0.66 + i * 0.35; if (zz < z0 || zz > L.z1) { continue; } const xb = x - s * 1.4; segN(P(xb, 0.2, zz), P(xb, 1.0, zz)); segN(P(xb, 1.0, zz), P(xb - s * 0.9, 1.0, zz)); segN(P(xb - s * 0.9, 1.0, zz), P(xb - s * 0.9, 0.3, zz)); segN(P(xb, 0.3, zz), P(xb - s * 0.9, 0.3, zz)); }
+  ctx.stroke();
+}
+// A cinema: brick front, a lit marquee full of bulbs, and a tall blade sign with the name down it.
+function drawCinema(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), za = Math.max(L.z0 + len * 0.1, z0), zb = L.z1 - len * 0.1;
+  if (zb > za) {
+    polyN([P(x, 3.6, za), P(x, 3.6, zb), P(x - s * 2, 3.6, zb), P(x - s * 2, 3.6, za)], toneN('#2a1e1a', mid, 0.8));
+    polyN(wallQuad(x - s * 2, za, x - s * 2, zb, 3.6, 5.2), toneN('#f4ecd8', mid));
+    facadeSign({ side: s, z0: za, z1: zb }, x - s * 2, z0, za + 0.2, zb - 0.2, 3.8, 5.0, '#f4ecd8', '#c8322a', L.film, null, 'bold 12px Georgia, serif');
+    for (let zz = za + 0.2, i = 0; zz < zb; zz += 0.45, i++) { for (const y of [3.65, 5.15]) { const p = P(x - s * 2.02, y, zz); if (p.rz > 1) { ctx.fillStyle = (i + Math.floor(clockT * 6)) % 3 ? '#fff2b0' : '#ffb040'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.k * 0.07), 0, TWO_PI); ctx.fill(); } } }
+  }
+  for (const u of [0.25, 0.6]) { const pa = L.z0 + len * u; if (pa + len * 0.14 > z0) { facadeSign(L, x, z0, pa, pa + len * 0.14, 0.8, 3.0, toneN('#1e1e24', pa), '#f2d13a', 'COMING SOON', null, 'bold 10px Georgia, serif'); } }
+  // The blade sign: a tall panel sticking out from the wall, the name in stacked letters.
+  const zc = L.z0 + len * 0.5, ya = 5.6, yb = Math.min(H + 2.5, ya + L.name.length * 1.2 + 0.8);
+  if (zc > cam.z + 1) {
+    polyN([P(x - s * 0.1, ya, zc), P(x - s * 1.7, ya, zc), P(x - s * 1.7, yb, zc), P(x - s * 0.1, yb, zc)], toneN('#c8322a', zc), '#ffd860', 2);
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    [...L.name].forEach((ch, i) => { const p = P(x - s * 0.9, yb - 0.9 - i * 1.2, zc); if (p.rz < 1) { return; } ctx.font = `bold ${Math.max(6, p.k * 0.95)}px Georgia, serif`; ctx.fillStyle = '#fff2b0'; ctx.shadowColor = '#ffb040'; ctx.shadowBlur = 6; ctx.fillText(ch, p.x, p.y); });
+    ctx.restore();
+  }
+}
+// A shopping mall: a big blank box with brand panels, a glass atrium entrance and the mall's name.
+function drawMall(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xf = x - s * 0.04;
+  const brands = [['BUY MORE', '#e8322a'], ['SHOP & CO', '#2a5ab8'], ['NEED IT', '#f2a01a'], ['MEGA', '#2a8a4a'], ['MORE & MORE', '#8a3a9a']];
+  const n = Math.max(2, Math.round(len / 5));
+  for (let i = 0; i < n; i++) { const za = L.z0 + len * (i + 0.12) / n, zb = L.z0 + len * (i + 0.88) / n, [nm, col] = brands[(i + Math.abs(L.seed)) % brands.length]; if (zb > z0) { facadeSign(L, x, z0, za, zb, H * 0.55, H * 0.55 + 2.2, toneN(col, za), '#ffffff', nm, null, 'bold 14px Georgia, serif'); } }
+  const ea = L.z0 + len * 0.35, eb = L.z0 + len * 0.65;
+  if (eb > z0) {
+    const q = wallQuad(xf - s * 0.4, Math.max(ea, z0), xf - s * 0.4, eb, 0, H * 0.45); polyN(q, glassFill(q, '#9ab8c8', night > 0.3, mid), toneN('#e8e8e8', mid), 2);
+    polyN([P(xf - s * 0.4, H * 0.45, Math.max(ea, z0)), P(xf - s * 0.4, H * 0.45, eb), P(xf + s * 2, H * 0.45 + 3, midN(ea, eb))], rgbaN('#b8d0dc', 0.85), toneN('#e8e8e8', mid), 2);
+  }
+  facadeSign(L, x, z0, L.z0 + len * 0.2, L.z0 + len * 0.8, H - 2.4, H - 0.6, toneN('#f4ecd8', mid), '#2a2a2a', L.name, null, 'bold 15px Georgia, serif');
+  polyN(wallQuad(xf, z0, xf, z1, 0, 0.6), toneN('#5a5a60', mid));
+}
+// An electrical substation: gravel behind a wire fence, humming transformers, insulators and a pylon.
+function drawSubstation(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), d = L.depth, xf = x + s * d;
+  polyN([P(x, 0.03, z0), P(x, 0.03, z1), P(xf, 0.03, z1), P(xf, 0.03, z0)], toneN('#9a968e', mid));
+  // Transformers: grey boxes with ribbed fins.
+  for (const u of [0.25, 0.65]) {
+    const zc = L.z0 + len * u, xb = x + s * d * 0.45; if (zc - 1.2 < z0) { continue; }
+    polyN(wallQuad(xb - s * 1.4, zc - 1.2, xb - s * 1.4, zc + 1.2, 0, 2.6), toneN('#8a9094', zc));
+    if (zc - 1.2 > cam.z + 1) { polyN(wallQuad(xb - s * 1.4, zc - 1.2, xb + s * 1.4, zc - 1.2, 0, 2.6), toneN('#6a7074', zc)); }
+    ctx.strokeStyle = toneN('#5a6064', zc); ctx.lineWidth = 1; ctx.beginPath(); for (let zz = zc - 1.1; zz < zc + 1.2; zz += 0.25) { segN(P(xb - s * 1.42, 0.2, zz), P(xb - s * 1.42, 2.4, zz)); } ctx.stroke();
+    ctx.strokeStyle = toneN('#c8b090', zc); ctx.lineWidth = Math.max(1, P(xb, 0, zc).k * 0.1); ctx.beginPath(); for (const dz of [-0.6, 0, 0.6]) { segN(P(xb, 2.6, zc + dz), P(xb, 4, zc + dz)); } ctx.stroke();
+  }
+  // A lattice pylon at the back, carrying the wires away down the street.
+  const pz = L.z0 + len * 0.5, px = x + s * d * 0.85, PH = 20;
+  if (pz > cam.z + 2) {
+    ctx.strokeStyle = toneN('#6a6e72', pz); ctx.lineWidth = Math.max(1, P(px, 0, pz).k * 0.08); ctx.beginPath();
+    segN(P(px, 0, pz - 2.2), P(px, PH, pz - 0.3)); segN(P(px, 0, pz + 2.2), P(px, PH, pz + 0.3));
+    for (let y = 2; y < PH; y += 2.5) { const w0 = 2.2 * (1 - y / PH) + 0.3, w1 = 2.2 * (1 - (y + 2.5) / PH) + 0.3; segN(P(px, y, pz - w0), P(px, y + 2.5, pz + w1)); segN(P(px, y, pz + w0), P(px, y + 2.5, pz - w1)); }
+    for (const [y, a] of [[PH * 0.7, 3.5], [PH * 0.9, 2.5]]) { segN(P(px, y, pz - a), P(px, y, pz + a)); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,30,30,0.6)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (const [y, a] of [[PH * 0.7, 3.5], [PH * 0.9, 2.5]]) { for (const sg of [-1, 1]) { const a0 = P(px, y, pz + sg * a), a1 = P(px, y - 3, pz + sg * a + 25); if (a0.rz > 1 && a1.rz > 1) { ctx.moveTo(a0.x, a0.y); ctx.quadraticCurveTo((a0.x + a1.x) / 2, Math.max(a0.y, a1.y) + 8, a1.x, a1.y); } } }
+    ctx.stroke();
+  }
+  // Chain-link fence along the pavement and a warning sign.
+  const xe = x - s * 0.1; ctx.strokeStyle = toneN('#8a8e92', mid); ctx.lineWidth = 1; ctx.beginPath();
+  for (let zz = Math.ceil(z0 / 0.3) * 0.3; zz < L.z1; zz += 0.3) { segN(P(xe, 0, zz), P(xe, 2.2, zz + 0.3)); segN(P(xe, 2.2, zz), P(xe, 0, zz + 0.3)); }
+  segN(P(xe, 2.2, z0), P(xe, 2.2, L.z1)); ctx.stroke();
+  const wz = L.z0 + len * 0.45; if (wz > z0) { facadeSign(L, xe + s * 0.1, z0, wz, wz + 1.6, 1.0, 1.9, '#f2d13a', '#1e1e1e', 'DANGER', null, 'bold 14px Georgia, serif'); }
+}
+// A power station: a turbine hall, and cooling towers behind it pouring out white steam.
+function drawPowerPlant(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1);
+  facadeWindows(L, x, z0, z1, [[H - 3, H - 1]], Math.max(3, Math.round(len / 2)), { padU: 0.1, lit: 0.2, glass: '#6a7a86' });
+  facadeSign(L, x, z0, L.z0 + len * 0.1, L.z0 + len * 0.9, 2.6, 3.8, toneN('#2a5a3a', mid), '#e8f0d8', L.name, null, 'bold 14px Georgia, serif');
+  for (let c = 0; c < 2; c++) {
+    const zc = L.z0 + len * (0.3 + c * 0.42), xc = x + s * (L.depth + 6 + c * 3), T = 26 + c * 4, R = 6;
+    if (zc < cam.z + 4) { continue; }
+    const base = P(xc, 0, zc); if (base.rz < 2) { continue; }
+    // A hyperboloid silhouette: narrow waist two thirds up, flaring at the top.
+    const left = [], right = [];
+    for (let i = 0; i <= 12; i++) { const y = T * i / 12, t = i / 12, rad = R * (0.62 + 0.38 * Math.pow((t - 0.72) / 0.72, 2)) + (t > 0.72 ? (t - 0.72) * 2.2 : 0), p = P(xc, y, zc); left.push({ x: p.x - rad * p.k, y: p.y }); right.unshift({ x: p.x + rad * p.k, y: p.y }); }
+    const g = ctx.createLinearGradient(left[0].x, 0, right[right.length - 1].x, 0); g.addColorStop(0, toneN('#b8b4ac', zc, 0.8)); g.addColorStop(0.6, toneN('#e0dcd4', zc)); g.addColorStop(1, toneN('#a8a49c', zc, 0.85));
+    ctx.fillStyle = g; ctx.beginPath(); [...left, ...right].forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.fill();
+    for (let i = 0; i < 9; i++) {
+      const t = modN(clockT * 0.08 + i / 9 + c * 0.3, 1), p = P(xc + s * t * 4, T + 2 + t * 22, zc - t * 10); if (p.rz < 1) { continue; }
+      ctx.fillStyle = rgbaN('#f4f2ee', 0.75 * (1 - t) * Math.min(1, t / 0.05)); ctx.beginPath(); ctx.arc(p.x, p.y, (R * 0.9 + t * 7) * p.k, 0, TWO_PI); ctx.fill();
+    }
+  }
+}
+// A data centre: a windowless box of grey panels, rows of fans, blinking lights and a friendly name.
+function drawDataCentre(L, x, z0, z1, H) {
+  const s = L.side, len = L.z1 - L.z0, mid = midN(z0, z1), xf = x - s * 0.03;
+  ctx.strokeStyle = 'rgba(30,30,40,0.18)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let y = 1.5; y < H; y += 1.5) { segN(P(xf, y, z0), P(xf, y, z1)); }
+  for (let zz = Math.ceil(L.z0 / 3) * 3; zz < z1; zz += 3) { if (zz > z0) { segN(P(xf, 0, zz), P(xf, H, zz)); } }
+  ctx.stroke();
+  for (let zz = L.z0 + 1.2; zz < L.z1 - 0.8; zz += 2.4) {
+    if (zz < z0) { continue; }
+    const p = P(xf - s * 0.02, H - 1.6, zz); if (p.rz < 1) { continue; }
+    const rad = 0.75 * p.k; ctx.fillStyle = toneN('#3a3e46', zz); ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = toneN('#8a909a', zz); ctx.lineWidth = Math.max(1, rad * 0.12); const a = clockT * 6 + zz;
+    ctx.beginPath(); for (let k = 0; k < 3; k++) { const b = a + k * TWO_PI / 3; ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(b) * rad * 0.85, p.y + Math.sin(b) * rad * 0.85); } ctx.stroke();
+  }
+  const r = rngN(L.seed + 31);
+  for (let i = 0; i < 24; i++) { const zz = L.z0 + r() * len, y = 1 + r() * (H - 4), on = Math.sin(clockT * (3 + r() * 6) + i) > 0; if (zz < z0 || !on) { continue; } const p = P(xf - s * 0.02, y, zz); if (p.rz > 1) { ctx.fillStyle = i % 3 ? '#4affb0' : '#4ab0ff'; ctx.fillRect(p.x - 1, p.y - 1, Math.max(2, p.k * 0.12), Math.max(2, p.k * 0.12)); } }
+  facadeSign(L, x, z0, L.z0 + len * 0.2, L.z0 + len * 0.8, 1.2, 2.6, toneN('#e8eef4', mid), '#2a5ab8', L.name, null, 'bold 15px Georgia, serif');
+}
+// A glass tower with its top cut off at a slant: the glass roof rises away from the street, so you
+// see it from below, with a wedge on the near end, and a red light blinking for aircraft.
+function drawSlantTop(L, x, z0, z1, H) {
+  drawTower(L, x, z0, z1, H);
+  const s = L.side, xo = x + s * L.depth, H2 = H + L.depth * 1.3, mid = midN(z0, z1);
+  const q = [P(x, H, z0), P(x, H, z1), P(xo, H2, z1), P(xo, H2, z0)];
+  const g = ctx.createLinearGradient(0, Math.min(q[2].y, q[3].y), 0, Math.max(q[0].y, q[1].y));
+  g.addColorStop(0, toneN('#d8e8f2', mid, 1.05)); g.addColorStop(1, toneN(L.color, mid, 0.9));
+  polyN(q, g, toneN('#3a4a5a', mid), 1);
+  ctx.strokeStyle = toneN('#3a4a5a', mid); ctx.lineWidth = 1; ctx.beginPath();
+  for (let zz = Math.ceil(L.z0 / 2) * 2; zz < L.z1; zz += 2) { if (zz > z0) { segN(P(x, H, zz), P(xo, H2, zz)); } }
+  for (let t = 0.2; t < 1; t += 0.2) { segN(P(x + s * L.depth * t, H + (H2 - H) * t, z0), P(x + s * L.depth * t, H + (H2 - H) * t, z1)); }
+  ctx.stroke();
+  if (L.z0 > cam.z + NEAR_Z) { polyN([P(x, H, L.z0), P(xo, H, L.z0), P(xo, H2, L.z0)], toneN(L.color, L.z0, 0.62), toneN('#3a4a5a', L.z0), 1); }
+  const lp = P(xo, H2 + 0.8, mid);
+  if (lp.rz > 1 && Math.sin(clockT * 3) > 0.3) { ctx.save(); ctx.fillStyle = '#ff3030'; ctx.shadowColor = '#ff3030'; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(lp.x, lp.y, Math.max(2, lp.k * 0.5), 0, TWO_PI); ctx.fill(); ctx.restore(); }
+}
 // One window on a facade at x, between za..zb along the street and ya..yb up.
 function winN(L, x, z0, za, zb, ya, yb, glass, frame, lit) {
   if (zb <= z0) { return; }
@@ -1438,6 +1684,10 @@ function wallMaterial(L) {
   if (L.style === 'bungalow') { return L.brick ? 'brick' : 'board'; }
   if (L.style === 'caravan' || L.style === 'castle' || L.style === 'factory' || L.style === 'carpark' || L.style === 'petrol') { return null; }
   if (L.style === 'apartment') { return 'render'; }
+  if (L.style === 'cabin') { return 'board'; }
+  if (L.style === 'canal' || L.style === 'cinema') { return 'brick'; }
+  if (L.style === 'greencondo' || L.style === 'supermarket' || L.style === 'mall' || L.style === 'datacentre') { return 'render'; }
+  if (L.style === 'modern' || L.style === 'diner' || L.style === 'substation' || L.style === 'powerplant' || L.style === 'slanttop') { return null; }
   if (L.style === 'villa') { return 'render'; }
   if (L.tier === 0) { return 'board'; }
   if (L.tier === 1 || L.tier === 3 && !L.glass) { return 'brick'; }
@@ -1474,7 +1724,7 @@ function drawWeathering(L, x, z0, z1, H) {
   if (base.rz < 1) { return; }
   let g = ctx.createLinearGradient(base.x, base.y, up.x, up.y); g.addColorStop(0, 'rgba(20,12,6,0.32)'); g.addColorStop(1, 'rgba(20,12,6,0)');
   polyN(wallQuad(x - s * 0.2, z0, x - s * 0.2, z1, 0, 0.8), g);
-  if (L.style !== 'castle' && L.style !== 'caravan' && !(L.tier === 4 && !L.style)) {
+  if (L.style !== 'castle' && L.style !== 'caravan' && L.style !== 'slanttop' && L.style !== 'diner' && !(L.tier === 4 && !L.style)) {
     const e0 = P(x, H, mid), e1 = P(x, H - 1, mid);
     g = ctx.createLinearGradient(e0.x, e0.y, e1.x, e1.y); g.addColorStop(0, 'rgba(20,12,6,0.34)'); g.addColorStop(1, 'rgba(20,12,6,0)');
     polyN(wallQuad(x - s * 0.21, z0, x - s * 0.21, z1, H - 1, H), g);
@@ -1796,7 +2046,20 @@ const STYLES_LOT = {
   factory: { tier: 3, len: [16, 24], setback: 2, name: 'Factory', moved: 0, priceK: 1, col: ['#8a9096', '#c0c4c8'] },
   carpark: { tier: 1, len: [12, 20], setback: 0.6, name: 'Car park', moved: 0, priceK: 1, col: ['#3c3c42', '#8a8a90'] },
   petrol: { tier: 1, len: [12, 18], setback: 0.8, name: 'Petrol station', moved: 0, priceK: 1, col: ['#d8322a', '#f2efe6'] },
-  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] }
+  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] },
+  // More things your hands can build (see makeBuilt).
+  cabin: { tier: 0, len: [8, 12], setback: 3, name: 'Log cabin', moved: 1, priceK: 1, col: ['#8a5a3a', '#d8c0a0'] },
+  canal: { tier: 1, len: [8, 14], setback: 0.4, name: 'Row houses', moved: 3, priceK: 1, col: ['#c8584a', '#e8b04a'] },
+  modern: { tier: 2, len: [10, 14], setback: 4, name: 'Modern house', moved: 1, priceK: 1, col: ['#3a3e44', '#c8b49a'] },
+  greencondo: { tier: 3, len: [12, 20], setback: 3, name: 'Green condos', moved: 8, priceK: 1, col: ['#4f8a3a', '#d8d4cc'] },
+  diner: { tier: 0, len: [8, 12], setback: 1.5, name: 'Diner', moved: 0, priceK: 1, col: ['#d8322a', '#d8dce0'] },
+  supermarket: { tier: 1, len: [12, 20], setback: 3, name: 'Supermarket', moved: 0, priceK: 1, col: ['#2a8a4a', '#e8e4dc'] },
+  cinema: { tier: 1, len: [10, 16], setback: 0.6, name: 'Cinema', moved: 0, priceK: 1, col: ['#c8322a', '#f4ecd8'] },
+  mall: { tier: 3, len: [14, 24], setback: 4, name: 'Mall', moved: 0, priceK: 1, col: ['#e0d8c8', '#2a5ab8'] },
+  substation: { tier: 1, len: [8, 14], setback: 0.6, name: 'Substation', moved: 0, priceK: 1, col: ['#9a968e', '#f2d13a'] },
+  powerplant: { tier: 3, len: [12, 20], setback: 2, name: 'Power station', moved: 0, priceK: 1, col: ['#a8a49a', '#2a5a3a'] },
+  datacentre: { tier: 3, len: [12, 20], setback: 2, name: 'Data centre', moved: 0, priceK: 1, col: ['#c8ccd2', '#2a5ab8'] },
+  slanttop: { tier: 4, len: [12, 20], setback: 2, name: 'Glass tower', moved: 0, priceK: 1, col: ['#7fa8c8', '#c8dcea'] }
 };
 function townSlot(slot) { return TOWNS[zone].slots[slot]; }
 function chunkStyle(slot) { const v = townSlot(slot); return typeof v === 'string' ? v : null; }
@@ -1854,7 +2117,7 @@ function lifeKind(L) {
   const pool = L.style === 'caravan' || L.tier === 0 ? ['dog', 'radio', 'baby', 'tv', 'kids'] : L.tier >= 3 ? ['tv', 'piano', 'baby', 'talk'] : L.tier === 2 ? ['piano', 'dog', 'kids', 'talk'] : ['kids', 'dog', 'piano', 'cook', 'tv', 'baby'];
   return pool[Math.abs(L.seed >> 3) % pool.length];
 }
-function lived(L) { return !L.special && !L.vacant && L.style !== 'carpark' && L.style !== 'petrol' && L.style !== 'factory' && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
+function lived(L) { return !L.special && !L.vacant && !['carpark', 'petrol', 'factory', 'substation', 'powerplant', 'datacentre'].includes(L.style) && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
 function houseLife() {
   if (!sound || !sound.life) { return; }
   const listen = intro || ending || turnAnim ? 0 : easeN((stillT - 0.6) / 1.2);
@@ -2311,14 +2574,16 @@ function chopForest(side) {
 // skyscrapers that stand empty, and on a big lot a castle).
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
-  //   open hand: bungalows, cottages, caravans -> terraces, villas, mansions -> apartment blocks
-  //   pointing:  petrol stations, corner shops -> high-street shops -> brick offices
-  //   fist:      car parks -> factories -> skyscrapers that stand empty
+  //   open hand: bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern houses,
+  //              villas, mansions -> apartment blocks, "vertical forest" condos
+  //   pointing:  petrol stations, corner shops, diners -> high-street shops, supermarkets, cinemas -> offices, malls
+  //   fist:      car parks, substations -> factories, power stations, data centres -> empty skyscrapers, slant-topped towers
   const r = rngN(L.seed + 5 + builtCount * 31 + level * 7), len = L.z1 - L.z0;
   let opts;
-  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark']] : level === 1 ? (len >= 9 ? [['style', 'factory'], ['style', 'factory'], ['tier', 3]] : [['tier', 3]]) : [['tier', 4], ['tier', 4], ['tier', 3]]; }
-  else if (kind === 'shop') { opts = level === 0 ? (len >= 11 ? [['style', 'petrol'], ['tier', 0]] : [['tier', 0]]) : level === 1 ? [['tier', 1]] : [['tier', 3]]; }
-  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0]].concat(len >= 10 ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1]].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment']]; }
+  const big = len >= 10;
+  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark'], ['style', 'substation']] : level === 1 ? [['style', 'datacentre']].concat(len >= 9 ? [['style', 'factory'], ['tier', 3]] : [['tier', 3]], big ? [['style', 'powerplant']] : []) : [['tier', 4], ['style', 'slanttop'], ['tier', 3]]; }
+  else if (kind === 'shop') { opts = level === 0 ? [['tier', 0], ['style', 'diner']].concat(len >= 11 ? [['style', 'petrol']] : []) : level === 1 ? [['tier', 1]].concat(big ? [['style', 'supermarket'], ['style', 'cinema']] : [['style', 'cinema']]) : [['tier', 3]].concat(big ? [['style', 'mall']] : []); }
+  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0], ['style', 'cabin']].concat(big ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1], ['style', 'canal'], ['style', 'modern']].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment'], ['style', 'greencondo']]; }
   const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(null, tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
@@ -2377,7 +2642,7 @@ function growLot(L, add, cap) {
   if (L.grow >= 1) {
     L.born = clockT - RISE_T - 1; L.thud = true; builtCount++;
     if (L.buildKind === 'tower') { towersBuilt++; } else if (L.buildKind === 'shop') { shopsBuilt++; } else { homesBuilt++; }
-    if (L.style === 'factory') { factoriesBuilt++; }
+    if (L.style === 'factory' || L.style === 'powerplant') { factoriesBuilt++; }
     if (sound.built) { sound.built(L.buildKind === 'tower'); }
   }
 }

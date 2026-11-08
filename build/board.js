@@ -28,7 +28,20 @@ const STYLES_LOT = {
   factory: { tier: 3, len: [16, 24], setback: 2, name: 'Factory', moved: 0, priceK: 1, col: ['#8a9096', '#c0c4c8'] },
   carpark: { tier: 1, len: [12, 20], setback: 0.6, name: 'Car park', moved: 0, priceK: 1, col: ['#3c3c42', '#8a8a90'] },
   petrol: { tier: 1, len: [12, 18], setback: 0.8, name: 'Petrol station', moved: 0, priceK: 1, col: ['#d8322a', '#f2efe6'] },
-  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] }
+  caravan: { tier: 0, len: [6, 7.5], setback: 1.2, name: 'Caravan park', moved: 2, priceK: 0.7, col: ['#8b5a2b', '#d8c0a0'] },
+  // More things your hands can build (see makeBuilt).
+  cabin: { tier: 0, len: [8, 12], setback: 3, name: 'Log cabin', moved: 1, priceK: 1, col: ['#8a5a3a', '#d8c0a0'] },
+  canal: { tier: 1, len: [8, 14], setback: 0.4, name: 'Row houses', moved: 3, priceK: 1, col: ['#c8584a', '#e8b04a'] },
+  modern: { tier: 2, len: [10, 14], setback: 4, name: 'Modern house', moved: 1, priceK: 1, col: ['#3a3e44', '#c8b49a'] },
+  greencondo: { tier: 3, len: [12, 20], setback: 3, name: 'Green condos', moved: 8, priceK: 1, col: ['#4f8a3a', '#d8d4cc'] },
+  diner: { tier: 0, len: [8, 12], setback: 1.5, name: 'Diner', moved: 0, priceK: 1, col: ['#d8322a', '#d8dce0'] },
+  supermarket: { tier: 1, len: [12, 20], setback: 3, name: 'Supermarket', moved: 0, priceK: 1, col: ['#2a8a4a', '#e8e4dc'] },
+  cinema: { tier: 1, len: [10, 16], setback: 0.6, name: 'Cinema', moved: 0, priceK: 1, col: ['#c8322a', '#f4ecd8'] },
+  mall: { tier: 3, len: [14, 24], setback: 4, name: 'Mall', moved: 0, priceK: 1, col: ['#e0d8c8', '#2a5ab8'] },
+  substation: { tier: 1, len: [8, 14], setback: 0.6, name: 'Substation', moved: 0, priceK: 1, col: ['#9a968e', '#f2d13a'] },
+  powerplant: { tier: 3, len: [12, 20], setback: 2, name: 'Power station', moved: 0, priceK: 1, col: ['#a8a49a', '#2a5a3a'] },
+  datacentre: { tier: 3, len: [12, 20], setback: 2, name: 'Data centre', moved: 0, priceK: 1, col: ['#c8ccd2', '#2a5ab8'] },
+  slanttop: { tier: 4, len: [12, 20], setback: 2, name: 'Glass tower', moved: 0, priceK: 1, col: ['#7fa8c8', '#c8dcea'] }
 };
 function townSlot(slot) { return TOWNS[zone].slots[slot]; }
 function chunkStyle(slot) { const v = townSlot(slot); return typeof v === 'string' ? v : null; }
@@ -86,7 +99,7 @@ function lifeKind(L) {
   const pool = L.style === 'caravan' || L.tier === 0 ? ['dog', 'radio', 'baby', 'tv', 'kids'] : L.tier >= 3 ? ['tv', 'piano', 'baby', 'talk'] : L.tier === 2 ? ['piano', 'dog', 'kids', 'talk'] : ['kids', 'dog', 'piano', 'cook', 'tv', 'baby'];
   return pool[Math.abs(L.seed >> 3) % pool.length];
 }
-function lived(L) { return !L.special && !L.vacant && L.style !== 'carpark' && L.style !== 'petrol' && L.style !== 'factory' && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
+function lived(L) { return !L.special && !L.vacant && !['carpark', 'petrol', 'factory', 'substation', 'powerplant', 'datacentre'].includes(L.style) && !L.owned && !L.piece && !L.sold && riseOf(L.born) > 0.9 && (L.sinkK === undefined || L.sinkK > 0.5); }
 function houseLife() {
   if (!sound || !sound.life) { return; }
   const listen = intro || ending || turnAnim ? 0 : easeN((stillT - 0.6) / 1.2);
@@ -543,14 +556,16 @@ function chopForest(side) {
 // skyscrapers that stand empty, and on a big lot a castle).
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
-  //   open hand: bungalows, cottages, caravans -> terraces, villas, mansions -> apartment blocks
-  //   pointing:  petrol stations, corner shops -> high-street shops -> brick offices
-  //   fist:      car parks -> factories -> skyscrapers that stand empty
+  //   open hand: bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern houses,
+  //              villas, mansions -> apartment blocks, "vertical forest" condos
+  //   pointing:  petrol stations, corner shops, diners -> high-street shops, supermarkets, cinemas -> offices, malls
+  //   fist:      car parks, substations -> factories, power stations, data centres -> empty skyscrapers, slant-topped towers
   const r = rngN(L.seed + 5 + builtCount * 31 + level * 7), len = L.z1 - L.z0;
   let opts;
-  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark']] : level === 1 ? (len >= 9 ? [['style', 'factory'], ['style', 'factory'], ['tier', 3]] : [['tier', 3]]) : [['tier', 4], ['tier', 4], ['tier', 3]]; }
-  else if (kind === 'shop') { opts = level === 0 ? (len >= 11 ? [['style', 'petrol'], ['tier', 0]] : [['tier', 0]]) : level === 1 ? [['tier', 1]] : [['tier', 3]]; }
-  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0]].concat(len >= 10 ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1]].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment']]; }
+  const big = len >= 10;
+  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark'], ['style', 'substation']] : level === 1 ? [['style', 'datacentre']].concat(len >= 9 ? [['style', 'factory'], ['tier', 3]] : [['tier', 3]], big ? [['style', 'powerplant']] : []) : [['tier', 4], ['style', 'slanttop'], ['tier', 3]]; }
+  else if (kind === 'shop') { opts = level === 0 ? [['tier', 0], ['style', 'diner']].concat(len >= 11 ? [['style', 'petrol']] : []) : level === 1 ? [['tier', 1]].concat(big ? [['style', 'supermarket'], ['style', 'cinema']] : [['style', 'cinema']]) : [['tier', 3]].concat(big ? [['style', 'mall']] : []); }
+  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0], ['style', 'cabin']].concat(big ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1], ['style', 'canal'], ['style', 'modern']].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment'], ['style', 'greencondo']]; }
   const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(null, tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
@@ -609,7 +624,7 @@ function growLot(L, add, cap) {
   if (L.grow >= 1) {
     L.born = clockT - RISE_T - 1; L.thud = true; builtCount++;
     if (L.buildKind === 'tower') { towersBuilt++; } else if (L.buildKind === 'shop') { shopsBuilt++; } else { homesBuilt++; }
-    if (L.style === 'factory') { factoriesBuilt++; }
+    if (L.style === 'factory' || L.style === 'powerplant') { factoriesBuilt++; }
     if (sound.built) { sound.built(L.buildKind === 'tower'); }
   }
 }
