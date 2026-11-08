@@ -9,7 +9,7 @@
  */
 // The band's volume, well above the street hum so it is clearly heard.
 const MUSIC_VOL = 6;
-const MUSIC_NAME = { rich: 'Strings & harp · the forest', city: 'House beat · the city', mid: 'Pop · the new town', poor: 'Old piano' };
+const MUSIC_NAME = { rich: 'Strings and harp - the forest', city: 'House beat - the city', mid: 'Pop - the new town', poor: 'Old piano' };
 const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 const STYLES = {
   // chords as MIDI notes, one bar each

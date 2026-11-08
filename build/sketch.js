@@ -12,9 +12,9 @@ const BOARD_COL = { brown: '#8b5a2b', sky: '#a9d8f0', pink: '#d94f9a', orange: '
 const KERB_COL = [BOARD_COL.brown, BOARD_COL.pink, BOARD_COL.red, BOARD_COL.green, BOARD_COL.navy];
 const SHOP_NAMES = [
   ['Bargain Bin', 'Rusty Nails', 'Patch & Mend', 'Penny Pantry', 'Junk & Co.', 'Second Chance', 'Odd Socks'],
-  ['Corner Café', 'Maple Bakery', 'Paper Moon Books', 'Petal Florist', 'Teapot', 'Little Deli'],
+  ['Corner Cafe', 'Maple Bakery', 'Paper Moon Books', 'Petal Florist', 'Teapot', 'Little Deli'],
   ['', '', '', '', ''],
-  ['Gallery 9', 'Boutique Noir', 'Bistro Lumière', 'The Atelier', 'Velvet Lounge', 'Grand Hotel'],
+  ['Gallery 9', 'Black Door Boutique', 'City Diner', 'The Workshop', 'Velvet Lounge', 'Grand Hotel'],
   ['', '', '']
 ];
 
@@ -1032,8 +1032,8 @@ function drawOverlays() {
 function drawStats() {
   if (!showStats) {return;}
   const s = typeof PostFX !== 'undefined' ? PostFX.stats() : null, fps = frameRate();
-  const lines = [`${fps.toFixed(0)} fps · frame ${(1000 / Math.max(1, fps)).toFixed(1)} ms`, s ? `post FX ${s.on ? s.quality : 'off'} · ${s.fxMs.toFixed(1)} ms` : 'post FX missing',
-    `${chunks.size} chunks · ${[...chunks.values()].reduce((n, ch) => n + ch.lots.length, 0)} lots · ${pixelDensity()}× pixels`];
+  const lines = [`${fps.toFixed(0)} fps, frame ${(1000 / Math.max(1, fps)).toFixed(1)} ms`, s ? `post FX ${s.on ? s.quality : 'off'}, ${s.fxMs.toFixed(1)} ms` : 'post FX missing',
+    `${chunks.size} chunks, ${[...chunks.values()].reduce((n, ch) => n + ch.lots.length, 0)} lots, ${pixelDensity()}x pixels`];
   push(); noStroke(); fill(0, 150); rect(width - 270, height - 92, 258, 74, 6); fill(255); textFont('monospace'); textSize(12); textAlign(LEFT, TOP);
   lines.forEach((l, i) => text(l, width - 260, height - 84 + i * 20)); pop();
 }
