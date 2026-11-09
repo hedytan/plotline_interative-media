@@ -1,52 +1,98 @@
-/* WalkSound - the sound of We Build Our World (extends StreetSound from street-sound.js).
- * Everything is synthesised with the Web Audio API; there are no sound files.
- *   The forest: wind, rustling leaves and birdsong, and slow strings with a harp.
- *   As you build (devK, the share of built lots near you), the wild sounds fade, traffic hum rises
- *   and the music changes at the end of a bar: town pop, then the city's house beat.
- *   Effects: the axe and a falling tree (chop), birds taking off (flutter), a clunk for every floor
- *   (floorUp), a fanfare or a cold chord when a building is finished (built), and the life inside
- *   each home (life: kids, a dog, a piano, the TV ...).
+/* Sound: everything you hear in We Build Our World, made live with the Web Audio API (no sound files).
+ *   The forest: wind, rustling leaves and birdsong, with slow strings and a harp.
+ *   As you build (devK = share of built lots near you), the wild sounds fade, traffic hum rises
+ *   and the music changes at the end of a bar: strings and harp, then pop, then a house beat.
+ *   Effects: footsteps, the axe and a falling tree (chop), birds taking off (flutter), a thud for
+ *   every floor (floorUp), a chord when a building is finished (built), the life inside each home
+ *   (life: kids, a dog, a piano, the TV ...) and a chime at the end (go).
+ * start() from a click or key press (browsers only allow sound after one), then update() every frame.
  */
 // The band's volume, well above the street hum so it is clearly heard.
 const MUSIC_VOL = 6;
-const MUSIC_NAME = { rich: 'Strings and harp - the forest', city: 'House beat - the city', mid: 'Pop - the new town', poor: 'Old piano' };
-const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
+// The three kinds of music, from forest to city. Chords are MIDI note numbers, one chord per bar.
 const STYLES = {
-  // chords as MIDI notes, one bar each
-  rich: { bpm: 72, swing: 0.5, chords: [[48, 55, 59, 64, 67], [45, 52, 57, 60, 64], [41, 48, 53, 57, 64], [43, 50, 55, 59, 62]], gain: 0.95 },
-  city: { bpm: 122, swing: 0.5, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 59], [40, 47, 52, 55]], gain: 0.75 },
-  mid: { bpm: 108, swing: 0.5, chords: [[48, 55, 60, 64], [43, 50, 55, 59], [45, 52, 57, 60], [41, 48, 53, 57]], gain: 0.8 },
-  poor: { bpm: 60, swing: 0.5, chords: [[45, 52, 57, 60], [40, 47, 52, 55], [41, 48, 53, 57], [40, 47, 52, 56]], gain: 0.9 }
+  forest: { name: 'Strings and harp - the forest', bpm: 72, swing: 0.5, chords: [[48, 55, 59, 64, 67], [45, 52, 57, 60, 64], [41, 48, 53, 57, 64], [43, 50, 55, 59, 62]], gain: 0.95 },
+  town: { name: 'Pop - the new town', bpm: 108, swing: 0.5, chords: [[48, 55, 60, 64], [43, 50, 55, 59], [45, 52, 57, 60], [41, 48, 53, 57]], gain: 0.8 },
+  city: { name: 'House beat - the city', bpm: 122, swing: 0.5, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 59], [40, 47, 52, 55]], gain: 0.75 }
 };
+const MIDI = n => 440 * Math.pow(2, (n - 69) / 12);
 
-class WalkSound extends StreetSound {
-  constructor() { super(); this.style = null; this.nextStyle = 'mid'; this.step = 0; this.nextAt = 0; this.mvoices = 0; }
-  _build() {
-    super._build(); if (!this.context) { return; }
-    // The old district pad is kept silent: the band below replaces it.
-    this.padGain.disconnect();
-    // Every family that moves out muffles the band a little, as if the street were emptying.
-    this.muffle = this.context.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 16000; this.muffle.connect(this.master);
-    this.music = this.context.createGain(); this.music.gain.value = 0; this.music.connect(this.muffle);
-    this.styleGain = this.context.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
-    this.music.gain.setTargetAtTime(MUSIC_VOL, this.context.currentTime, 1);
-    // Life inside the houses, heard through the walls: muffled while you walk, clear when you stop to listen.
-    this.lifeFilter = this.context.createBiquadFilter(); this.lifeFilter.type = 'lowpass'; this.lifeFilter.frequency.value = 1100;
-    this.lifeGain = this.context.createGain(); this.lifeGain.gain.value = 1; this.lifeFilter.connect(this.lifeGain); this.lifeGain.connect(this.master);
-    this.listenK = 0;
-    // The forest before the street: wind in the leaves (birds are added in update).
-    this.wind = this._noiseBed(700, 'bandpass', 0); this.leaves = this._noiseBed(3500, 'highpass', 0); this.devK = this.devK || 0; this.devSmooth = 0;
+class WorldSound {
+  constructor() {
+    this.enabled = false; this.context = null;
+    this.voices = 0;    // effect voices playing (footsteps, the end chime)
+    this.mvoices = 0;   // music and effect voices playing (the band, the axe, the homes ...)
+    this.style = null; this.nextStyle = 'forest'; this.step = 0; this.nextAt = 0;
+    this.devK = 0; this.devSmooth = 0; this.listenK = 0;
+    document.addEventListener('visibilitychange', () => this._sync());
   }
+
+  /* ---------- Switching on and off ---------- */
+  async start() { this.enabled = true; if (!this.context) {this._build();} await this._sync(); }
+  async toggle() { this.enabled = !this.enabled; if (this.enabled && !this.context) {this._build();} await this._sync(); }
+  async _sync() {
+    const ctx = this.context; if (!ctx) {return;}
+    if (this.enabled && !document.hidden) { await ctx.resume(); this.master.gain.setTargetAtTime(0.5, ctx.currentTime, 0.4); }
+    else { this.master.gain.setTargetAtTime(0, ctx.currentTime, 0.05); setTimeout(() => { if (!this.enabled || document.hidden) {ctx.suspend();} }, 300); }
+  }
+
+  /* ---------- The sound graph ---------- */
+  _build() {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) {return;}
+    const ctx = this.context = new AC();
+    this.master = ctx.createGain(); this.master.gain.value = 0;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 4;
+    this.master.connect(comp); comp.connect(ctx.destination);
+    this.noise = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+    const d = this.noise.getChannelData(0); for (let i = 0; i < d.length; i++) {d[i] = Math.random() * 2 - 1;}
+    // Street hum and breeze.
+    this.hum = this._noiseBed(260, 'lowpass', 0.035);
+    this.air = this._noiseBed(2400, 'bandpass', 0.008);
+    // The band: every note goes through styleGain (dipped when the style changes) into music.
+    this.music = ctx.createGain(); this.music.gain.value = 0; this.music.connect(this.master);
+    this.styleGain = ctx.createGain(); this.styleGain.gain.value = 1; this.styleGain.connect(this.music);
+    this.music.gain.setTargetAtTime(MUSIC_VOL, ctx.currentTime, 1);
+    // Life inside the houses, heard through the walls: muffled while you walk, clear when you stop to listen.
+    this.lifeFilter = ctx.createBiquadFilter(); this.lifeFilter.type = 'lowpass'; this.lifeFilter.frequency.value = 1100;
+    this.lifeGain = ctx.createGain(); this.lifeGain.gain.value = 1; this.lifeFilter.connect(this.lifeGain); this.lifeGain.connect(this.master);
+    // The forest before the street: wind in the leaves (birds are added in update).
+    this.wind = this._noiseBed(700, 'bandpass', 0); this.leaves = this._noiseBed(3500, 'highpass', 0);
+  }
+  // A looping bed of filtered noise (hum, air, wind, leaves); returns its volume control.
+  _noiseBed(freq, type, gain) {
+    const ctx = this.context, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = this.noise; s.loop = true; f.type = type; f.frequency.value = freq; g.gain.value = gain;
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(); return g;
+  }
+  _ok(n = 3) { return this.enabled && this.context && this.context.state === 'running' && this.voices + n <= 28; }
+  _note(freq, when, dur, type, gain, cutoff = 4000, pan = 0) {
+    const ctx = this.context, o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner();
+    o.type = type; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = cutoff; p.pan.value = pan;
+    g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(gain, when + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(f); f.connect(g); g.connect(p); p.connect(this.master);
+    this.voices += 4; o.onended = () => { this.voices -= 4; o.disconnect(); f.disconnect(); g.disconnect(); p.disconnect(); };
+    o.start(when); o.stop(when + dur + 0.05);
+  }
+  _burst(when, dur, freq, gain, type = 'highpass') {
+    const ctx = this.context, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = this.noise; f.type = type; f.frequency.value = freq;
+    g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(gain, when + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    this.voices += 3; s.onended = () => { this.voices -= 3; s.disconnect(); f.disconnect(); g.disconnect(); };
+    s.start(when, Math.random() * 2); s.stop(when + dur + 0.02);
+  }
+
+  /* ---------- Sounds of the street ---------- */
+  // A footstep: a soft scuff and a low thud, brighter when you run.
+  footstep(pace = 0.4) { if (!this._ok(3)) {return;} const t = this.context.currentTime; this._burst(t, 0.07, 1600 + pace * 900, 0.08 + pace * 0.05); this._burst(t, 0.09, 180, 0.06, 'lowpass'); }
+  // The end: a rising chime.
+  go() { if (!this._ok(12)) {return;} const t = this.context.currentTime; [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this._note(f, t + i * 0.09, 0.5, 'triangle', 0.07)); this._note(2093, t + 0.5, 0.8, 'sine', 0.05); }
   // One sound of somebody's home: kids, a dog, a piano, the TV... Returns how long it lasts.
-  life(kind, gain, pan, memory) {
-    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 36 || !this.lifeFilter) { return 0; }
+  life(kind, gain, pan) {
+    if (!this.enabled || !this.context || this.context.state !== 'running' || this.mvoices > 36) { return 0; }
     const ctx = this.context, t = ctx.currentTime + 0.02, out = ctx.createGain(), p = ctx.createStereoPanner(), made = [out, p];
     out.gain.value = gain; p.pan.value = Math.max(-1, Math.min(1, pan)); out.connect(p);
-    if (memory) {
-      // A memory: far away, dark, with an echo.
-      const f = ctx.createBiquadFilter(), d = ctx.createDelay(1), fb = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 650; d.delayTime.value = 0.27; fb.gain.value = 0.5;
-      p.connect(f); f.connect(this.lifeGain); f.connect(d); d.connect(fb); fb.connect(d); d.connect(this.lifeGain); made.push(f, d, fb);
-    } else { p.connect(this.lifeFilter); }
+    p.connect(this.lifeFilter);
     const R = Math.random;
     const tone = (freq, when, dur, type, g, to) => {
       const o = ctx.createOscillator(), e = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = type; f.type = 'lowpass'; f.frequency.value = 2600;
@@ -139,29 +185,28 @@ class WalkSound extends StreetSound {
     o.connect(g); g.connect(this.styleGain); this.mvoices++; o.onended = () => { this.mvoices--; o.disconnect(); g.disconnect(); };
     o.start(when); o.stop(when + 0.32);
   }
-  update(opts = {}) {
+
+  /* ---------- Every frame: the mix follows the street, and the band plays ---------- */
+  update() {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
-    const ctx = this.context, now = ctx.currentTime, tier = opts.tier || 0;
+    const now = this.context.currentTime;
     // The music follows how built-up the street is: forest strings, then town pop, then the city's beat.
-    const dv = this.devSmooth || 0; this.nextStyle = dv < 0.3 ? 'rich' : dv < 0.65 ? 'mid' : 'city';
+    const dv = this.devSmooth; this.nextStyle = dv < 0.3 ? 'forest' : dv < 0.65 ? 'town' : 'city';
     if (!this.style) { this.style = this.nextStyle; this.nextAt = now + 0.1; }
-    const listen = this.listenK || 0;
+    const listen = this.listenK;
     // Forest to city: the less built-up the street around you, the more wind and birds; the more
     // built-up, the more traffic hum and the louder the band.
-    this.devSmooth += ((this.devK || 0) - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = (1 - dev) * (typeof ending !== 'undefined' && ending ? (builtCount === 0 ? 1 : builtCount <= 5 ? 0.4 : 0) : 1);   // at the end: birds keep singing if you built nothing, a few if you built a little, none after a city
-    if (this.wind) { this.wind.gain.setTargetAtTime(0.05 * wild, now, 0.8); this.leaves.gain.setTargetAtTime(0.012 * wild * (0.6 + 0.4 * Math.sin(now * 0.7)), now, 0.5); }
-    this.hum.gain.setTargetAtTime((0.03 + (tier >= 3 ? 0.02 : 0)) * (0.15 + dev * 1.2), now, 1);
+    this.devSmooth += (this.devK - this.devSmooth) * 0.03; const dev = this.devSmooth, wild = (1 - dev) * (ending ? (builtCount === 0 ? 1 : builtCount <= 5 ? 0.4 : 0) : 1);   // at the end: birds keep singing if you built nothing, a few if you built a little, none after a city
+    this.wind.gain.setTargetAtTime(0.05 * wild, now, 0.8); this.leaves.gain.setTargetAtTime(0.012 * wild * (0.6 + 0.4 * Math.sin(now * 0.7)), now, 0.5);
+    this.hum.gain.setTargetAtTime(0.03 * (0.15 + dev * 1.2), now, 1);
     if (Math.random() < 0.05 * wild * wild && this.mvoices < 30) {
       // A bird: two to five quick chirps, sliding up.
       const f0 = 2400 + Math.random() * 2200, n = 2 + Math.floor(Math.random() * 4), p = (Math.random() - 0.5) * 1.6, t0 = now + 0.02;
       for (let i = 0; i < n; i++) { const o = this.context.createOscillator(), g = this.context.createGain(), pn = this.context.createStereoPanner(); pn.pan.value = p; o.type = 'sine'; o.frequency.setValueAtTime(f0, t0 + i * 0.11); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, t0 + i * 0.11 + 0.07); g.gain.setValueAtTime(0, t0 + i * 0.11); g.gain.linearRampToValueAtTime(0.025 * wild, t0 + i * 0.11 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.11 + 0.09); o.connect(g); g.connect(pn); pn.connect(this.master); o.start(t0 + i * 0.11); o.stop(t0 + i * 0.11 + 0.1); o.onended = () => { o.disconnect(); g.disconnect(); pn.disconnect(); }; }
     }
-    this.muffle.frequency.setTargetAtTime(15350, now, 0.8);   // the band's low-pass filter, fully open
     // Stop and listen: the band and the street fade back, the homes beside you come through the wall.
     this.music.gain.setTargetAtTime(MUSIC_VOL * (1 - 0.8 * listen) * (0.35 + 0.65 * dev), now, 0.4);
-    if (this.lifeFilter) { this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4); }
-    // The poor tape crackles all the time it plays.
-    if (this.style === 'poor' && Math.random() < 0.8) { this._hit(now + Math.random() * 0.05, 0.012, 3000 + Math.random() * 4000, 0.02 + Math.random() * 0.03, 'bandpass', 4); }
+    this.lifeFilter.frequency.setTargetAtTime(1100 + listen * 4500, now, 0.4); this.lifeGain.gain.setTargetAtTime(1 + listen * 0.9, now, 0.4);
     // Schedule the band a little ahead, an eighth note at a time.
     while (this.nextAt < now + 0.15) { this._play(this.nextAt); }
   }
@@ -170,13 +215,13 @@ class WalkSound extends StreetSound {
     // Swing: the off-beat eighths land late.
     const len = beat8 % 2 === 0 ? eighth * 2 * S.swing : eighth * 2 * (1 - S.swing);
     const chord = S.chords[bar], pan = () => (Math.random() - 0.5) * 0.6;
-    if (this.style === 'rich') {
-      // A string section and a harp: slow, lush, expensive. Long bowed chords that swell in each bar...
+    if (this.style === 'forest') {
+      // The forest: a string section and a harp, slow and calm. Long bowed chords that swell in each bar...
       const barLen = eighth * 8;
       if (beat8 === 0) { chord.forEach((n, i) => { this._m(MIDI(n + 12), t, barLen * 1.1, 'sawtooth', 0.007, 1500, -0.4 + i * 0.2, barLen * 0.35); this._m(MIDI(n + 12) * 1.004, t, barLen * 1.1, 'sawtooth', 0.006, 1300, 0.4 - i * 0.2, barLen * 0.35); }); this._m(MIDI(chord[0] - 12), t, barLen, 'sawtooth', 0.03, 420, 0, 0.15); }
       // ...a harp rippling up the chord on every eighth...
       this._m(MIDI(chord[(beat8 % chord.length)] + 24), t, 0.9, 'triangle', 0.024, 5200, -0.3 + beat8 * 0.08);
-      // ...a celesta tune on top, and the clink of champagne glasses.
+      // ...and a celesta tune on top, with a high sparkle.
       if ((beat8 === 2 || beat8 === 6) && Math.random() < 0.7) { const top = [72, 74, 76, 79, 81, 84], f = MIDI(top[Math.floor(Math.random() * top.length)] + 12); this._m(f, t, 1.4, 'sine', 0.02, 9000); this._m(f * 2, t, 0.6, 'sine', 0.006, 9000); }
     } else if (this.style === 'city') {
       // The city: a house beat. Kick on every beat, open hi-hat on the off-beats, claps on 2 and 4...
@@ -187,8 +232,8 @@ class WalkSound extends StreetSound {
       // ...an off-beat synth bass jumping octaves, and short synth stabs.
       if (beat8 % 2 === 1) { this._m(MIDI(chord[0] - 12 + (beat8 % 4 === 3 ? 12 : 0)), t, 0.2, 'sawtooth', 0.05, 800); }
       if (beat8 === 3 || beat8 === 7) { chord.forEach((n, i) => this._m(MIDI(n + 12), t, 0.16, 'sawtooth', 0.012, 2800, -0.3 + i * 0.2)); }
-    } else if (this.style === 'mid') {
-      // Plucked chord, broken over the bar.
+    } else {
+      // The new town: pop. A plucked chord, broken over the bar.
       const n = chord[(beat8 + Math.floor(beat8 / 4)) % chord.length]; this._m(MIDI(n + 12), t, 0.35, 'triangle', 0.035, 3200, pan());
       if (beat8 === 0) { chord.forEach(c => this._m(MIDI(c + 12), t, 0.9, 'sine', 0.012, 2400)); }
       // Bouncing bass on the root and fifth.
@@ -196,15 +241,6 @@ class WalkSound extends StreetSound {
       this._hit(t, 0.04, 6500, 0.018);
       if (beat8 === 2 || beat8 === 6) { this._hit(t, 0.12, 1500, 0.03, 'bandpass', 1.2); }
       if (beat8 === 0 || beat8 === 5) { this._kick(t, 0.12); }
-    } else {
-      // An old, slightly out-of-tune piano: two detuned strings, wobbling like a worn tape.
-      const wobble = 1 + Math.sin(t * 1.3) * 0.006 + (Math.random() - 0.5) * 0.004;
-      if (beat8 === 0) { chord.forEach((n, i) => { const f = MIDI(n + 12) * wobble; this._m(f, t + i * 0.03, 2.4, 'triangle', 0.016, 1400, -0.2 + i * 0.12); this._m(f * 1.007, t + i * 0.03, 2.4, 'triangle', 0.01, 1200); }); }
-      // A sparse, sad tune in A minor pentatonic.
-      if ((beat8 === 3 || beat8 === 6) && Math.random() < 0.55) { const scale = [69, 72, 74, 76, 79, 81], f = MIDI(scale[Math.floor(Math.random() * scale.length)]) * wobble; this._m(f, t, 1.2, 'triangle', 0.03, 1800, pan()); this._m(f * 0.995, t, 1.2, 'triangle', 0.012, 1500); }
-      if (beat8 === 0) { this._m(MIDI(chord[0] - 12) * wobble, t, 1.6, 'sine', 0.09, 400, 0, 0.02); }
-      // No band, no beat: now and then a lonely whistled note, sliding flat.
-      if (beat8 === 4 && Math.random() < 0.35) { const f = MIDI([76, 79, 81, 74][Math.floor(Math.random() * 4)]); const o = this._m(f, t, 1.6, 'sine', 0.02, 4000, pan(), 0.15); if (o) { o.frequency.setValueAtTime(f, t + 0.6); o.frequency.exponentialRampToValueAtTime(f * 0.94, t + 1.5); } }
     }
     this.nextAt += len; this.step++;
     // Change style at the end of a bar: dip the band, swap, and bring it back.
@@ -214,4 +250,3 @@ class WalkSound extends StreetSound {
     }
   }
 }
-window.WalkSound = WalkSound;

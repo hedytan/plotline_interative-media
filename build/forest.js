@@ -7,7 +7,6 @@
  */
 let forestSprites = null;
 const FW = 260, FH = 420;
-const FOREST_TOP = { broad: 1, pine: 1, poplar: 1, gum: 1, bush: 1 };
 function makeForest() {
   if (forestSprites) { return; }
   forestSprites = { broad: [], pine: [], poplar: [], gum: [], bush: [] };
@@ -89,7 +88,15 @@ function makeForest() {
     [0, 1].forEach(v => grow('pine', 7400 + v * 13, PAL.pine, { h: 420 + v * 60, w: 120 }));
     // Bushes: low and wide.
     [0, 1].forEach(v => grow('bush', 7500 + v * 13, PAL.bush, { w: 150 + v * 30, h: 110 }));
-  } catch (e) { console.warn('forest failed, using the plain trees', e && e.stack); forestSprites = null; }
+  } catch (e) { console.warn('the forest could not be painted', e && e.stack); forestSprites = null; }
+}
+// A haze-coloured silhouette of a tree sprite, laid over it in the distance so far trees fade into the air.
+const hazeCache = new Map();
+function hazeSprite(img) {
+  if (hazeCache.has(img)) { return hazeCache.get(img); }
+  const src = img.canvas || img.elt, cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+  const c = cv.getContext('2d'); c.drawImage(src, 0, 0); c.globalCompositeOperation = 'source-in'; c.fillStyle = '#ffd79a'; c.fillRect(0, 0, cv.width, cv.height);
+  hazeCache.set(img, cv); return cv;
 }
 // Draw one painted tree at a ground point: its kind sets the shape, h its real height in metres.
 function drawBrushTree(q, kind, tone, h, z) {

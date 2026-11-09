@@ -34,16 +34,16 @@ street. With the keys, both sides build at once.
 
 ## Files
 
-| File | What it does |
-|---|---|
-| `sketch.js` | The street: a first-person camera and perspective projection `P(x, y, z)`, near-plane clipping, 48 m blocks generated from a seed (`chunkAt`, `makeLot`), the sky, the road, every building style (`drawLot`, `styleLot`, `drawStyled` and one `draw...` function per style), the look-back view (`drawMirrored`) and keyboard / mouse input. |
-| `board.js` | The artwork: forest lots that wait for your hands, chopping (`chopForest`), building floor by floor (`handUpdate`, `growLot`, `makeBuilt`), scaffolding and cranes, hand tracking with ml5 (`startHands`, `gotHands`, `handFeedSide`), walking on the spot (`sampleMotion`, `bodySpeed`), smog, fleeing birds, the HUD and the opening and ending cards. |
-| `dabforest.js` | Grows 12 painted tree sprites at start-up (broadleaf, poplar, gum, pine, bush) from recursive branches and hundreds of leaf dabs. |
-| `trees.js` | Smaller painted trees for pavements and gardens. |
-| `music.js` | `WalkSound`: wind, birds, the axe, building sounds, the life inside homes, and a band that changes style as the street develops. |
-| `street-sound.js` | The shared base sound engine (footsteps, traffic hum, effects). |
-| `sketch-all.js` | All of the above in one file, for the p5.js Web Editor. |
-| `vendor/p5.min.js` | p5.js 1.11.3. |
+Four files, each with one job. They load in this order; only code this artwork uses is in them.
+
+| File | Lines | What it does |
+|---|---|---|
+| `sound.js` | ~250 | `WorldSound`: everything you hear, made live with Web Audio. Wind, leaves and birdsong; footsteps; the axe and falling tree (`chop`); fleeing birds (`flutter`); a thud for each floor (`floorUp`); a chord when a building is finished (`built`); the life inside homes (`life`); and the band, which changes from strings and harp (forest) to pop (town) to a house beat (city) as the street fills (`update`, `_play`). |
+| `forest.js` | ~110 | Grows 12 painted tree sprites once at start-up (`makeForest`: broadleaf, poplar, gum, pine, bush, from recursive branches and hundreds of shaded leaf dabs) and draws one at its real height with a shadow and distance haze (`drawBrushTree`). |
+| `sketch.js` | ~1230 | The street engine: settings and state, colour helpers (`rgbOf`, `toneN`), the perspective camera `P(x, y, z)` and near-plane clipping, 48 m blocks grown from a seed (`chunkAt`, `makeLot`), the frame (`draw`), looking back (`drawMirrored`), sky, ground, the street drawn far to near (`drawWorld`, `drawForest`), every building (`drawLot`, `styleLot`, `drawStyled` and one function per building), lamps, trees and input. |
+| `world.js` | ~610 | The artwork's rules: the street plan and building styles, cutting the forest (`chopForest`) and fleeing birds, building floor by floor (`handUpdate`, `growLot`, `makeBuilt`, scaffolding and cranes), the hands (`startHands`, `gotHands`, `handFeedSide`), walking on the spot (`sampleMotion`, `bodySpeed`), smog, the sounds of the homes, painted slogans, the HUD, the cards and the three endings. |
+| `sketch-all.js` | | The four files joined into one, for the p5.js Web Editor. |
+| `../vendor/p5.min.js` | | p5.js 1.11.3. |
 
 ## Techniques
 
@@ -67,12 +67,22 @@ street. With the keys, both sides build at once.
 
 ## How the code is organised
 
-Each file has one job (see the table above). Inside them, functions are grouped under banner comments
-(`/* ---------- Camera ---------- */`, `/* ---------- Your hands ---------- */` ...), and the comments
-explain *why* things work the way they do, not just what they do. The two big files talk to each other
-through a small set of named hooks: the street (`sketch.js`) calls `boardUpdate`, `plotsForChunk`,
-`waitsForHand`, `lotRise`, `drawScaffold`, `drawBirds`, `drawBoardHud` and `boardKey` in `board.js`,
-so the street engine knows nothing about the artwork's rules.
+Each file has one job (see the table above). Inside each file, functions are grouped in the order you
+meet them, under banner comments (`/* ---------- Camera ---------- */`, `/* ---------- Cutting the forest ---------- */` ...),
+and the comments explain *why* things work the way they do, not just what they do.
+
+The street engine (`sketch.js`) knows nothing about the artwork's rules. It calls a small set of named
+hooks in `world.js`:
+
+| Hook | When the engine calls it |
+|---|---|
+| `plotsForChunk`, `addResidents` | A new block of street is made |
+| `propWaits` | Should this lamp, tree or person wait (no buildings near it yet)? |
+| `worldUpdate` | Every frame, before drawing |
+| `lotRise` | How far has this building risen (floor by floor)? |
+| `drawScaffold`, `paintSlogan`, `drawBirds` | While drawing the street |
+| `drawHud` | After the street, for the scoreboard, cards and camera panel |
+| `worldKey`, `worldClick` | A key or click the engine does not use itself |
 
 ## Performance
 
@@ -96,8 +106,8 @@ view and dropped once they are far behind, and the camera picture for walking de
 | Option | Used? | Notes |
 |---|---|---|
 | p5.js 1.11 (Canvas 2D) | yes | A painted, illustrated look with full control over every shape. |
-| p5.js WEBGL / Three.js | tried (`../3d/`) | Real 3D lighting, but the street looked like a game engine rather than a painting. |
+| p5.js WEBGL / Three.js | tried in an earlier version | Real 3D lighting, but the street looked like a game engine rather than a painting. |
 | ml5.js handPose | yes | Two-hand landmarks in the browser, with no server and no training. |
 | MediaPipe Tasks directly | alternative | The same hand model with more set-up code; ml5 wraps it for p5. |
 | p5.brush | tried, dropped | Replaced by the leaf-dab tree sprites, which are painted once and cached. |
-| Tone.js | alternative | Raw Web Audio is enough here and keeps one sound engine shared with the other versions. |
+| Tone.js | alternative | Raw Web Audio is enough here: one small class, no library to load. |
