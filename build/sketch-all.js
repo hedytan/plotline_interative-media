@@ -1729,6 +1729,7 @@ function drawBirds() {
 /* ---------- Building, floor by floor ---------- */
 // What a cleared lot becomes. Each hand shape builds a different family of buildings, picked at
 // random so the street never repeats: homes (one finger), shops (open hand) or industry and towers (fist).
+const lastLook = { [-1]: '', [1]: '' };   // the last look built on each side
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
   //   one finger (homes): bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern
@@ -1738,10 +1739,16 @@ function makeBuilt(L, kind, level = 0) {
   const r = rngN(L.seed + 5 + builtCount * 31 + level * 7), len = L.z1 - L.z0;
   let opts;
   const big = len >= 10;
-  if (kind === 'tower') { opts = level === 0 ? [['style', 'carpark'], ['style', 'substation']] : level === 1 ? [['style', 'datacentre']].concat(len >= 9 ? [['style', 'factory'], ['tier', 3]] : [['tier', 3]], big ? [['style', 'powerplant']] : []) : [['tier', 4], ['style', 'slanttop'], ['tier', 3]]; }
-  else if (kind === 'shop') { opts = level === 0 ? [['tier', 0], ['style', 'diner']].concat(len >= 11 ? [['style', 'petrol']] : []) : level === 1 ? [['tier', 1]].concat(big ? [['style', 'supermarket'], ['style', 'cinema']] : [['style', 'cinema']]) : [['tier', 3]].concat(big ? [['style', 'mall']] : []); }
-  else { opts = level === 0 ? [['style', 'bungalow'], ['tier', 0], ['style', 'cabin']].concat(big ? [['style', 'caravan']] : []) : level === 1 ? [['tier', 1], ['style', 'canal'], ['style', 'modern']].concat(len >= 18 ? [['style', 'villa'], ['tier', 2]] : []) : [['style', 'apartment'], ['style', 'greencondo']]; }
-  const [how, v] = pickN(r, opts), tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(tier, L.side, L.z0, len, r);
+  // Each size has several looks, and the middle sizes share some with their neighbours, so a street
+  // of buildings of the same kind still looks varied.
+  const S = v => ['style', v], T = v => ['tier', v];
+  if (kind === 'tower') { opts = level === 0 ? [S('carpark'), S('substation')].concat(len >= 9 ? [S('factory')] : [S('datacentre')]) : level === 1 ? [S('datacentre'), T(3)].concat(len >= 9 ? [S('factory')] : [], big ? [S('powerplant')] : []) : [T(4), S('slanttop'), T(3)]; }
+  else if (kind === 'shop') { opts = level === 0 ? [T(0), S('diner')].concat(len >= 11 ? [S('petrol')] : [T(1)]) : level === 1 ? [T(1), S('cinema'), S('diner')].concat(big ? [S('supermarket')] : [T(0)]) : [T(3)].concat(big ? [S('mall')] : []); }
+  else { opts = level === 0 ? [S('bungalow'), S('cabin'), S('caravan'), S('modern')] : level === 1 ? [T(1), S('canal'), S('modern'), S('bungalow')].concat(len >= 18 ? [S('villa'), T(2)] : [S('canal')]) : [S('apartment'), S('greencondo')]; }
+  // Not the same look as the last building on this side of the street.
+  const last = lastLook[L.side], fresh = opts.filter(o => o.join() !== last);
+  const pick = pickN(r, fresh.length ? fresh : opts); lastLook[L.side] = pick.join();
+  const [how, v] = pick, tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
   if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, formerName: 'FOREST', name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
@@ -1763,8 +1770,8 @@ function handUpdate(dt) {
   const keyLevel = keyHoldT < 0.6 ? 0 : keyHoldT < 1.4 ? 1 : 2;   // hold longer: bigger
   let keyNoLand = 0;
   // Pressing a build key again and again makes it taller at once: every press adds floors to the two
-  // nearest cleared lots on each side you have cut; the 2nd press makes it a bigger building, the 3rd
-  // the biggest, and every press after that adds another floor or two.
+  // nearest cleared lots on each side you have cut; the 3rd press makes it a bigger building, the 5th
+  // the biggest, and after that every press adds another floor or two (see tapBuild).
   const tap = keyTap; keyTap = null;
   if (tap && handsActive()) {
     for (const side of [-1, 1]) {
@@ -1804,7 +1811,7 @@ function handUpdate(dt) {
     for (const L of cleared.slice(0, 2)) {
       if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = 0; }
       // Reaching higher turns it into a bigger building; what is built so far keeps its height.
-      if (level > L.level) { const builtM = (L.grow || 0) * (L.H || 0); L.level = level; makeBuilt(L, L.buildKind, level); L.grow = Math.min(0.98, builtM / L.H); }
+      if (level > L.level) { const builtM = (L.grow || 0) * (L.H || 0), was = L.H || 0; L.level = level; makeBuilt(L, L.buildKind, level); L.H = Math.max(L.H, was); L.grow = Math.min(0.98, builtM / L.H); }
       // While your hand is still rising it keeps going (it can still get bigger); it tops out
       // when you stop. Taller buildings need a little more lifting, but not much.
       L.liftT = clockT;
@@ -1821,21 +1828,22 @@ function handUpdate(dt) {
     for (const L of ch.lots) {
       if (!L.buildKind || L.born !== undefined || !(L.grow > 0)) { continue; }
       const atCap = L.grow >= 0.97 - 1e-6; if (atCap && L.capT === undefined) { L.capT = clockT; } else if (!atCap) { L.capT = undefined; }
-      const idle = clockT - (L.liftT || 0) > (L.taps ? 0.7 : 0.25), stuck = atCap && clockT - L.capT > 0.4;
+      const idle = clockT - (L.liftT || 0) > (L.taps ? 0.7 : 0.25), stuck = atCap && !L.taps && clockT - L.capT > 0.4;   // key presses have their own 0.7 s wait
       if ((idle || stuck) && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); }
     }
   }
 }
-// One press of a build key on one lot. Presses 1, 2, 3 pick a small, middle and big building (what is
-// built so far keeps its height); after that each press adds about a floor (up to 1.6 times as tall).
+// One press of a build key on one lot. Presses 1-2 make a small building, 3-4 a middle one and 5 a big
+// one (a bigger building never ends up lower than what is built so far); after 6 presses each press
+// adds about a floor (up to 1.6 times as tall).
 // Open lots (car parks, petrol stations, substations) don't get taller. It tops out 0.7 s after the
 // last press, so you have time to press again.
 function tapBuild(L, kind, n) {
   if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = L.grow || 0; }
   L.taps = (L.taps || 0) + n; L.liftT = clockT;
-  const level = Math.min(2, L.taps - 1), builtM = (L.grow || 0) * (L.H || 0);
-  if (level > L.level) { L.level = level; makeBuilt(L, L.buildKind, level); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
-  else if (L.taps > 3 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n); L.grow = Math.min(0.98, builtM / L.H); }
+  const level = L.taps <= 2 ? 0 : L.taps <= 4 ? 1 : 2, builtM = (L.grow || 0) * (L.H || 0);
+  if (level > L.level) { const was = L.H || 0; L.level = level; makeBuilt(L, L.buildKind, level); L.H = Math.max(L.H, was); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
+  else if (L.taps > 6 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n); L.grow = Math.min(0.98, builtM / L.H); }
   if (clockT - L.cutT > 0.45) { growLot(L, 0.34 * n, 0.97); } else { L.grow = Math.max(L.grow || 0, 0.02); }
 }
 // Add to a building's height. A sound for every new floor; at the top it is finished and counted.
