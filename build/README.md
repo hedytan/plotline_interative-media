@@ -33,8 +33,9 @@ A hand shape counts once it is seen three times in a row; an unclear shape build
 ignores the hands and the arms below them (so you can cut and build while you walk), and needs about
 half a second of steady stepping (6 of the last 8 samples) before you move.
 
-If the land beside you is still forest, a build clears it first. Each hand works its own side of the
-street. With the keys, both sides build at once.
+Each hand works its own side of the street; a hand lift beside uncut forest clears it first. The keys
+build only on the side(s) you have cut: cut the left (left arrow / Z) and H builds only on the left,
+cut both and both sides build.
 
 ## Files
 

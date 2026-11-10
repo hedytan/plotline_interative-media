@@ -162,23 +162,30 @@ function kindOf(shape) { return shape === 'point' ? 'home' : shape === 'open' ? 
 function handUpdate(dt) {
   const now = performance.now() / 1000; sampleMotion();
   for (const side of [-1, 1]) { const s = hands[side]; if (s.ok && now - s.seen > 0.6) { s.ok = false; } }
-  // Keys stand in for the camera: H lifts homes, S shops, B big buildings (industry and towers), on both sides.
+  // Keys stand in for the camera: H lifts homes, S shops, B big buildings (industry and towers). A key
+  // builds only on the side(s) you have cut (left / right arrow, Z / X): cut one side, only that side builds.
   const keyKind = keysHeld.has('KeyB') ? 'tower' : keysHeld.has('KeyS') ? 'shop' : keysHeld.has('KeyH') ? 'home' : null, keyLift = keyKind ? dt : 0;
   keyHoldT = keyLift ? keyHoldT + dt : 0;
   const keyLevel = keyHoldT < 0.6 ? 0 : keyHoldT < 1.4 ? 1 : 2;   // hold longer: bigger
+  let keyNoLand = 0;
   for (const side of [-1, 1]) {
-    const s = hands[side], handKind = s.ok ? kindOf(s.shape) : null, lift = (handKind ? s.lift : 0) + keyLift, kind = keyKind || handKind; s.lift = 0;
+    const s = hands[side], handKind = s.ok ? kindOf(s.shape) : null, handLift = handKind ? s.lift : 0, lift = handLift + keyLift, kind = keyKind || handKind; s.lift = 0;
     if (!handsActive() || lift <= 0 || !kind) { continue; }
     // The lift raises the cleared lots on this hand's side, nearest first.
     const cleared = [];
     for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.45 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
     cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
-    // Nothing cleared on this side: the lift clears the nearest forest itself (the trees fall, and
-    // the building starts as soon as they are down), so a press or a lift always builds.
+    // Nothing cleared on this side yet. If the trees are still falling, remember what to build there.
+    // A hand lift on uncut forest clears it itself (so a gesture is never wasted); a key does not:
+    // with the keys you choose the side by cutting it first.
     if (!cleared.length) {
       let falling = false;
       for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT <= 0.45) { falling = true; } } }
-      if (!falling) {
+      if (falling) {
+        const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
+        for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && !L.buildKind && clockT - L.cutT <= 0.45) { L.buildKind = kind; L.level = level; makeBuilt(L, kind, level); L.grow = 0.02; L.liftT = clockT; } } }
+      } else if (handLift <= 0) { keyNoLand++; }
+      else {
         chopForest(side);
         // Remember what this press or lift asked for, so even a quick tap builds once the trees are down.
         const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
@@ -197,6 +204,8 @@ function handUpdate(dt) {
       growLot(L, lift * 3 * Math.pow(8 / Math.max(8, L.H), 0.3), 0.97);
     }
   }
+  // A build key with no cut land on either side: say how to choose a side (at most every 3 s).
+  if (keyLift && keyNoLand === 2 && handsActive() && clockT - keyHintT > 3) { keyHintT = clockT; sayToast('Cut the forest first: left or right arrow (or Z / X)'); }
   // Once you stop lifting, the building tops out at the size your hand reached: the last floors go
   // up on their own in about half a second, and the scaffolding comes down.
   for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > 0.25 && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); } } }
@@ -263,6 +272,7 @@ function drawCrane(L, x, top) {
 }
 
 /* ---------- Your hands: the webcam and ml5 handPose ---------- */
+let keyHintT = -9;
 let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9;
 // Two hands, one for each side of the street. In the mirrored picture your left hand is on the left.
 const newHand = () => ({ ok: false, x: 0.5, y: 0.6, fist: false, shape: null, cand: null, candN: 0, t: 0, seen: -9, chopT: -9, trail: [], lift: 0 });
