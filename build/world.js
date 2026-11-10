@@ -256,27 +256,14 @@ function lotRise(L) {
   const n = floorsOf(L), f = Math.floor((L.grow || 0) * n + 1e-6) / n, bump = L.floorT !== undefined ? Math.max(0, 1 - (clockT - L.floorT) / 0.18) : 0;
   return f + bump * 0.6 / n;
 }
-// Scaffolding while a building goes up: poles, ledgers, braces, planks and a green net on top,
-// and a tower crane beside the tall ones. It comes down when the building is finished.
+// While a building goes up: no scaffolding (the floors simply rise), only a tower crane beside the
+// tall ones. It goes when the building is finished.
 function drawScaffold(L, g) {
-  if (L.style === 'carpark' || L.style === 'petrol') { return; }
-  const s = L.side, x = s * (EDGE_X + L.setback), xs = x - s * 0.8, z0 = clipZ(L.z0), z1 = L.z1; if (z1 <= z0 + 0.2) { return; }
-  const built = L.H * g, top = Math.min(L.H + 1, built + 2.2), near = P(xs, 0, z0); if (near.rz > FAR_Z) { return; }
-  const lw = Math.max(1, Math.min(4, near.k * 0.05));
-  ctx.save(); ctx.globalAlpha = 1 - fogFor(midN(z0, z1)) * 0.8;
-  for (let y = 3; y <= top; y += 3) { polyN([P(xs, y, z0), P(xs, y, z1), P(x, y, z1), P(x, y, z0)], toneN('#a07a4a', z0, 0.9)); }
-  polyN(wallQuad(xs, z0, xs, z1, Math.max(0, built - 3), top), rgbaN('#2f7a4a', 0.3));
-  ctx.strokeStyle = toneN('#c89a3a', z0); ctx.lineWidth = lw; ctx.beginPath();
-  for (let zz = Math.ceil(L.z0 / 2) * 2; zz <= z1; zz += 2) { if (zz < z0) { continue; } segN(P(xs, 0, zz), P(xs, top, zz)); }
-  for (let y = 1.5; y <= top; y += 1.5) { segN(P(xs, y, z0), P(xs, y, z1)); }
-  ctx.stroke();
-  ctx.strokeStyle = toneN('#9a7a3a', z0); ctx.lineWidth = Math.max(1, lw * 0.7); ctx.beginPath();
-  for (let zz = Math.ceil(L.z0 / 4) * 4; zz + 2 <= z1; zz += 4) { if (zz < z0) { continue; } for (let y = 0; y + 3 <= top; y += 3) { segN(P(xs, y, zz), P(xs, y + 3, zz + 2)); } }
-  ctx.stroke();
-  ctx.restore();
-  if (L.H > 18) { drawCrane(L, x, top); }
+  if (L.H <= 18) { return; }
+  const x = L.side * (EDGE_X + L.setback), top = Math.min(L.H + 1, L.H * g + 2.2);
+  if (P(x, 0, clipZ(L.z0)).rz > FAR_Z) { return; }
+  drawCrane(L, x, top);
 }
-// A tower crane beside a tall building site: a lattice mast and a jib that slowly turns.
 function drawCrane(L, x, top) {
   const s = L.side, mz = L.z1 - 2, mx = x + s * Math.min(L.depth * 0.7, 10), H = Math.max(L.H, top) + 9;
   if (mz < cam.z + 3) { return; }
