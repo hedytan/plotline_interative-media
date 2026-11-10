@@ -47,7 +47,7 @@ Four files, each with one job. They load in this order; only code this artwork u
 | `sound.js` | ~250 | `WorldSound`: everything you hear, made live with Web Audio. Wind, leaves and birdsong; footsteps; the axe and falling tree (`chop`); fleeing birds (`flutter`); a thud for each floor (`floorUp`); a chord when a building is finished (`built`); the life inside homes (`life`); and the band, which changes from strings and harp (forest) to pop (town) to a house beat (city) as the street fills (`update`, `_play`). |
 | `forest.js` | ~110 | Grows 12 painted tree sprites once at start-up (`makeForest`: broadleaf, poplar, gum, pine, bush, from recursive branches and hundreds of shaded leaf dabs) and draws one at its real height with a shadow and distance haze (`drawBrushTree`). |
 | `sketch.js` | ~1230 | The street engine: settings and state, colour helpers (`rgbOf`, `toneN`), the perspective camera `P(x, y, z)` and near-plane clipping, 48 m blocks grown from a seed (`chunkAt`, `makeLot`), the frame (`draw`), looking back (`drawMirrored`), sky, ground, the street drawn far to near (`drawWorld`, `drawForest`), every building (`drawLot`, `styleLot`, `drawStyled` and one function per building), lamps, trees and input. |
-| `world.js` | ~610 | The artwork's rules: the street plan and building styles, cutting the forest (`chopForest`) and fleeing birds, building floor by floor (`handUpdate`, `growLot`, `makeBuilt`, cranes), the hands (`startHands`, `gotHands`, `handFeedSide`), walking on the spot (`sampleMotion`, `bodySpeed`), smog, the sounds of the homes, painted slogans, the HUD, the cards and the three endings. |
+| `world.js` | ~610 | The artwork's rules: the street plan and building styles, cutting the forest (`chopForest`) and fleeing birds, building floor by floor (`handUpdate`, `growLot`, `makeBuilt`), the hands (`startHands`, `gotHands`, `handFeedSide`), walking on the spot (`sampleMotion`, `bodySpeed`), smog, the sounds of the homes, painted slogans, the HUD, the cards and the three endings. |
 | `sketch-all.js` | | The four files joined into one, for the p5.js Web Editor. |
 | `../vendor/p5.min.js` | | p5.js 1.11.3. |
 
@@ -61,7 +61,7 @@ Four files, each with one job. They load in this order; only code this artwork u
 - **Procedural painting.** Trees are grown with recursive branching and shaded leaf dabs, then cached
   as sprites. 24 kinds of building (19 styles and 5 basic district types) are drawn entirely in code:
   brick, weatherboard and render, glass curtain walls, neon signs, steaming cooling towers, chimney
-  smoke and tower cranes.
+  smoke.
 - **Machine-learning interaction.** ml5.js `handPose` (MediaPipe hand landmarks) tracks two hands. The
   hand shape (open, pointing, fist) is read from the landmarks, a quick sideways stroke is a chop and
   upward movement builds.
@@ -86,7 +86,7 @@ hooks in `world.js`:
 | `propWaits` | Should this lamp, tree or person wait (no buildings near it yet)? |
 | `worldUpdate` | Every frame, before drawing |
 | `lotRise` | How far has this building risen (floor by floor)? |
-| `drawScaffold`, `paintSlogan`, `drawBirds` | While drawing the street |
+| `paintSlogan`, `drawBirds` | While drawing the street |
 | `drawHud` | After the street, for the scoreboard, cards and camera panel |
 | `worldKey`, `worldClick` | A key or click the engine does not use itself |
 

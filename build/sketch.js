@@ -4,7 +4,7 @@
  * Every lot starts as forest; world.js decides what happens to it (cut down, built on), and this
  * file draws it: sky, ground, forest, buildings, people and lamps, far to near.
  * Hooks into world.js: plotsForChunk, addResidents, propWaits, lotRise, worldUpdate,
- * drawScaffold, drawBirds, paintSlogan, drawHud, worldKey, worldClick.
+ * drawBirds, paintSlogan, drawHud, worldKey, worldClick.
  */
 
 /* ---------- Settings: sizes in metres, speeds, colours ---------- */
@@ -384,7 +384,7 @@ function drawWorld(z) {
     const cut = L.cutT !== undefined, forestK = cut ? 1 - Math.min(1, rise * 2) : 1 - Math.min(1, rise * 1.4), fall = cut ? easeN((clockT - L.cutT) / 0.7) : 0;
     if (g <= 0.01) { drawPlot(L); drawForest(L, forestK, 0, fall, cut); continue; }
     if (forestK > 0.02) { drawForest(L, forestK, 0, fall, cut); }
-    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; if (L.born === undefined && L.grow > 0) { drawScaffold(L, g); } }
+    if (g > 0.01) { riseK = g; drawLot(L); riseK = 1; }
     const age = L.born === undefined ? clockT - L.cutT : clockT - L.born; if (age < RISE_T + 0.8) {drawDust(L, Math.min(age, RISE_T));}
   }
   const items = [];
