@@ -221,7 +221,16 @@ function handUpdate(dt) {
   if ((keyLift || tap) && keyNoLand === 2 && handsActive() && clockT - keyHintT > 3) { keyHintT = clockT; sayToast('Cut the forest first: left or right arrow (or Z / X)'); }
   // Once you stop lifting, the building tops out at the size your hand reached: the last floors go
   // up on their own in about half a second, and the scaffolding comes down.
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > (L.taps ? 0.7 : 0.25) && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); } } }
+  // It also tops out 0.4 s after reaching the cap even if a hand is still twitching upward, so a
+  // building (and its crane) never waits half-finished until you walk away.
+  for (const ch of chunks.values()) {
+    for (const L of ch.lots) {
+      if (!L.buildKind || L.born !== undefined || !(L.grow > 0)) { continue; }
+      const atCap = L.grow >= 0.97 - 1e-6; if (atCap && L.capT === undefined) { L.capT = clockT; } else if (!atCap) { L.capT = undefined; }
+      const idle = clockT - (L.liftT || 0) > (L.taps ? 0.7 : 0.25), stuck = atCap && clockT - L.capT > 0.4;
+      if ((idle || stuck) && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); }
+    }
+  }
 }
 // One press of a build key on one lot. Presses 1, 2, 3 pick a small, middle and big building (what is
 // built so far keeps its height); after that each press adds about a floor (up to 1.6 times as tall).
@@ -255,6 +264,34 @@ function lotRise(L) {
   if (L.cutT === undefined || L.born !== undefined) { return riseOf(L.born); }
   const n = floorsOf(L), f = Math.floor((L.grow || 0) * n + 1e-6) / n, bump = L.floorT !== undefined ? Math.max(0, 1 - (clockT - L.floorT) / 0.18) : 0;
   return f + bump * 0.6 / n;
+}
+
+// While a building goes up: no scaffolding (the floors simply rise), only a tower crane beside the
+// tall ones (over 18 m). It goes the moment the building is finished (sketch.js only calls this while
+// L.born is undefined).
+function drawBuildCrane(L, g) {
+  if (L.H <= 18) { return; }
+  const x = L.side * (EDGE_X + L.setback), top = Math.min(L.H + 1, L.H * g + 2.2);
+  if (P(x, 0, clipZ(L.z0)).rz > FAR_Z) { return; }
+  drawCrane(L, x, top);
+}
+function drawCrane(L, x, top) {
+  const s = L.side, mz = L.z1 - 2, mx = x + s * Math.min(L.depth * 0.7, 10), H = Math.max(L.H, top) + 9;
+  if (mz < cam.z + 3) { return; }
+  const base = P(mx, 0, mz); if (base.rz > FAR_Z) { return; }
+  const lw = Math.max(1, Math.min(5, base.k * 0.12)), w = 0.8;
+  ctx.save(); ctx.globalAlpha = 1 - fogFor(mz) * 0.8; ctx.strokeStyle = toneN('#f2b81a', mz); ctx.lineWidth = lw; ctx.beginPath();
+  segN(P(mx, 0, mz - w), P(mx, H, mz - w)); segN(P(mx, 0, mz + w), P(mx, H, mz + w));
+  for (let y = 0; y < H; y += 2) { segN(P(mx, y, mz - w), P(mx, y + 2, mz + w)); }
+  const a = clockT * 0.25 + (Math.abs(L.seed) % 100) * 0.06, len = 22, cx = Math.cos(a), cz = Math.sin(a);
+  const jx = mx + cx * len, jz = mz + cz * len, bx = mx - cx * 8, bz = mz - cz * 8;
+  segN(P(bx, H, bz), P(jx, H, jz)); segN(P(mx, H + 4, mz), P(jx, H, jz)); segN(P(mx, H + 4, mz), P(bx, H, bz)); segN(P(mx, H, mz), P(mx, H + 4, mz));
+  ctx.stroke();
+  const tr = 0.55 + 0.25 * Math.sin(clockT * 0.7), hx = mx + cx * len * tr, hz = mz + cz * len * tr, hy = Math.max(top + 1, H - 6 - 6 * Math.pow(Math.sin(clockT * 0.5), 2));
+  ctx.strokeStyle = toneN('#2a2a2a', mz); ctx.lineWidth = Math.max(1, lw * 0.4); ctx.beginPath(); segN(P(hx, H, hz), P(hx, hy, hz)); ctx.stroke();
+  polyN(wallQuad(hx, hz - 1.5, hx, hz + 1.5, hy - 0.5, hy), toneN('#8a5a3a', hz));
+  polyN(wallQuad(bx, bz - 0.8, bx, bz + 0.8, H - 1.8, H), toneN('#6a6a6a', bz));
+  ctx.restore();
 }
 
 /* ---------- Your hands: the webcam and ml5 handPose ---------- */
