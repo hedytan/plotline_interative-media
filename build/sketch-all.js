@@ -1729,7 +1729,7 @@ function drawBirds() {
 /* ---------- Building, floor by floor ---------- */
 // What a cleared lot becomes. Each hand shape builds a different family of buildings, picked at
 // random so the street never repeats: homes (one finger), shops (open hand) or industry and towers (fist).
-const lastLook = { [-1]: '', [1]: '' };   // the last look built on each side
+const recentLooks = [];   // the last few looks built anywhere, so neighbours look different
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
   //   one finger (homes): bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern
@@ -1745,13 +1745,15 @@ function makeBuilt(L, kind, level = 0) {
   if (kind === 'tower') { opts = level === 0 ? [S('carpark'), S('substation')].concat(len >= 9 ? [S('factory')] : [S('datacentre')]) : level === 1 ? [S('datacentre'), T(3)].concat(len >= 9 ? [S('factory')] : [], big ? [S('powerplant')] : []) : [T(4), S('slanttop'), T(3)]; }
   else if (kind === 'shop') { opts = level === 0 ? [T(0), S('diner')].concat(len >= 11 ? [S('petrol')] : [T(1)]) : level === 1 ? [T(1), S('cinema'), S('diner')].concat(big ? [S('supermarket')] : [T(0)]) : [T(3)].concat(big ? [S('mall')] : []); }
   else { opts = level === 0 ? [S('bungalow'), S('cabin'), S('caravan'), S('modern')] : level === 1 ? [T(1), S('canal'), S('modern'), S('bungalow')].concat(len >= 18 ? [S('villa'), T(2)] : [S('canal')]) : [S('apartment'), S('greencondo')]; }
-  // Not the same look as the last building on this side of the street.
-  const last = lastLook[L.side], fresh = opts.filter(o => o.join() !== last);
-  const pick = pickN(r, fresh.length ? fresh : opts); lastLook[L.side] = pick.join();
+  // Not the same look as the last few buildings (on either side), if the size allows another one.
+  const fresh = opts.filter(o => !recentLooks.includes(o.join()));
+  const pick = pickN(r, fresh.length ? fresh : opts); recentLooks.push(pick.join()); if (recentLooks.length > 2) { recentLooks.shift(); }
   const [how, v] = pick, tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
   if (kind === 'tower' && tier === 4) { Object.assign(L, { H: mixN(45, 95, r()), vacant: true, sign: true, formerName: 'FOREST', name: VOID_NAMES[Math.abs(L.seed) % VOID_NAMES.length] }); }
+  // Every building its own height: 80% to 125% of its style's usual height (flat lots stay flat).
+  if (L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H *= mixN(0.8, 1.25, r()); }
 }
 // The height of your hand picks the size: low (0), chest to face (1), above your head (2).
 // With the keys, holding longer goes bigger.
@@ -1841,9 +1843,12 @@ function handUpdate(dt) {
 function tapBuild(L, kind, n) {
   if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = L.grow || 0; }
   L.taps = (L.taps || 0) + n; L.liftT = clockT;
-  const level = L.taps <= 2 ? 0 : L.taps <= 4 ? 1 : 2, builtM = (L.grow || 0) * (L.H || 0);
+  // Each lot reacts a little differently to the same presses: one grows up a size a press earlier,
+  // another a press later, and each adds floors at its own pace, so a row built together isn't uniform.
+  if (L.bias === undefined) { L.bias = Math.abs(L.seed >> 5) % 3 - 1; L.pace = 0.6 + (Math.abs(L.seed >> 9) % 9) / 10; }
+  const eff = Math.max(1, L.taps + L.bias), level = eff <= 2 ? 0 : eff <= 4 ? 1 : 2, builtM = (L.grow || 0) * (L.H || 0);
   if (level > L.level) { const was = L.H || 0; L.level = level; makeBuilt(L, L.buildKind, level); L.H = Math.max(L.H, was); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
-  else if (L.taps > 6 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n); L.grow = Math.min(0.98, builtM / L.H); }
+  else if (eff > 6 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n * L.pace); L.grow = Math.min(0.98, builtM / L.H); }
   if (clockT - L.cutT > 0.45) { growLot(L, 0.34 * n, 0.97); } else { L.grow = Math.max(L.grow || 0, 0.02); }
 }
 // Add to a building's height. A sound for every new floor; at the top it is finished and counted.
