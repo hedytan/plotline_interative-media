@@ -82,7 +82,7 @@ function toneN(hexCol, zz, k = 1) {
 function setup() {
   const c = createCanvas(windowWidth, windowHeight); pixelDensity(min(1.5, window.devicePixelRatio || 1));
   canvasNode = c.elt; canvasNode.tabIndex = 0; ctx = drawingContext; setTimeout(() => canvasNode.focus({ preventScroll: true }), 100);
-  canvasNode.setAttribute('aria-label', 'We Build Our World, a first-person street that starts as forest. Press H to use your hands with the camera, or use the keys: Z and X cut the forest on the left or right; B, V or N build homes, shops or towers (hold for bigger). C looks back, F ends, M sound.');
+  canvasNode.setAttribute('aria-label', 'We Build Our World, a first-person street that starts as forest. Press C to use your hands with the camera: one finger builds homes, an open hand shops, a fist towers. Or use the keys: Z and X cut the forest on the left or right; hold H, S or B to build homes, shops or towers (hold for bigger). T turns round, F ends, M sound.');
   sound = new WorldSound(); textFont('Georgia');   // sound.js: wind and birds that give way to traffic and a band
   grain = createGraphics(320, 320); grain.pixelDensity(1); grain.loadPixels();
   for (let i = 0; i < grain.pixels.length; i += 4) { const v = random() < 0.5 ? 255 : 0; grain.pixels[i] = grain.pixels[i + 1] = grain.pixels[i + 2] = v; grain.pixels[i + 3] = random(10); }
@@ -178,7 +178,7 @@ function makeLot(tier, side, z, len, r) {
 function draw() {
   const dt = Math.min(deltaTime / 1000, 0.05); if (!paused) {clockT += dt;}
   // Input.
-  const focus = document.activeElement === canvasNode, back = held('KeyS') || held('ArrowDown');
+  const focus = document.activeElement === canvasNode, back = held('ArrowDown');
   const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
   let target = 0;
   const busy = intro || ending || backT > 0.01;   // a card is up, or you are turning round: stand still
@@ -1213,13 +1213,13 @@ function mousePressed(e) { if (e.target !== canvasNode) {return;} if (worldClick
 function mouseReleased() { pointerHeld = false; }
 function keyPressed(e) {
   if (e.target !== canvasNode) {return;} const k = String(key).toLowerCase();
-  if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd'].includes(k)) {return false;}
+  if (e.repeat && ['m', 'p', 'r', ' ', 'enter', 'e', 'a', 'd', 'c', 't', 'f'].includes(k)) {return false;}
   beginSound();
   if (!paused && worldKey(e)) {return false;}
   if (e.key === 'Enter') { autoWalk = !autoWalk; return false; }
   if (k === 'm') { sound.toggle(); return false; }
   if (k === 'p') { paused = !paused; return false; }
-  if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(e.code)) {return false;}
+  if (['KeyW', 'ArrowUp', 'ArrowDown'].includes(e.code)) {return false;}
 }
 function touchStarted() { canvasNode.focus(); pointerHeld = true; beginSound(); return false; }
 function touchEnded() { pointerHeld = false; return false; }

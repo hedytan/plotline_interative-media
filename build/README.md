@@ -18,16 +18,20 @@ For the p5.js Web Editor, paste `sketch-all.js` (every file below joined into on
 
 ## Controls
 
-| With the camera (press H) | With the keyboard | What happens |
+| With the camera (press C) | With the keyboard | What happens |
 |---|---|---|
 | Swing your left / right hand sideways | Z / X (or left / right arrow) | Cut the forest on that side; birds flee |
-| Lift an open hand | B (hold = bigger) | Homes: cabin, bungalow, caravan -> row houses, terraces, modern house, villa -> apartments, green condos |
-| Lift a pointing finger | V (hold = bigger) | Shops: diner, corner shop, petrol -> high street, supermarket, cinema -> offices, mall |
-| Lift a fist | N (hold = bigger) | Industry: car park, substation -> factory, power station, data centre -> empty skyscraper, glass tower |
-| Walk or run on the spot | Up / W (Shift to run) | Move down the street at your pace |
-| | C | Turn round and look back |
+| Lift one finger (index up, others curled) | H (hold = bigger) | Homes: cabin, bungalow, caravan -> row houses, terraces, modern house, villa -> apartments, green condos |
+| Lift an open hand (five fingers) | S (hold = bigger) | Shops: diner, corner shop, petrol -> high street, supermarket, cinema -> offices, mall |
+| Lift a fist | B (hold = bigger) | Big buildings: car park, substation -> factory, power station, data centre -> empty skyscraper, glass tower |
+| Walk or run on the spot | Up / W (Shift to run) | Move down the street at your pace (moving only your hands does not walk) |
+| | T | Turn round and look back |
 | | F | The end card: what it cost (it changes with what you did: the forest stays, a little, or a city) |
-| | M / P / R | Sound on/off, pause, start again |
+| | M / P / R | Sound on (mute), pause, start again |
+
+A hand shape counts once it is seen three times in a row; an unclear shape builds nothing. Walking
+ignores the hands and the arms below them (so you can cut and build while you walk), and needs about
+half a second of steady stepping (6 of the last 8 samples) before you move.
 
 If the land beside you is still forest, a build clears it first. Each hand works its own side of the
 street. With the keys, both sides build at once.
