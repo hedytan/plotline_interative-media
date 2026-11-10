@@ -61,7 +61,7 @@ Four files, each with one job. They load in this order; only code this artwork u
 - **Procedural painting.** Trees are grown with recursive branching and shaded leaf dabs, then cached
   as sprites. 24 kinds of building (19 styles and 5 basic district types) are drawn entirely in code:
   brick, weatherboard and render, glass curtain walls, neon signs, steaming cooling towers, chimney
-  smoke, and a tower crane beside tall buildings while they go up.
+  smoke, and scaffolding with a tower crane on tall buildings while they go up (gone the moment they finish).
 - **Machine-learning interaction.** ml5.js `handPose` (MediaPipe hand landmarks) tracks two hands. The
   hand shape (open, pointing, fist) is read from the landmarks, a quick sideways stroke is a chop and
   upward movement builds.
@@ -86,7 +86,7 @@ hooks in `world.js`:
 | `propWaits` | Should this lamp, tree or person wait (no buildings near it yet)? |
 | `worldUpdate` | Every frame, before drawing |
 | `lotRise` | How far has this building risen (floor by floor)? |
-| `drawBuildCrane`, `paintSlogan`, `drawBirds` | While drawing the street |
+| `drawBuildSite`, `paintSlogan`, `drawBirds` | While drawing the street |
 | `drawHud` | After the street, for the scoreboard, cards and camera panel |
 | `worldKey`, `worldClick` | A key or click the engine does not use itself |
 
