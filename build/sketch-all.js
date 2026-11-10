@@ -1731,9 +1731,9 @@ function drawBirds() {
 // random so the street never repeats: homes (one finger), shops (open hand) or industry and towers (fist).
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
-  //   open hand: bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern houses,
-  //              villas, mansions -> apartment blocks, "vertical forest" condos
-  //   pointing:  petrol stations, corner shops, diners -> high-street shops, supermarkets, cinemas -> offices, malls
+  //   one finger (homes): bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern
+  //              houses, villas, mansions -> apartment blocks, "vertical forest" condos
+  //   open hand (shops): petrol stations, corner shops, diners -> high-street shops, supermarkets, cinemas -> offices, malls
   //   fist:      car parks, substations -> factories, power stations, data centres -> empty skyscrapers, slant-topped towers
   const r = rngN(L.seed + 5 + builtCount * 31 + level * 7), len = L.z1 - L.z0;
   let opts;
@@ -1762,6 +1762,19 @@ function handUpdate(dt) {
   keyHoldT = keyLift ? keyHoldT + dt : 0;
   const keyLevel = keyHoldT < 0.6 ? 0 : keyHoldT < 1.4 ? 1 : 2;   // hold longer: bigger
   let keyNoLand = 0;
+  // Pressing a build key again and again makes it taller at once: every press adds floors to the two
+  // nearest cleared lots on each side you have cut; the 2nd press makes it a bigger building, the 3rd
+  // the biggest, and every press after that adds another floor or two.
+  const tap = keyTap; keyTap = null;
+  if (tap && handsActive()) {
+    for (const side of [-1, 1]) {
+      const near = [];
+      for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && Math.abs(L.z0 - distanceWalked) < 50) { near.push(L); } } }
+      if (!near.length) { keyNoLand++; continue; }
+      near.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
+      for (const L of near.slice(0, 2)) { tapBuild(L, tap.kind, tap.n); }
+    }
+  }
   for (const side of [-1, 1]) {
     const s = hands[side], handKind = s.ok ? kindOf(s.shape) : null, handLift = handKind ? s.lift : 0, lift = handLift + keyLift, kind = keyKind || handKind; s.lift = 0;
     if (!handsActive() || lift <= 0 || !kind) { continue; }
@@ -1799,10 +1812,22 @@ function handUpdate(dt) {
     }
   }
   // A build key with no cut land on either side: say how to choose a side (at most every 3 s).
-  if (keyLift && keyNoLand === 2 && handsActive() && clockT - keyHintT > 3) { keyHintT = clockT; sayToast('Cut the forest first: left or right arrow (or Z / X)'); }
+  if ((keyLift || tap) && keyNoLand === 2 && handsActive() && clockT - keyHintT > 3) { keyHintT = clockT; sayToast('Cut the forest first: left or right arrow (or Z / X)'); }
   // Once you stop lifting, the building tops out at the size your hand reached: the last floors go
   // up on their own in about half a second, and the scaffolding comes down.
-  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > 0.25 && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); } } }
+  for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.buildKind && L.born === undefined && L.grow > 0 && clockT - (L.liftT || 0) > (L.taps ? 0.7 : 0.25) && clockT - L.cutT > 0.45) { growLot(L, dt * 2.2, 1); } } }
+}
+// One press of a build key on one lot. Presses 1, 2, 3 pick a small, middle and big building (what is
+// built so far keeps its height); after that each press adds about a floor (up to 1.6 times as tall).
+// Open lots (car parks, petrol stations, substations) don't get taller. It tops out 0.7 s after the
+// last press, so you have time to press again.
+function tapBuild(L, kind, n) {
+  if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = L.grow || 0; }
+  L.taps = (L.taps || 0) + n; L.liftT = clockT;
+  const level = Math.min(2, L.taps - 1), builtM = (L.grow || 0) * (L.H || 0);
+  if (level > L.level) { L.level = level; makeBuilt(L, L.buildKind, level); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
+  else if (L.taps > 3 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n); L.grow = Math.min(0.98, builtM / L.H); }
+  if (clockT - L.cutT > 0.45) { growLot(L, 0.34 * n, 0.97); } else { L.grow = Math.max(L.grow || 0, 0.02); }
 }
 // Add to a building's height. A sound for every new floor; at the top it is finished and counted.
 function growLot(L, add, cap) {
@@ -1866,7 +1891,7 @@ function drawCrane(L, x, top) {
 }
 
 /* ---------- Your hands: the webcam and ml5 handPose ---------- */
-let keyHintT = -9;
+let keyHintT = -9, keyTap = null;   // keyTap: presses of H / S / B since the last frame
 let handMode = false, handVideo = null, handModel = null, handStatus = '', chopHintT = -9;
 // Two hands, one for each side of the street. In the mirrored picture your left hand is on the left.
 const newHand = () => ({ ok: false, x: 0.5, y: 0.6, fist: false, shape: null, cand: null, candN: 0, t: 0, seen: -9, chopT: -9, trail: [], lift: 0 });
@@ -2243,7 +2268,10 @@ function worldKey(e) {
   if (code === 'KeyF') { if (ending) { ending = null; nightTarget = 0; backWant = false; } else if (!intro) { endWalk(); } return true; }
   if (code === 'KeyX' || code === 'ArrowRight' || code === 'KeyD') { chopForest(1); return true; }
   if (code === 'KeyZ' || code === 'ArrowLeft' || code === 'KeyA') { chopForest(-1); return true; }
-  if (code === 'KeyH' || code === 'KeyS' || code === 'KeyB') { return true; }   // held: build (see handUpdate)
+  if (code === 'KeyH' || code === 'KeyS' || code === 'KeyB') {   // press again and again: taller (see tapBuild); hold: grows too
+    if (!e.repeat) { const kind = code === 'KeyH' ? 'home' : code === 'KeyS' ? 'shop' : 'tower'; keyTap = keyTap && keyTap.kind === kind ? { kind, n: keyTap.n + 1 } : { kind, n: 1 }; }
+    return true;
+  }
   if (code === 'BracketLeft') { motionGain = Math.max(0.3, motionGain / 1.25); sayToast(`Step sensitivity ${Math.round(motionGain * 100)}%`); return true; }
   if (code === 'BracketRight') { motionGain = Math.min(4, motionGain * 1.25); sayToast(`Step sensitivity ${Math.round(motionGain * 100)}%`); return true; }
   return false;

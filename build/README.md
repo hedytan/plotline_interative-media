@@ -21,9 +21,9 @@ For the p5.js Web Editor, paste `sketch-all.js` (every file below joined into on
 | With the camera (press C) | With the keyboard | What happens |
 |---|---|---|
 | Swing your left / right hand sideways | Z / X (or left / right arrow) | Cut the forest on that side; birds flee |
-| Lift one finger (index up, others curled) | H (hold = bigger) | Homes: cabin, bungalow, caravan -> row houses, terraces, modern house, villa -> apartments, green condos |
-| Lift an open hand (five fingers) | S (hold = bigger) | Shops: diner, corner shop, petrol -> high street, supermarket, cinema -> offices, mall |
-| Lift a fist | B (hold = bigger) | Big buildings: car park, substation -> factory, power station, data centre -> empty skyscraper, glass tower |
+| Lift one finger (index up, others curled) | H (press again = taller) | Homes: cabin, bungalow, caravan -> row houses, terraces, modern house, villa -> apartments, green condos |
+| Lift an open hand (five fingers) | S (press again = taller) | Shops: diner, corner shop, petrol -> high street, supermarket, cinema -> offices, mall |
+| Lift a fist | B (press again = taller) | Big buildings: car park, substation -> factory, power station, data centre -> empty skyscraper, glass tower |
 | Walk or run on the spot | Up / W (Shift to run) | Move down the street at your pace (moving only your hands does not walk) |
 | | T | Turn round and look back |
 | | F | The end card: what it cost (it changes with what you did: the forest stays, a little, or a city) |
@@ -35,7 +35,8 @@ half a second of steady stepping (6 of the last 8 samples) before you move.
 
 Each hand works its own side of the street; a hand lift beside uncut forest clears it first. The keys
 build only on the side(s) you have cut: cut the left (left arrow / Z) and H builds only on the left,
-cut both and both sides build.
+cut both and both sides build. Each press adds floors at once: the 2nd press makes it a bigger
+building, the 3rd the biggest, and more presses keep adding floors; it tops out 0.7 s after the last press.
 
 ## Files
 
