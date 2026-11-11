@@ -177,6 +177,12 @@ function kindOf(shape) { return shape === 'point' ? 'home' : shape === 'open' ? 
 // with a big lift you get tall, middle, tall, small...; with a small one, small and middle mixed.
 const LEAN = [0, -1, 1, -2, 1, -1, 0, -2, 2, -1];
 const leanN = { [-1]: 0, [1]: 0 };
+// The keys, like a hand at a different height for every lot: the first press already gives a mix of
+// small, middle and big buildings (KEY_LEAN, taken in turn per side), and every press after that
+// makes each of them bigger, so the keys build as varied a street as your hands do.
+const KEY_LEAN = [2, 0, 4, 1, 3, 0, 2, 4, 1, 3];
+const keyLeanN = { [-1]: 0, [1]: 0 };
+function keyBias(L) { if (L.kbias === undefined) { L.kbias = KEY_LEAN[(keyLeanN[L.side]++ + (L.side > 0 ? 5 : 0)) % KEY_LEAN.length]; } return L.kbias; }
 function lotBias(L) { if (L.bias === undefined) { L.bias = LEAN[(leanN[L.side]++ + (L.side > 0 ? 3 : 0)) % LEAN.length]; } return L.bias; }
 function lotLevel(L, level) { return Math.max(0, Math.min(2, level + lotBias(L))); }
 // Every frame: turn the lifting of each hand (or a held key) into floors on the nearest cleared lots.
@@ -232,7 +238,7 @@ function handUpdate(dt) {
       if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = 0; }
       // Reaching higher turns it into a bigger building; what is built so far keeps its height.
       const lv = lotLevel(L, level);
-      if (lv > L.level) { const builtM = (L.grow || 0) * (L.H || 0), was = L.H || 0; L.level = lv; makeBuilt(L, L.buildKind, lv); L.H = Math.max(L.H, was); L.grow = Math.min(0.98, builtM / L.H); }
+      if (lv > L.level) { const builtM = (L.grow || 0) * (L.H || 0), was = L.level >= 0 ? L.H || 0 : 0; L.level = lv; makeBuilt(L, L.buildKind, lv); L.H = Math.max(L.H, was); L.grow = Math.min(0.98, builtM / L.H); }
       // While your hand is still rising it keeps going (it can still get bigger); it tops out
       // when you stop. Taller buildings need a little more lifting, but not much.
       L.liftT = clockT;
@@ -254,9 +260,9 @@ function handUpdate(dt) {
     }
   }
 }
-// One press of a build key on one lot. Presses 1-2 make a small building, 3-4 a middle one and 5 a big
-// one (a bigger building never ends up lower than what is built so far); after 6 presses each press
-// adds about a floor (up to 1.6 times as tall).
+// One press of a build key on one lot. The lot's own lean (keyBias) plus the presses so far pick its
+// size: 1-2 small, 3-4 middle, 5 or more big (a bigger building never ends up lower than what is built
+// so far); past 6 each press adds about a floor (up to 1.6 times as tall).
 // Open lots (car parks, petrol stations, substations) don't get taller. It tops out 0.7 s after the
 // last press, so you have time to press again.
 function tapBuild(L, kind, n) {
@@ -265,8 +271,8 @@ function tapBuild(L, kind, n) {
   // Each lot reacts a little differently to the same presses: one grows up a size a press earlier,
   // another a press later, and each adds floors at its own pace, so a row built together isn't uniform.
   if (L.pace === undefined) { L.pace = 0.6 + (Math.abs(L.seed >> 9) % 9) / 10; }
-  const eff = Math.max(1, L.taps + lotBias(L)), level = eff <= 2 ? 0 : eff <= 4 ? 1 : 2, builtM = (L.grow || 0) * (L.H || 0);
-  if (level > L.level) { const was = L.H || 0; L.level = level; makeBuilt(L, L.buildKind, level); L.H = Math.max(L.H, was); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
+  const eff = Math.max(1, L.taps + keyBias(L)), level = eff <= 2 ? 0 : eff <= 4 ? 1 : 2, builtM = (L.grow || 0) * (L.H || 0);
+  if (level > L.level) { const was = L.level >= 0 ? L.H || 0 : 0; L.level = level; makeBuilt(L, L.buildKind, level); L.H = Math.max(L.H, was); L.baseH = L.H; L.grow = Math.min(0.98, builtM / L.H); }
   else if (eff > 6 && L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H = Math.min((L.baseH || L.H) * 1.6, L.H + 3.2 * n * L.pace); L.grow = Math.min(0.98, builtM / L.H); }
   if (clockT - L.cutT > 0.45) { growLot(L, 0.34 * n, 0.97); } else { L.grow = Math.max(L.grow || 0, 0.02); }
 }

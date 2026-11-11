@@ -35,8 +35,8 @@ half a second of steady stepping (6 of the last 8 samples) before you move.
 
 Each hand works its own side of the street; a hand lift beside uncut forest clears it first. The keys
 build only on the side(s) you have cut: cut the left (left arrow / Z) and H builds only on the left,
-cut both and both sides build. Each press adds floors at once: presses 1-2 make a small building, 3-4 a
-middle one, 5 the biggest, and more presses keep adding floors (it never gets lower). Every
+cut both and both sides build. Each press adds floors at once. Like a hand held at a different height, every lot
+starts at its own size (some small, some middle, some big) and each press makes it bigger, and more presses keep adding floors (it never gets lower). Every
 building gets its own height and the lots built together grow at their own pace, so no two look alike; it tops out 0.7 s after the last press.
 
 ## Files
