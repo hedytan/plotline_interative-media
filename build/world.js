@@ -197,7 +197,7 @@ function handUpdate(dt) {
   // builds only on the side(s) you have cut (left / right arrow, Z / X): cut one side, only that side builds.
   const keyKind = keysHeld.has('KeyB') ? 'tower' : keysHeld.has('KeyS') ? 'shop' : keysHeld.has('KeyH') ? 'home' : null, keyLift = keyKind ? dt : 0;
   keyHoldT = keyLift ? keyHoldT + dt : 0;
-  const keyLevel = keyHoldT < 0.6 ? 0 : keyHoldT < 1.4 ? 1 : 2;   // hold longer: bigger
+  const keyLevel = keyHoldT < 0.3 ? 0 : keyHoldT < 0.9 ? 1 : 2;   // hold longer: bigger, at the pace a hand rises from low to above your head
   let keyNoLand = 0;
   // Pressing a build key again and again is like lifting your hand higher: every press adds floors to
   // the two nearest cleared lots on each side you have cut, and more presses reach a bigger size (see tapBuild).
@@ -258,17 +258,17 @@ function handUpdate(dt) {
     }
   }
 }
-// One press of a build key on one lot works exactly like a short lift of your hand: the presses so far
-// stand for how high the hand has reached (1-2 low, 3-4 chest to face, 5+ above your head), the lot's
+// One press of a build key on one lot works exactly like one lift of your hand: a press is a lift to your
+// chest (middle size), a second press reaches above your head (the biggest), the lot's
 // own lean (lotBias, the same as for hands) mixes the sizes, makeBuilt picks the same looks, and each
 // press adds the floors a lift would, rising floor by floor over the next frames (L.tapPend, see
 // handUpdate). It tops out 0.7 s after the last press, so you have time to press again.
 function tapBuild(L, kind, n) {
   if (!L.buildKind) { L.buildKind = kind; L.level = -1; L.grow = L.grow || 0; }
   L.taps = (L.taps || 0) + n; L.liftT = clockT;
-  const reach = L.taps <= 2 ? 0 : L.taps <= 4 ? 1 : 2, lv = lotLevel(L, reach);
+  const reach = L.taps <= 1 ? 1 : 2, lv = lotLevel(L, reach);
   if (lv > L.level) { const builtM = (L.grow || 0) * (L.H || 0), was = L.level >= 0 ? L.H || 0 : 0; L.level = lv; makeBuilt(L, L.buildKind, lv); L.H = Math.max(L.H, was); L.grow = Math.min(0.98, builtM / L.H); }
-  L.tapPend = (L.tapPend || 0) + 0.3 * n * Math.pow(8 / Math.max(8, L.H), 0.3);
+  L.tapPend = (L.tapPend || 0) + 0.45 * n * Math.pow(8 / Math.max(8, L.H), 0.3);
   if (clockT - L.cutT <= 0.45) { L.grow = Math.max(L.grow || 0, 0.02); }
 }
 // Add to a building's height. A sound for every new floor; at the top it is finished and counted.
