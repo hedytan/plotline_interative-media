@@ -602,6 +602,7 @@ function drawStreetLife() {
 // Everything drawn on top of the street: scoreboard, messages, NEXT bar, music label, camera panel, cards.
 function drawHud() {
   const z = distanceWalked;
+  snapStreet();   // the ending's snapshot of the street, before anything is drawn over it
   push(); textFont('Georgia');
   if (!intro && !ending) {
     // The scoreboard, top left: what the forest has lost, and what you have built.
@@ -635,10 +636,7 @@ function drawHud() {
   }
   if (!intro) { drawHandPanel(); }
   if (intro) { drawOpening(); }
-  if (ending) {
-    const card = endingCard();
-    storyCard(card.title, card.lines, clockT - ending.t > 4.5 ? 'F: keep building   -   R: start again' : '', easeN((clockT - ending.t - 2.6) / 1.2), card.col);
-  }
+  if (ending) { drawReceipt(); }
   pop();
 }
 // What to do next, in one line: build if there is cleared land, cut if there is forest, else walk on.
@@ -675,21 +673,6 @@ function drawOpening() {
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
-// A centred card: the opening and the ending.
-function storyCard(title, lines, foot, a = 1, col = '#c8322a') {
-  if (a <= 0.001) { return; }
-  push(); drawingContext.globalAlpha = a; noStroke();
-  fill(20, 14, 10, 120); rect(0, 0, width, height);
-  const w = Math.min(580, width - 32), h = 110 + lines.length * 26, x = width / 2 - w / 2, y = height / 2 - h / 2;
-  fill(255, 250, 238); rect(x, y, w, h, 10); fill(col); rect(x, y, w, 46, 10, 10, 0, 0);
-  fill(255); textStyle(BOLD); textSize(18); textAlign(CENTER, CENTER); text(title, width / 2, y + 23);
-  textStyle(NORMAL); textSize(15); fill(40, 30, 24); textAlign(CENTER, TOP);
-  const story = lines.indexOf('');
-  lines.forEach((ln, i) => { if (story >= 0 && i > story) { textStyle(ITALIC); fill(110, 90, 80); } text(ln, x + 20, y + 62 + i * 26, w - 40); });
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD); fill(col); textSize(14); text(foot, width / 2, y + h - 24);
-  pop();
-}
 // The end card answers what you actually did: leaving the forest standing, taking a little, or
 // building a city each get their own words, so the ending never judges everyone the same way.
 function endingCard() {
@@ -703,11 +686,83 @@ function endingCard() {
   return { title: 'THE WORLD WE WANTED', col: '#2f6a3a', lines: [`You cut down ${treesCut} trees.`, built, 'Listen: the birds have stopped.', '', 'Every city was a forest once.', 'We build our world the way we want it.', 'Nobody asks the forest.'] };
 }
 
+/* ---------- The receipt: what the world you built cost ---------- */
+// The end is a receipt. A little printer prints it out: THE WORLD YOU CREATED, a snapshot of your
+// street (taken just after you turn round to look at it), what you cut and built, who paid (the
+// forest), the ending's words and a barcode. The paper slides out of the printer, its far end first.
+const RECEIPT_T0 = 2.6, RECEIPT_DUR = 2.8, RECEIPT_INK = '#23231f';
+let receiptCount = 0;
+// Copy the middle of the screen (the street you built) into a small picture for the receipt.
+function snapStreet() {
+  if (!ending || ending.snap || clockT - ending.t < 2.4) { return; }
+  const sw = canvasNode.width, sh = canvasNode.height, cw = sw * 0.96, chh = Math.min(sh * 0.8, cw * 0.56);
+  const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * chh / cw);
+  c.getContext('2d').drawImage(canvasNode, (sw - cw) / 2, Math.max(0, sh * 0.52 - chh * 0.62), cw, chh, 0, 0, c.width, c.height);
+  ending.snap = c;
+}
+function drawReceipt() {
+  const card = endingCard(), a = clockT - ending.t, fade = easeN((a - 2.2) / 0.6), k = easeN((a - RECEIPT_T0) / RECEIPT_DUR);
+  if (fade <= 0) { return; }
+  if (a > RECEIPT_T0 && !ending.printing) { ending.printing = true; sound.printer(RECEIPT_DUR); }
+  const PW = 300, pad = 18, mono = '"Courier New", Courier, monospace', sans = 'Helvetica, Arial, sans-serif', INK = RECEIPT_INK;
+  const rows = [['TREES CUT DOWN', treesCut], ['HOMES BUILT', homesBuilt], ['SHOPS BUILT', shopsBuilt], ['TOWERS BUILT', towersBuilt], ['BIRDS LEFT', builtCount === 0 ? 'ALL' : builtCount <= 5 ? 'SOME' : 'NONE']];
+  const story = card.lines.slice(card.lines.indexOf('') + 1);
+  const snapH = ending.snap ? (PW - pad * 2) * ending.snap.height / ending.snap.width : 0;
+  const H = pad + 72 + 20 + (snapH ? snapH + 14 : 0) + 22 + 12 + rows.length * 20 + 12 + 26 + 12 + story.length * 16 + 12 + 50 + 16 + 18;
+  const PH = 110, slotY = PH * 0.74, sc = Math.min(1, (height - 60) / (slotY + H + 10), (width - 32) / (PW + 80));
+  const c = drawingContext;
+  push(); c.save();
+  c.globalAlpha = fade; c.fillStyle = 'rgba(16,20,16,0.6)'; c.fillRect(0, 0, width, height);
+  c.translate(width / 2, 14); c.scale(sc, sc);
+  // The printer: a soft grey box with a dark slot.
+  const bw = PW + 70;
+  c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 24; c.shadowOffsetY = 8;
+  let g = c.createLinearGradient(0, 0, 0, PH); g.addColorStop(0, '#e9ebe6'); g.addColorStop(1, '#c9ccc5');
+  c.fillStyle = g; c.beginPath(); c.roundRect ? c.roundRect(-bw / 2, 0, bw, PH, 26) : c.rect(-bw / 2, 0, bw, PH); c.fill();
+  c.shadowColor = 'transparent';
+  c.fillStyle = 'rgba(255,255,255,0.5)'; c.fillRect(-bw / 2 + 20, 10, bw - 40, 3);
+  c.fillStyle = '#2a2b28'; c.fillRect(-PW / 2 - 8, slotY - 3, PW + 16, 6);
+  // The paper, clipped below the slot, sliding out as it prints.
+  const y0 = slotY + H * k - H;
+  c.save(); c.beginPath(); c.rect(-PW / 2 - 20, slotY, PW + 40, H + 60); c.clip(); c.translate(-PW / 2, y0);
+  c.shadowColor = 'rgba(0,0,0,0.3)'; c.shadowBlur = 12; c.shadowOffsetY = 4; c.fillStyle = '#f7f5ef';
+  c.beginPath(); c.moveTo(0, 0); c.lineTo(PW, 0); c.lineTo(PW, H - 6);
+  for (let x = PW; x > 0; x -= 10) { c.lineTo(x - 5, H); c.lineTo(Math.max(0, x - 10), H - 6); }
+  c.closePath(); c.fill(); c.shadowColor = 'transparent';
+  let y = pad; c.fillStyle = INK; c.textBaseline = 'top'; c.textAlign = 'center';
+  c.font = `bold 30px ${sans}`; c.fillText('THE WORLD', PW / 2, y); y += 34; c.fillText('YOU CREATED', PW / 2, y); y += 38;
+  c.font = `11px ${mono}`; c.fillText(`RECEIPT NO. ${String(ending.no || 1).padStart(4, '0')}  -  WE BUILD OUR WORLD`, PW / 2, y, PW - pad * 2); y += 20;
+  if (snapH) { c.drawImage(ending.snap, pad, y, PW - pad * 2, snapH); c.strokeStyle = INK; c.lineWidth = 1; c.strokeRect(pad, y, PW - pad * 2, snapH); y += snapH + 14; }
+  c.font = `bold 13px ${sans}`; c.fillText(card.title, PW / 2, y, PW - pad * 2); y += 22;
+  const dashes = () => { c.strokeStyle = INK; c.lineWidth = 1; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(pad, y + 4); c.lineTo(PW - pad, y + 4); c.stroke(); c.setLineDash([]); y += 12; };
+  dashes();
+  c.font = `13px ${mono}`;
+  for (const [lab, v] of rows) { c.textAlign = 'left'; c.fillText(lab, pad, y); c.textAlign = 'right'; c.fillText(String(v), PW - pad, y); y += 20; }
+  dashes();
+  c.font = `bold 15px ${mono}`; c.textAlign = 'left'; c.fillText('PAID BY', pad, y); c.textAlign = 'right'; c.fillText(builtCount ? 'THE FOREST' : 'NOBODY', PW - pad, y); y += 26;
+  dashes();
+  c.textAlign = 'center'; c.font = `italic 12px Georgia, serif`;
+  for (const ln of story) { c.fillText(ln, PW / 2, y, PW - pad * 2); y += 16; }
+  y += 12;
+  // A barcode made from what you did.
+  const r = rngN(treesCut * 31 + builtCount * 7 + (ending.no || 1)); let bx = pad + 6;
+  while (bx < PW - pad - 6) { const w = 1 + Math.floor(r() * 3); c.fillRect(bx, y, w, 50); bx += w + 1 + Math.floor(r() * 3); }
+  y += 54; c.font = `10px ${mono}`;
+  c.fillText(`${treesCut} TREES  ${homesBuilt}-${shopsBuilt}-${towersBuilt}  NO REFUNDS`, PW / 2, y, PW - pad * 2);
+  c.restore();
+  c.restore(); pop();
+  // When it has printed: what you can do next.
+  if (a > RECEIPT_T0 + RECEIPT_DUR) {
+    push(); textFont('Georgia'); textStyle(BOLD); textSize(15); textAlign(CENTER, BOTTOM); fill(255); stroke(0, 150); strokeWeight(3);
+    drawingContext.globalAlpha = easeN((a - RECEIPT_T0 - RECEIPT_DUR) / 0.5); text('F: keep building   -   R: start again', width / 2, height - 14); pop();
+  }
+}
+
 /* ---------- Ending and starting again ---------- */
 // F: the end. You turn round to look at the street you made, then the card fades in.
 function endWalk() {
   if (ending) { return; }
-  ending = { t: clockT }; sound.go(); nightTarget = 0.25;   // the light dims a little
+  ending = { t: clockT, no: ++receiptCount }; sound.go(); nightTarget = 0.25;   // the light dims a little
   backWant = true;   // turn round and see the street you made, then the card
 }
 // A new street: a new seed, the forest back, every count back to zero, and the opening card.
@@ -740,6 +795,6 @@ function worldKey(e) {
 // A click closes the opening card, or the end card once it has been read.
 function worldClick(mx, my) {
   if (intro) { intro = false; return true; }
-  if (ending) { if (clockT - ending.t > 4.5) { ending = null; nightTarget = 0; backWant = false; } return true; }
+  if (ending) { if (clockT - ending.t > RECEIPT_T0 + RECEIPT_DUR) { ending = null; nightTarget = 0; backWant = false; } return true; }
   return false;
 }

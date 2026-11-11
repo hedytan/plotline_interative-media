@@ -26,7 +26,7 @@ For the p5.js Web Editor, paste `sketch-all.js` (every file below joined into on
 | Lift a fist | B (press again = taller) | Big buildings: car park, substation -> factory, power station, data centre -> empty skyscraper, glass tower |
 | Walk or run on the spot | Up / W (Shift to run) | Move down the street at your pace (moving only your hands does not walk) |
 | | T | Turn round and look back |
-| | F | The end card: what it cost (it changes with what you did: the forest stays, a little, or a city) |
+| | F | The end: a little printer prints a receipt, THE WORLD YOU CREATED, with a snapshot of your street, what you cut and built, PAID BY: THE FOREST and a barcode (its words change with what you did: the forest stays, a little, or a city) |
 | | M / P / R | Sound on (mute), pause, start again |
 
 A hand shape counts once it is seen three times in a row; an unclear shape builds nothing. Walking

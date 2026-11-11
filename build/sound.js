@@ -116,6 +116,16 @@ class WorldSound {
     setTimeout(() => { made.forEach(nd => { try { nd.disconnect(); } catch (e) { } }); }, (len + 3) * 1000);
     return len;
   }
+  // The receipt printer: a fast, buzzing rattle of the print head for as long as it prints.
+  printer(dur) {
+    if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
+    const ctx = this.context, t = ctx.currentTime, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    s.buffer = this.noise; s.loop = true; f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 1.5;
+    lfo.type = 'square'; lfo.frequency.value = 24; lg.gain.value = 0.05; lfo.connect(lg); lg.connect(g.gain);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.07, t + 0.05); g.gain.setValueAtTime(0.07, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.08);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.1); lfo.start(t); lfo.stop(t + dur + 0.1);
+    s.onended = () => { s.disconnect(); f.disconnect(); g.disconnect(); lfo.disconnect(); lg.disconnect(); };
+  }
   // A tree comes down, loud: the axe bites, the wood cracks, branches crash, and the trunk thumps down.
   chop(side) {
     if (!this.enabled || !this.context || this.context.state !== 'running') { return; }
