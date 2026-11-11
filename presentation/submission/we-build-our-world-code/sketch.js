@@ -271,7 +271,7 @@ function updateLandmarks(z) {
 function skyColors() {
   const dayCols = ['#c9a46e', '#d9c194', '#e8dcbc', '#8a96a6'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
   // Smog: the more you have built, the greyer the sky (smogK, from world.js).
-  const smog = ['#77726b', '#86817a', '#9a9388', '#4a4c52'], sm = smogNow() * 0.92;
+  const smog = ['#77726b', '#86817a', '#9a9388', '#4a4c52'], sm = smogNow() * 0.8;
   return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), smog[i], sm));
 }
 function drawSky() {
@@ -282,7 +282,7 @@ function drawSky() {
   const sx = cam.cx - Math.tan(cam.yaw) * cam.f, sy = hy - height * 0.06;
   // The sun behind the landmark tower: a soft glow, dimmer as the smog thickens.
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55), sunA = (1 - night) * (mirrorView ? 0.15 : 1) * (1 - 0.85 * smogNow());
+  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55), sunA = (1 - night) * (mirrorView ? 0.15 : 1) * (1 - 0.7 * smogNow());
   sg.addColorStop(0, `rgba(255,240,200,${0.5 * sunA})`); sg.addColorStop(0.25, `rgba(255,200,140,${0.16 * sunA})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
   ctx.fillStyle = sg; ctx.fillRect(-80, -height * 0.3, width + 160, height * 1.3);
   ctx.restore();

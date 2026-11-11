@@ -648,7 +648,7 @@ function updateLandmarks(z) {
 function skyColors() {
   const dayCols = ['#c9a46e', '#d9c194', '#e8dcbc', '#8a96a6'], dusk = ['#5a3a7a', '#c86a7a', '#ffb070', '#1d2a55'];
   // Smog: the more you have built, the greyer the sky (smogK, from world.js).
-  const smog = ['#77726b', '#86817a', '#9a9388', '#4a4c52'], sm = smogNow() * 0.92;
+  const smog = ['#77726b', '#86817a', '#9a9388', '#4a4c52'], sm = smogNow() * 0.8;
   return dayCols.map((c, i) => mixHex(mixHex(c, dusk[i], night * 0.85), smog[i], sm));
 }
 function drawSky() {
@@ -659,7 +659,7 @@ function drawSky() {
   const sx = cam.cx - Math.tan(cam.yaw) * cam.f, sy = hy - height * 0.06;
   // The sun behind the landmark tower: a soft glow, dimmer as the smog thickens.
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55), sunA = (1 - night) * (mirrorView ? 0.15 : 1) * (1 - 0.85 * smogNow());
+  const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, height * 0.55), sunA = (1 - night) * (mirrorView ? 0.15 : 1) * (1 - 0.7 * smogNow());
   sg.addColorStop(0, `rgba(255,240,200,${0.5 * sunA})`); sg.addColorStop(0.25, `rgba(255,200,140,${0.16 * sunA})`); sg.addColorStop(1, 'rgba(255,170,90,0)');
   ctx.fillStyle = sg; ctx.fillRect(-80, -height * 0.3, width + 160, height * 1.3);
   ctx.restore();
@@ -1690,7 +1690,7 @@ function worldUpdate(z) {
   const dt = Math.min(deltaTime / 1000, 0.05);
   houseLife(); handUpdate(dt);
   devBar += (sound.devK - devBar) * (1 - Math.exp(-dt * 1.5));
-  smogK += (Math.pow(Math.min(1, (builtCount + factoriesBuilt * 2) / 12), 0.7) - smogK) * (1 - Math.exp(-dt * 1.4));   // about half grey at 5 buildings, full smog at 12 (factories count 3x)
+  smogK += (Math.pow(Math.min(1, (builtCount + factoriesBuilt * 2) / 20), 0.85) - smogK) * (1 - Math.exp(-dt * 0.35));   // a light grey at 5 buildings, deepening slowly, full smog at 20 (factories count 3x)
   if (!lookHint && builtCount >= 6 && !ending) { lookHint = true; sayToast('Press T to turn round and look at what you have done.'); }
   if (builtCount >= nextThought) { sayToast(THOUGHTS[Math.floor(nextThought / 10 - 1) % THOUGHTS.length]); nextThought += 10; }
 }
@@ -2213,18 +2213,18 @@ function drawPerson(q, p) {
 // the colour drains, the light dims, and a brown-grey smoke veil hangs over the horizon.
 function drawStreetLife() {
   const sm = smogNow();
-  ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.3 + 0.45 * sm; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.3 + 0.3 * sm; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, width, height); ctx.restore();
   if (sm < 0.01) { return; }
   ctx.save();
-  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = `rgba(120,112,104,${0.55 * sm})`; ctx.fillRect(0, 0, width, height);   // the light dims
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = `rgba(120,112,104,${0.32 * sm})`; ctx.fillRect(0, 0, width, height);   // the light dims
   ctx.globalCompositeOperation = 'source-over';
   const hy = cam.hy, g = ctx.createLinearGradient(0, hy - height * 0.45, 0, hy + height * 0.12);   // smoke veil over the horizon
-  g.addColorStop(0, 'rgba(92,86,78,0)'); g.addColorStop(0.55, `rgba(92,86,78,${0.42 * sm})`); g.addColorStop(0.85, `rgba(110,102,92,${0.5 * sm})`); g.addColorStop(1, 'rgba(110,102,92,0)');
+  g.addColorStop(0, 'rgba(92,86,78,0)'); g.addColorStop(0.55, `rgba(92,86,78,${0.26 * sm})`); g.addColorStop(0.85, `rgba(110,102,92,${0.3 * sm})`); g.addColorStop(1, 'rgba(110,102,92,0)');
   ctx.fillStyle = g; ctx.fillRect(0, hy - height * 0.45, width, height * 0.57);
   const r = rngN(seed + 77);   // slow drifting smoke clouds across the sky
   for (let i = 0; i < 6; i++) {
     const cx = modN(r() * width * 1.5 + clockT * (6 + i * 2) - cam.yaw * cam.f * 0.4, width * 1.5) - width * 0.25, cy = hy * mixN(0.25, 0.85, r()), rad = mixN(90, 200, r()) * height / 800;
-    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad); cg.addColorStop(0, `rgba(70,66,62,${0.35 * sm})`); cg.addColorStop(1, 'rgba(70,66,62,0)');
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad); cg.addColorStop(0, `rgba(70,66,62,${0.2 * sm})`); cg.addColorStop(1, 'rgba(70,66,62,0)');
     ctx.save(); ctx.translate(cx, cy); ctx.scale(2.2, 0.6); ctx.translate(-cx, -cy); ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TWO_PI); ctx.fill(); ctx.restore();
   }
   ctx.restore();
