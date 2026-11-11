@@ -139,7 +139,7 @@ A sideways movement of more than 18% of the picture within 0.4 seconds, and more
 No, it's frame differencing. About 15 times a second, I shrink the camera image to 48 by 36 grey pixels and count how many changed, only in the middle, with the hands and arms masked out. So hand gestures don't move you, and you can walk and build at the same time. It calibrates for two seconds at the start.
 
 **Q: Do the keys build the same things as the hands?**
-Yes, both call the same function, `makeBuilt`. With the hand, height picks the size; with the keys, the number of presses does. Each lot also leans a little bigger or smaller, so neighbouring buildings differ.
+Yes. A key press is treated exactly like one lift of the hand: one press is a lift to the chest, two presses reach above the head. Both go through the same functions, `makeBuilt` for the look and `growLot` for the floors, and each lot leans a little bigger or smaller, so neighbouring buildings differ.
 
 ## Visuals and code
 
@@ -170,7 +170,7 @@ Four files with one job each; the engine calls the artwork's rules through a few
 ## Harder questions
 
 **Q: Show me where the hand shape is decided.**
-*[Open world.js and search for `handShape`.]*
+*[In `sketch-all.js` press Cmd + F, type `function handShape` (line 2016). The three lines that decide fist / point / open are 2021-2023.]*
 
 **Q: What happens if the camera fails?**
 Every gesture has a key, the camera calibrates itself, and if ml5 can't load, it tells you to use the keys. Drawing is wrapped in try/catch, so one bad shape can't freeze the sketch.
