@@ -1729,7 +1729,7 @@ function drawBirds() {
 /* ---------- Building, floor by floor ---------- */
 // What a cleared lot becomes. Each hand shape builds a different family of buildings, picked at
 // random so the street never repeats: homes (one finger), shops (open hand) or industry and towers (fist).
-const recentLooks = [];   // the last few looks built anywhere, so neighbours look different
+const recentLooks = [];   // the last five looks built anywhere, so neighbours look different
 function makeBuilt(L, kind, level = 0) {
   // How high you lift decides how big it gets: level 0 low, 1 middle, 2 high (see handUpdate).
   //   one finger (homes): bungalows, cottages, caravans, log cabins -> terraces, canal row houses, modern
@@ -1746,8 +1746,10 @@ function makeBuilt(L, kind, level = 0) {
   else if (kind === 'shop') { opts = level === 0 ? [T(0), S('diner')].concat(len >= 11 ? [S('petrol')] : [T(1)]) : level === 1 ? [T(1), S('cinema'), S('diner')].concat(big ? [S('supermarket')] : [T(0)]) : [T(3)].concat(big ? [S('mall')] : []); }
   else { opts = level === 0 ? [S('bungalow'), S('cabin'), S('caravan'), S('modern')] : level === 1 ? [T(1), S('canal'), S('modern'), S('bungalow')].concat(len >= 18 ? [S('villa'), T(2)] : [S('canal')]) : [S('apartment'), S('greencondo'), T(3)]; }
   // Not the same look as the last few buildings (on either side), if the size allows another one.
+  // If every look of this size was used lately, take the one used longest ago.
   const fresh = opts.filter(o => !recentLooks.includes(o.join()));
-  const pick = pickN(r, fresh.length ? fresh : opts); recentLooks.push(pick.join()); if (recentLooks.length > 2) { recentLooks.shift(); }
+  const oldest = () => opts.reduce((a, b) => (recentLooks.lastIndexOf(a.join()) <= recentLooks.lastIndexOf(b.join()) ? a : b));
+  const pick = fresh.length ? pickN(r, fresh) : oldest(); recentLooks.push(pick.join()); if (recentLooks.length > 5) { recentLooks.shift(); }
   const [how, v] = pick, tier = how === 'tier' ? v : STYLES_LOT[v].tier, t = makeLot(tier, L.side, L.z0, len, r);
   Object.assign(L, { style: null, tier, H: t.H, depth: t.depth, setback: t.setback, color: t.color, accent: t.accent, awning: t.awning, name: t.name, sign: t.sign, crooked: t.crooked || 0, crown: t.crown, spire: t.spire, glass: t.glass, fountain: t.fountain, brick: false, tree: false, vacant: false });
   if (how === 'style') { styleLot(L, v, r); }
@@ -1755,7 +1757,7 @@ function makeBuilt(L, kind, level = 0) {
   // A tall home on a plain tier-3 block is a brick block of flats: no shop sign, no glass.
   if (kind === 'home' && how === 'tier' && tier === 3) { Object.assign(L, { sign: false, name: '', glass: false, color: pickN(r, ['#a8483a', '#b85a40', '#8c3e34', '#9a5038', '#b8806a']) }); }
   // Every building its own height: 80% to 125% of its style's usual height (flat lots stay flat).
-  if (L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H *= mixN(0.8, 1.25, r()); }
+  if (L.H > 3 && !['carpark', 'petrol', 'substation'].includes(L.style)) { L.H *= mixN(0.75, 1.35, r()); }
 }
 // The height of your hand picks the size: low (0), chest to face (1), above your head (2).
 // With the keys, holding longer goes bigger.
@@ -1763,9 +1765,13 @@ function handLevel(s) { const h = 1 - s.y; return h < 0.5 ? 0 : h < 0.72 ? 1 : 2
 // What each hand shape builds: one finger = homes, open hand = shops, fist = industry and towers.
 // An unclear shape builds nothing (see handFeedSide), so a half-open hand never builds the wrong thing.
 function kindOf(shape) { return shape === 'point' ? 'home' : shape === 'open' ? 'shop' : shape === 'fist' ? 'tower' : null; }
-// Each lot leans a little smaller or bigger than what you asked for (-1, 0 or +1 size), so the lots
+// Each lot leans smaller or bigger than what you asked for (up to two sizes), so the lots
 // built together by one lift, hold or press are not all the same building.
-function lotBias(L) { if (L.bias === undefined) { L.bias = Math.abs(L.seed >> 5) % 3 - 1; } return L.bias; }
+// Lots take their lean in turn from a mixed pattern (per side), so next-door buildings differ in size:
+// with a big lift you get tall, middle, tall, small...; with a small one, small and middle mixed.
+const LEAN = [0, -1, 1, -2, 1, -1, 0, -2, 2, -1];
+const leanN = { [-1]: 0, [1]: 0 };
+function lotBias(L) { if (L.bias === undefined) { L.bias = LEAN[(leanN[L.side]++ + (L.side > 0 ? 3 : 0)) % LEAN.length]; } return L.bias; }
 function lotLevel(L, level) { return Math.max(0, Math.min(2, level + lotBias(L))); }
 // Every frame: turn the lifting of each hand (or a held key) into floors on the nearest cleared lots.
 function handUpdate(dt) {
