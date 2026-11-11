@@ -357,6 +357,17 @@ function startHands() {
   sc.onload = go; sc.onerror = () => { handStatus = 'Hand tracking could not load: Z / X cut, hold H, S or B'; };
   document.head.appendChild(sc);
 }
+// Which hand is which. ml5 labels every hand 'Left' or 'Right', but whether that label means your
+// left or the picture's left depends on the camera, so the sketch learns it while you play: a hand
+// seen well over on one side of the mirrored picture is almost always the hand on that side of your
+// body, and every such sighting is a vote. Once the votes agree (handVote at +-5 or more), the label
+// decides, wherever the hand is in the picture, so your right hand works the right side of the street
+// even when it reaches across the middle. Until then the half of the picture decides.
+let handVote = 0;
+function sideOfLabel(label) {
+  if (label !== 'Left' && label !== 'Right' || Math.abs(handVote) < 5) { return 0; }
+  const s = label === 'Right' ? 1 : -1; return handVote > 0 ? s : -s;
+}
 // ml5 calls this with the hands it found (21 points each). Read each hand's shape and side.
 function gotHands(results) {
   if (!results || !results.length || !handVideo) { return; }
@@ -366,18 +377,25 @@ function gotHands(results) {
     const kp = h.keypoints || [], at = n => kp.find(k => k.name === n);
     const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { continue; }
     if (kp.length) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const k of kp) { x0 = Math.min(x0, k.x); y0 = Math.min(y0, k.y); x1 = Math.max(x1, k.x); y1 = Math.max(y1, k.y); } boxes.push({ x0, y0, x1, y1 }); }
-    seen.push({ x: 1 - p.x / (handVideo.width || 320), y: p.y / (handVideo.height || 240), fist: wrist ? handShape(at, wrist) : null });
+    const x = 1 - p.x / (handVideo.width || 320), label = h.handedness;
+    // Learn what the label means from hands clearly on one side of the picture.
+    if ((label === 'Left' || label === 'Right') && (x < 0.35 || x > 0.65)) { const agree = (label === 'Right') === (x > 0.5); handVote = Math.max(-30, Math.min(30, handVote + (agree ? 1 : -1))); }
+    seen.push({ x, y: p.y / (handVideo.height || 240), fist: wrist ? handShape(at, wrist) : null, side: sideOfLabel(label) });
   }
   handBoxes = boxes; handBoxT = performance.now();
-  // Two hands: the one further left is your left hand. One hand: the hand it already was, if that hand
-  // was seen a moment ago (so a swing across the middle of the picture stays one swing); otherwise
-  // whichever half of the picture it is in.
+  const feed = (side, h) => handFeedSide(side, h.x, h.y, h.fist);
   seen.sort((a, b) => a.x - b.x);
-  if (seen.length === 2) { handFeedSide(-1, seen[0].x, seen[0].y, seen[0].fist); handFeedSide(1, seen[1].x, seen[1].y, seen[1].fist); }
-  else if (seen.length === 1) {
-    const now = performance.now() / 1000, live = [-1, 1].filter(sd => hands[sd].ok && now - hands[sd].seen < 0.5);
-    const side = live.length === 1 ? live[0] : seen[0].x < 0.5 ? -1 : 1;
-    handFeedSide(side, seen[0].x, seen[0].y, seen[0].fist);
+  if (seen.length === 2) {
+    // Two hands: by their labels if both are known and differ, otherwise the one further left is your left.
+    if (seen[0].side && seen[1].side && seen[0].side !== seen[1].side) { feed(seen[0].side, seen[0]); feed(seen[1].side, seen[1]); }
+    else { feed(-1, seen[0]); feed(1, seen[1]); }
+  } else if (seen.length === 1) {
+    const h = seen[0];
+    if (h.side) { feed(h.side, h); return; }
+    // Label not learned yet: the same hand still moving (seen a moment ago, close by) keeps its side,
+    // so a swing across the middle stays one swing; a hand that appears anew goes by its half of the picture.
+    const now = performance.now() / 1000, cont = [-1, 1].find(sd => hands[sd].ok && now - hands[sd].seen < 0.15 && Math.abs(hands[sd].x - h.x) < 0.25);
+    feed(cont || (h.x < 0.5 ? -1 : 1), h);
   }
 }
 // The shape of one hand from its 21 points. For each finger, compare how far its tip is from the
