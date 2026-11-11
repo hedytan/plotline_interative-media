@@ -7,7 +7,7 @@ Thursday 12 November 2026, 11:00 - 11:15, room CB10.04.430, with Jacob Dawson-Da
 |---|---|---|---|
 | 1 | A2B presentation (slides 1-6, live demo) | 5 min | 11:00 - 11:05 |
 | 2 | A2B Q&A | 3 min | 11:05 - 11:08 |
-| 3 | A2C reflection (2 reflection slides) | 3 min | 11:08 - 11:11 |
+| 3 | A2C reflection (3 reflection slides) | 3 min | 11:08 - 11:11 |
 | 4 | A2C Q&A | 2 min | 11:11 - 11:13 |
 | | spare | 2 min | |
 
@@ -28,7 +28,7 @@ Thursday 12 November 2026, 11:00 - 11:15, room CB10.04.430, with Jacob Dawson-Da
 - [ ] Press **R** to start again; leave it on the opening card.
 - [ ] Second tab: `sketch-all.js` open (p5 editor or VS Code) for slide 5 / questions.
 - [ ] Slides open on slide 1. Notifications off.
-- [ ] Reflection slides (`We Build Our World - A2C reflection slides.pptx`) open in a second window, ready for Part 3.
+- [ ] Reflection slides (`A2C Reflection slides - Hedy Tan.pptx`) open in a second window, ready for Part 3.
 - [ ] Wait outside until you are called.
 
 ## Controls (backup if the camera fails)
@@ -215,35 +215,47 @@ Let the forest slowly grow back when you stop building, so restraint has a visib
 
 ---
 
-# PART 3: A2C REFLECTION (3 minutes, 2 slides)
+# PART 3: A2C REFLECTION (3 minutes, 3 slides)
 
-Talk about insights and future practice, not the whole story. Switch to the reflection slides.
+Based on my submitted reflection (`HedyTan_A2C_Reflection_Final_edited.docx`). Talk about insights and future practice, not the whole story. Switch to the reflection slides (`A2C Reflection slides - Hedy Tan.pptx`).
 
-## Reflection slide 1: The bugs were between the code and the body
+## Reflection slide 1: Hand gestures as interaction (about 1:15)
 
-**Opening (10 s)**
-My reflection has two key insights, and what they taught me about my practice.
+**Opening (15 s)**
+We Build Our World is a first-person street that begins as a painted forest. You clear trees and build, with camera gestures or the keyboard. It started as a Monopoly-inspired street; now it asks what building replaces. My reflection has two parts.
 
-**Insight 1: Interaction bugs live between the algorithm and a real body (about 1 min)**
-Chopping kept failing, and the problem wasn't the model, it was my rules. I assigned hands by which half of the picture they were in, so one swing across the middle became two half-swings. Then I over-corrected with a big rewrite that changed many thresholds at once, and it felt worse. I rolled back with version control and re-applied only two small fixes.
+**Recount**
+The first is hand gestures. I use ml5 hand tracking: each hand acts on its own side of the street. A quick sideways stroke clears land, lifting grows buildings floor by floor, and hand height picks the size. The keyboard uses the same functions.
 
-For my practice: I'll test with a real camera and real people early, change one thing at a time, and commit small working steps so I can always go back. Even this week, testing with my own hands led me to change the gestures, let walking and building happen together, and teach the sketch which hand is which.
+**React**
+I wanted walking through this world to feel direct, not depend on throwing dice like my Monopoly version. I prefer the gestures, because swinging and lifting make clearing and building feel physically different. But the camera adds uncertainty, and I would rather show a dependable keyboard than let an unreliable gesture hide the concept. Sophistication only helps when it supports the experience.
 
-*(Point to the dark box: FOR MY PRACTICE.)*
+**Analyse**
+A swing suggests cutting and lifting looks like growth, but I have not yet proven that new users read it that way. Early on, one hand swinging across the middle was read as two half-swings, so nothing was cleared. So matching the concept does not guarantee usability. Making an action meaningful and making it dependable are two separate jobs.
 
-## Reflection slide 2: Let the world answer, not the words
+**Improve**
+*(Point to the IMPROVE box.)*
+Next time I will test with three users at the first working prototype, without coaching, and record missed gestures, accidental actions and requests for help.
+
+## Reflection slide 2: Reducing the concept (about 1:15)
 
 *(Point to the BEFORE picture, then the NOW picture.)*
 
-**Insight 2: Let the world answer instead of explaining with words (about 1 min)**
-My first version was a Monopoly street full of signs and scores, and the feedback was that the meaning was unclear. I pivoted to forest-to-city and removed most of the text. The piece became calmer and clearer, because a consequence you cause yourself is more persuasive than a slogan. The pivot also showed that old Monopoly code was still running; removing it and caching colours made every frame twice as fast.
+**Recount**
+My earlier direction combined a Monopoly street with buying, rent and a lot of information. It narrowed to forest, clearing, building and looking back. Every new building now needs forest cleared, the sound follows nearby development, and the haze grows with the buildings, factories counting more.
 
-For my practice: I'll prototype the core interaction first and check that people understand it before adding detail; write down what the player should feel and judge every feature against it; and remove old code as soon as the direction changes.
+**React**
+I was frustrated when I could not explain what my own project was doing. I had linked visual richness with a better result. I now prefer the clearer direction, even though I gave up worlds I liked. I want building to feel inviting, but also consequential.
 
-*(Point to the gold line at the bottom.)*
+**Analyse**
+My real problem was adding features before defining how they relate. Extra mechanics needed more instructions, so the explanation competed with the landscape. Taking things away gave what was left one shared purpose. But consistent sound and visuals can support a meaning without proving people understand it.
 
-**Closing (20 s)**
-Overall, the work reaches its main aim: the cost of building is felt rather than read. The biggest lessons were about process: simplify the message until the interaction carries it, test with real bodies early, and use version control as a safety net that makes bold decisions possible.
+**Improve**
+I will define one central question before expanding a prototype, keep the last quarter of the schedule for evaluation, and test a one-minute version with a newcomer before another big pivot.
+
+## Reflection slide 3: What I learned (about 20 s)
+
+It largely achieved its aim: participants cause a transformation and can look back on it, though strangers may not yet read it as intended. I learned that an idea must be simple enough for the interaction to carry it, and that testing, not extra features, makes it dependable.
 
 ---
 
