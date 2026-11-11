@@ -160,9 +160,9 @@ Thursday 12 November 2026, 11:00 – 11:15, CB10.04.430, with Jacob Dawson-Daley
 
 中文：二、减少反而让意义更清楚。之前的 Monopoly 版本靠标志、规则和文字，回馈是意义不清楚；简化成砍和盖以后，交互本身就能带出意思，大部分文字都拿掉了。以后先确认核心交互看得懂，再加视觉细节。
 
-> **Third: a meaningful interaction also has to be dependable.** A gesture has to express the idea and respond every time. That's why every gesture has a keyboard equivalent, the camera calibrates itself, and a lift on uncleared land clears it first, so no gesture is ever wasted.
+> **Third: a meaningful interaction also has to be dependable.** A gesture has to express the idea and respond every time. That's why every gesture has a keyboard equivalent, the camera calibrates itself and why a lift only builds on land you have already cut.
 
-中文：三、有意义的交互也必须可靠。手势要表达概念，也要每次都有反应，所以每个手势都有键盘备用、摄像头会自己校准、在没砍过的地上举手会先帮你砍，手势不会白做。
+中文：三、有意义的交互也必须可靠。手势要表达概念，也要每次都有反应，所以每个手势都有键盘备用、摄像头会自己校准、举手只会在砍过的地上盖。
 
 > Overall, I think it achieves its main aim: the cost of building is felt rather than read. The open question is whether people who don't know the project read it the way I intend, so user testing with strangers is the next step.
 

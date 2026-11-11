@@ -351,7 +351,7 @@ Helpers: `facadeWindows` (a grid of windows, some lit, with sills and bars), `fa
 
 ---
 
-# PART D: world.js — the artwork's rules (lines 1605–2404)
+# PART D: world.js — the artwork's rules (lines 1605–2416)
 # 第四部分：world.js，作品的规则
 
 ### D1. The street plan and building styles (lines 1615–1645)
@@ -395,7 +395,7 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** 一挥手就砍掉两块地的森林，故意做得"太容易"。鸟飞走是森林的反应。
 
-### D6. Building, floor by floor (lines 1739–1939)
+### D6. Building, floor by floor (lines 1739–1948)
 
 **What it does:**
 - `makeBuilt(L, kind, level)`: hand shape (`home`/`shop`/`tower`) × height level (0/1/2) chooses a random building from a family. The tallest towers are made **vacant** and get a name from `VOID_NAMES`.
@@ -403,7 +403,7 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 - `handUpdate(dt)` every frame:
   - keys H / S / B (homes / shops / towers) lift like a hand, but **only on a side you have cut** (a key never clears forest itself; with nothing cut on either side it shows "Cut the forest first"). **Each press** (`keyTap` → `tapBuild`) adds floors at once to the 2 nearest cut lots: presses 1–2 small, 3–4 middle, 5 the biggest, then from the 7th about a floor per press (up to 1.6×); a bigger building never ends up lower than what is built; each lot's own size lean, taken in turn from a mixed tall/small pattern per side (`LEAN`, `lotBias` / `lotLevel`, for hands, held keys and presses) and `pace`, a ×0.8–1.25 height in `makeBuilt` and `recentLooks` (none of the last 5 looks, else the one used longest ago) keep a row from looking uniform; it tops out 0.7 s after the last press. Holding also grows it (hold < 0.6 s small, < 1.4 s middle, longer big);
   - each hand's lift goes to the **2 nearest cleared lots on its side**;
-  - if nothing is cleared, it **cuts first** and remembers what to build, so a lift is never wasted;
+  - if nothing is cleared, a hand lift builds nothing (you always cut first) and a hint says which side to cut; `deliberateLift` ignores the 0.6 s after a chop and any rise under 6% of the picture;
   - reaching a higher level re-makes the building bigger but keeps the height already built;
   - growth = `lift × 3`, slightly slower for tall buildings, capped at 97% while lifting;
   - **0.25 s after you stop lifting it tops out by itself**.
@@ -415,11 +415,11 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** 手的形状决定盖什么，手的高度决定多大。手往上举，楼就一层一层长，每层"咚"一声；停手 0.25 秒楼自己封顶，手不用一直举着。没砍过的地会先自动砍，所以每次举手都有反应。最高的摩天楼是空的，取名 "Forest View Apartments"。
 
-### D7. Your hands: webcam + ml5 handPose (lines 1940–2041)
+### D7. Your hands: webcam + ml5 handPose (lines 1949–2053)
 
 **What it does:**
 - `startHands()` (C key): loads ml5.js 1.0.1 from the web, opens the camera (320 × 240), starts `ml5.handPose({ maxHands: 2 })` and calls `gotHands` every time it sees hands. If anything fails, it tells you to use the keys.
-- `gotHands(results)`: each hand has **21 landmarks**. Hands that ml5 is less than 60% sure about are skipped. The picture is **mirrored** (`1 − x`). Which hand is which comes from ml5's own **handedness** label; the sketch learns whether that label means your left or the picture's left from hands seen clearly on one side (`handVote`, `sideOfLabel`), so after a few seconds your right hand always works the right side, even reaching across the middle. Until then: a hand still moving keeps its side (seen < 0.15 s ago, close by), and a hand that appears anew goes by its half of the picture. It also records each hand's box in the picture (`handBoxes`) for the walking detector.
+- `gotHands(results)`: each hand has **21 landmarks**. Hands that ml5 is less than 60% sure about are skipped. The picture is **mirrored** (`1 − x`). Which hand is which comes from ml5's own **handedness** label; the sketch learns whether that label means your left or the picture's left only from both hands seen far apart at once (`handVote`, `sideOfLabel`), so after a few seconds your right hand always works the right side, even reaching across the middle. Until then: a hand still moving keeps its side (seen < 0.15 s ago, close by), and a hand that appears anew goes by its half of the picture. It also records each hand's box in the picture (`handBoxes`) for the walking detector.
 - `handShape(at, wrist)`: each finger is read on its own: the distance from its **tip** to the wrist ÷ the distance from its **middle joint (PIP)** to the wrist. Above 1.18 the finger is straight, below 1.02 it is curled, in between unsure. Only the index straight (the others curled) → **point** (one finger, homes); three or more straight → **open** (shops); none straight and most curled → **fist** (towers); anything else → `null` (unclear, builds nothing).
 - `handFeedSide(side, x, y, shape)`: a new shape only counts after it is seen **3 times in a row** (`cand`, `candN`); upward movement adds to `lift` (building); a **chop** is a sideways move of more than 18% of the picture within 0.4 s that is more sideways than vertical, with a 0.35 s pause between chops.
 - `kindOf(shape)`: one finger → `home`, open → `shop`, fist → `tower`.
@@ -428,7 +428,7 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** ml5 每只手给 21 个点。每根手指分开看：指尖到手腕 ÷ 中间关节到手腕，大于 1.18 是直的，小于 1.02 是弯的。只有食指直 = 一根手指（住宅），三根以上直 = 张开（商店），全部不直 = 拳头（高楼），看不清楚就不盖。新手形要连续认到 3 次才算。挥手要"横向多于纵向"才算砍，举手不会被误判。一只手挥过画面中间仍然算同一只手，这修好了我最大的 bug。
 
-### D8. Your body: walking on the spot (lines 2042–2124)
+### D8. Your body: walking on the spot (lines 2054–2136)
 
 **What it does:**
 - `sampleMotion()` every 66 ms: shrinks the camera picture to **48 × 36 grey pixels**, compares it with the last one, counts pixels whose brightness changed by more than 20, **only in the middle columns** (your body, not your arms), and **skips every hand ml5 saw in the last 0.3 s, plus the arm below it** (a mask from `handBoxes`). If the hands hide almost all of the body, it keeps your pace. Walking only starts when 6 of the last 8 samples moved (`stepHist`, about half a second).
@@ -440,7 +440,7 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** 用"帧差法"（不是 AI）：画面缩成 48×36 灰阶，跟上一张比较有多少点在变，只看中间（身体），而且把手和手下面的手臂挖掉，所以可以边走边砍边盖；要连续动约半秒才开始走。开始时站 2 秒校准，量出房间本身的噪音再扣掉。右下角面板显示摄像头画面、手的轨迹和踏步量。
 
-### D9. The sound of the homes (lines 2125–2155)
+### D9. The sound of the homes (lines 2137–2167)
 
 `lifeKind` picks a home's sound from its seed (small homes: dog, radio; big ones: piano, TV). `lived` is false for industry, car parks and empty towers. `houseLife` lets the 3 nearest lived-in homes within 24 m take turns, panned to where they are; standing still opens the filter so you can listen.
 
@@ -448,13 +448,13 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** 附近 3 间有人住的房子轮流发出生活声，站着不动就听得清楚。空置的高楼没有声音，这也是想表达的。
 
-### D10. Drawing on the street (lines 2156–2204)
+### D10. Drawing on the street (lines 2168–2216)
 
 `paintSlogan` paints a red marker slogan with a white edge and paint drips on one wall per side, fitted to one or two lines and mapped onto the wall in perspective. `drawPerson` draws a person with a shadow, legs, coat, head and sometimes a phone. `drawStreetLife` lays a 30% desaturating wash over the street.
 
 **中文：** 墙上用红色马克笔写标语（有白边和往下流的颜料），跟着透视贴在墙上。画行人。整个画面盖一层 30% 去饱和，让颜色沉稳。
 
-### D11. The HUD and the cards (lines 2205–2364)
+### D11. The HUD and the cards (lines 2217–2376)
 
 - `drawHud()`: the scoreboard (TREES YOU CUT DOWN | BUILDINGS YOU BUILT, and the NATURE → CITY bar), messages, the NEXT bar, the music label, the camera panel, the opening card and the ending card.
 - `nextText()`/`drawNextBar()`: one instruction at a time: build if there is cleared land, cut if there is forest, else "Walk on".
@@ -466,13 +466,13 @@ Counters (`treesCut`, `builtCount`, `homesBuilt`, `shopsBuilt`, `towersBuilt`, `
 
 **中文：** 计分板、NEXT 提示（一次只给一个指示）、开场卡、结局卡。结局按你做的事情分三种，不会用同一种方式评判每个人。
 
-### D12. Ending and starting again (lines 2365–2379)
+### D12. Ending and starting again (lines 2377–2391)
 
 `endWalk()` (F): sets the ending, plays the chime, dims the light a little, and **turns you round first** to see the street you made; the card fades in at 2.6 s. `restartWalk()` (R): a new seed, every count back to zero, the forest back, the opening card.
 
 **中文：** 按 F：先让你转身看你建的街，再淡入结局卡。按 R：新的种子、全部归零、森林回来。
 
-### D13. Keys and clicks (lines 2380–2404)
+### D13. Keys and clicks (lines 2392–2416)
 
 `worldKey(e)`: E/Space close the opening card, R restart, T turn round, F end/continue, C camera, X/D/→ cut right, Z/A/← cut left, H/S/B (held) build homes/shops/towers, `[`/`]` step sensitivity. `worldClick`: a click closes the opening card, or the end card after 4.5 s.
 

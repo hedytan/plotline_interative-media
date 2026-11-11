@@ -168,6 +168,16 @@ function makeBuilt(L, kind, level = 0) {
 // The height of your hand picks the size: low (0), chest to face (1), above your head (2).
 // With the keys, holding longer goes bigger.
 function handLevel(s) { const h = 1 - s.y; return h < 0.5 ? 0 : h < 0.72 ? 1 : 2; }
+// A lift only builds when it is meant: not in the 0.6 s after a chop (a swing carries the hand up a
+// little), and only once the hand has gone up by 6% of the picture in one go (a small twitch never
+// builds). After that, every bit of upward movement adds floors.
+let liftHintT = -9;
+function deliberateLift(s, kind, now) {
+  if (!kind || !(s.lift > 0) || now - s.chopT < 0.6) { if (now - (s.raiseT || 0) > 0.4) { s.raise = 0; } return 0; }
+  if (now - (s.raiseT || 0) > 0.4) { s.raise = 0; }
+  s.raise = (s.raise || 0) + s.lift; s.raiseT = now;
+  return s.raise > 0.06 ? s.lift : 0;
+}
 // What each hand shape builds: one finger = homes, open hand = shops, fist = industry and towers.
 // An unclear shape builds nothing (see handFeedSide), so a half-open hand never builds the wrong thing.
 function kindOf(shape) { return shape === 'point' ? 'home' : shape === 'open' ? 'shop' : shape === 'fist' ? 'tower' : null; }
@@ -209,28 +219,21 @@ function handUpdate(dt) {
     }
   }
   for (const side of [-1, 1]) {
-    const s = hands[side], handKind = s.ok ? kindOf(s.shape) : null, handLift = handKind ? s.lift : 0, lift = handLift + keyLift, kind = keyKind || handKind; s.lift = 0;
+    const s = hands[side], handKind = s.ok ? kindOf(s.shape) : null, handLift = deliberateLift(s, handKind, now), lift = handLift + keyLift, kind = keyKind || handKind; s.lift = 0;
     if (!handsActive() || lift <= 0 || !kind) { continue; }
     // The lift raises the cleared lots on this hand's side, nearest first.
     const cleared = [];
     for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT > 0.45 && Math.abs(L.z0 - distanceWalked) < 50) { cleared.push(L); } } }
     cleared.sort((a, b) => Math.abs(a.z0 - distanceWalked) - Math.abs(b.z0 - distanceWalked));
-    // Nothing cleared on this side yet. If the trees are still falling, remember what to build there.
-    // A hand lift on uncut forest clears it itself (so a gesture is never wasted); a key does not:
-    // with the keys you choose the side by cutting it first.
+    // Nothing cleared on this side yet: nothing is built. You always cut first (a swing, or the arrow
+    // keys), then lift. A held key whose trees are still falling remembers what to build there.
     if (!cleared.length) {
       let falling = false;
       for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && clockT - L.cutT <= 0.45) { falling = true; } } }
-      if (falling) {
-        const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
-        for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && !L.buildKind && clockT - L.cutT <= 0.45) { const lv = lotLevel(L, level); L.buildKind = kind; L.level = lv; makeBuilt(L, kind, lv); L.grow = 0.02; L.liftT = clockT; } } }
-      } else if (handLift <= 0) { keyNoLand++; }
-      else {
-        chopForest(side);
-        // Remember what this press or lift asked for, so even a quick tap builds once the trees are down.
-        const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
-        for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && !L.buildKind && clockT - L.cutT <= 0.45) { const lv = lotLevel(L, level); L.buildKind = kind; L.level = lv; makeBuilt(L, kind, lv); L.grow = 0.02; L.liftT = clockT; } } }
-      }
+      if (falling && keyLift) {
+        for (const ch of chunks.values()) { for (const L of ch.lots) { if (L.side === side && L.cutT !== undefined && L.born === undefined && !L.buildKind && clockT - L.cutT <= 0.45) { const lv = lotLevel(L, keyLevel); L.buildKind = kind; L.level = lv; makeBuilt(L, kind, lv); L.grow = 0.02; L.liftT = clockT; } } }
+      } else if (!falling && keyLift) { keyNoLand++; }
+      else if (!falling && handLift > 0 && clockT - liftHintT > 4) { liftHintT = clockT; sayToast(`Cut the ${side < 0 ? 'left' : 'right'} side first: swing that hand`); }
       continue;
     }
     const level = keyLift ? keyLevel : s.ok ? handLevel(s) : 0;
@@ -364,14 +367,13 @@ function startHands() {
   document.head.appendChild(sc);
 }
 // Which hand is which. ml5 labels every hand 'Left' or 'Right', but whether that label means your
-// left or the picture's left depends on the camera, so the sketch learns it while you play: a hand
-// seen well over on one side of the mirrored picture is almost always the hand on that side of your
-// body, and every such sighting is a vote. Once the votes agree (handVote at +-5 or more), the label
+// left or the picture's left depends on the camera, so the sketch learns it while you play, from
+// sightings that can't be wrong (see gotHands: both hands in the picture, far apart). Once the votes agree (handVote at +-6 or more), the label
 // decides, wherever the hand is in the picture, so your right hand works the right side of the street
 // even when it reaches across the middle. Until then the half of the picture decides.
 let handVote = 0;
 function sideOfLabel(label) {
-  if (label !== 'Left' && label !== 'Right' || Math.abs(handVote) < 5) { return 0; }
+  if (label !== 'Left' && label !== 'Right' || Math.abs(handVote) < 6) { return 0; }
   const s = label === 'Right' ? 1 : -1; return handVote > 0 ? s : -s;
 }
 // ml5 calls this with the hands it found (21 points each). Read each hand's shape and side.
@@ -384,11 +386,15 @@ function gotHands(results) {
     const wrist = at('wrist'), mcp = at('middle_finger_mcp'), p = mcp || wrist || kp[0]; if (!p) { continue; }
     if (kp.length) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const k of kp) { x0 = Math.min(x0, k.x); y0 = Math.min(y0, k.y); x1 = Math.max(x1, k.x); y1 = Math.max(y1, k.y); } boxes.push({ x0, y0, x1, y1 }); }
     const x = 1 - p.x / (handVideo.width || 320), label = h.handedness;
-    // Learn what the label means from hands clearly on one side of the picture.
-    if ((label === 'Left' || label === 'Right') && (x < 0.35 || x > 0.65)) { const agree = (label === 'Right') === (x > 0.5); handVote = Math.max(-30, Math.min(30, handVote + (agree ? 1 : -1))); }
-    seen.push({ x, y: p.y / (handVideo.height || 240), fist: wrist ? handShape(at, wrist) : null, side: sideOfLabel(label) });
+    seen.push({ x, y: p.y / (handVideo.height || 240), fist: wrist ? handShape(at, wrist) : null, label });
   }
   handBoxes = boxes; handBoxT = performance.now();
+  // Learn what ml5's label means only from a sighting that can't be wrong: two hands at once, far
+  // apart (the one further left is your left). A single hand never votes, because a chop carries it
+  // right across the picture and it may stop on the other side.
+  const vote = (h, isRight) => { if (h.label === 'Left' || h.label === 'Right') { handVote = Math.max(-30, Math.min(30, handVote + ((h.label === 'Right') === isRight ? 1 : -1))); } };
+  if (seen.length === 2) { const [a, b] = [...seen].sort((p, q) => p.x - q.x); if (b.x - a.x > 0.25 && a.label !== b.label) { vote(a, false); vote(b, true); } }
+  for (const h of seen) { h.side = sideOfLabel(h.label); }
   const feed = (side, h) => handFeedSide(side, h.x, h.y, h.fist);
   seen.sort((a, b) => a.x - b.x);
   if (seen.length === 2) {

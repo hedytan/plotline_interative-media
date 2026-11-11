@@ -161,7 +161,7 @@ I hope people leave a little more aware of what was there before the buildings. 
 **Q：Why a seeded random instead of Math.random()?**
 > "With a seed, the same block always comes out the same. So when you turn round and look back, the street you walked through is still there exactly as it was. Math.random() would give a different street every time it's regenerated."
 
-## 3.3 手势识别：`startHands` / `gotHands` / `handFeedSide`（第 1949–2041 行）
+## 3.3 手势识别：`startHands` / `gotHands` / `handFeedSide`（第 1958–2053 行）
 
 **`startHands`**：按 C 才开始。它从网上载入 ml5.js 1.0.1，打开摄像头（320×240），开启 `ml5.handPose`（最多两只手），每次识别到手就呼叫 `gotHands`。载入失败的话，会显示改用键盘的提示。
 
@@ -177,11 +177,11 @@ I hope people leave a little more aware of what was there before the buildings. 
    - ml5 自己的信心低于 0.6 的手直接忽略。
    - 也会记下每只手在画面里的范围（`handBoxes`），给走路侦测用。
 2. **镜像**：`x = 1 - p.x / 宽度`，所以你往左动，画面里的手也往左，像照镜子。
-3. **分左右手**：用 ml5 自己给的左右手标签（handedness）。程序会在你玩的时候自动学会这个标签在你的镜头里代表哪一边（手明显在画面一边时投一票，`handVote`）；学会以后右手就一定管右边，伸过中间也一样。学会之前：同一只手还在连续移动（0.15 秒内、位置很近）就保持原来那边，新出现的手就看它在画面哪一半。
+3. **分左右手**：用 ml5 自己给的左右手标签（handedness）。程序会在你玩的时候自动学会这个标签在你的镜头里代表哪一边（只有两只手同时在画面里、分得很开时才投票，`handVote`；一只手挥过画面中间不会投票）；学会以后右手就一定管右边，伸过中间也一样。学会之前：同一只手还在连续移动（0.15 秒内、位置很近）就保持原来那边，新出现的手就看它在画面哪一半。
 
 **这是我修过的一个 bug**：原来只按"手在画面左半边还是右半边"来分。结果一只手挥过中线，就被拆成两只手各挥了半下，两边都不够长，砍不到树。改成"记住这只手刚才是谁"之后就好了。（这件事写在你的 reflection 里。）
 
-**`handFeedSide`（第 2023 行）**：处理一只手的每个新位置。
+**`handFeedSide`（第 2035 行）**：处理一只手的每个新位置。
 - **手形要稳定才算**：新的手形要**连续认到 3 次**（约 0.1 秒）才会换，举手中途画面糊一下不会把住宅变成高楼。
 - **`kindOf`**：把手形换成要盖的东西：一根手指 → 住宅，张开 → 商店，拳头 → 高楼。
 - **举手 = 建房**：和上一个位置比，往上移（y 变小）超过 0.004，就累加到 `s.lift`。
@@ -196,9 +196,9 @@ I hope people leave a little more aware of what was there before the buildings. 
 **Q：What was the hardest problem?**
 > "Chopping didn't work reliably. I found that hands were assigned by which half of the picture they were in, so one hand swinging across the middle was split into two half-swings, and neither was long enough. I fixed it by remembering which hand it was a moment ago. I also learned not to change many thresholds at once. I tried a big rewrite, it felt worse, so I went back to the working version and only re-applied two small fixes."
 
-## 3.4 建造：`handUpdate` / `makeBuilt` / `growLot`（第 1743–1892 行）
+## 3.4 建造：`handUpdate` / `makeBuilt` / `growLot`（第 1743–1901 行）
 
-**`handUpdate`（第 1787 行）**，每帧执行：
+**`handUpdate`（第 1803 行）**，每帧执行：
 1. 键盘代替手势：H = 住宅，S = 商店，B = 工业和高楼，只在砍过的那一边盖。**多按几下就越长越高**（`tapBuild`）：按 1–2 下是小楼，3–4 下变中型，第 5 下变大楼，第 7 下以后每按一下再加一两层（最高 1.6 倍），不会越按越矮。每栋楼的高度是原本的 80% 到 125%，同时盖的几栋长大的节奏也不同，相邻的楼不会是同一种样子，所以整排楼不会一模一样。每块地会按一个高低交错的顺序偏大或偏小（`LEAN`、`lotLevel`），所以隔壁的楼会一高一矮，按住键、用手举、一下一下按都一样；高的住宅有三种：公寓、阳台种树的高楼、红砖公寓楼；最后一下之后 0.7 秒自己封顶。按住不放也会长。
 2. 每只手把"举起的量"分给**它那一边最近的两块已经砍空的地**。
 3. **如果那边还没砍**：自动先砍，并先记下你要建什么，树倒下后马上开始建。所以**每一次举手都一定有反应**，不会白举。
@@ -217,7 +217,7 @@ I hope people leave a little more aware of what was there before the buildings. 
 
 最高级的摩天楼会被设成**空置**（`vacant: true`），取名自 `VOID_NAMES`，例如 "FOREST VIEW APARTMENTS"。
 
-**`growLot`（第 1878 行）**：每多长一层就播放一声"咚"（`floorUp`），一层比一层高音。长到 100% 就算建成：计数加一，播放落成音效，工厂和发电厂另外记一笔（会让烟雾加重）。
+**`growLot`（第 1887 行）**：每多长一层就播放一声"咚"（`floorUp`），一层比一层高音。长到 100% 就算建成：计数加一，播放落成音效，工厂和发电厂另外记一笔（会让烟雾加重）。
 
 **Q：How does building work?**
 > "Lifting a hand adds to a 'lift' amount. Each frame, that lift goes into the two nearest cleared lots on that hand's side, so the building grows floor by floor while you keep lifting, with a sound for every floor. How high your hand is picks the size, and the shape picks the type. When you stop lifting, it tops out on its own after a quarter of a second. If there's no cleared land yet, the lift clears it first, so a gesture is never wasted."
@@ -225,7 +225,7 @@ I hope people leave a little more aware of what was there before the buildings. 
 **Q：Why does the height of the hand change the size?**
 > "Because it's the meaning: greed is literally a reach upward. The more you reach, the more you take."
 
-## 3.5 用身体走路：`sampleMotion` / `bodySpeed`（第 2054–2095 行）
+## 3.5 用身体走路：`sampleMotion` / `bodySpeed`（第 2066–2107 行）
 
 这里**没有用 AI 模型**，用的是一个简单又快的方法：**帧差法**（frame differencing）。
 1. 每 66 毫秒（约每秒 15 次），把摄像头画面缩小成 **48×36** 的小图，变成灰度。
@@ -319,9 +319,9 @@ I hope people leave a little more aware of what was there before the buildings. 
 ## 3.10 建筑升起的动画、脚手架、提示
 
 - **`riseOf`（第 629 行）**：ease-out-back 缓动曲线，2.4 秒。楼长到顶会稍微超过一点再回来，有"砰"的弹跳感。
-- **`lotRise`（第 1893 行）**：建造中的楼按**整层**跳升（不是平滑长高），每升一层轻轻弹一下，所以看得出是一层一层盖的。
-- **`drawBuildSite`（第 1902 行）**：建造中的脚手架（钢管、横杆、斜撑、木板、绿色防护网），18 米以上的楼旁边再加一台转动的塔吊；**楼一盖好就马上消失**。
-- **`nextText` / `drawNextBar`（第 2247 行）**：画面上方的 NEXT 提示，依情况变化：
+- **`lotRise`（第 1902 行）**：建造中的楼按**整层**跳升（不是平滑长高），每升一层轻轻弹一下，所以看得出是一层一层盖的。
+- **`drawBuildSite`（第 1911 行）**：建造中的脚手架（钢管、横杆、斜撑、木板、绿色防护网），18 米以上的楼旁边再加一台转动的塔吊；**楼一盖好就马上消失**。
+- **`nextText` / `drawNextBar`（第 2259 行）**：画面上方的 NEXT 提示，依情况变化：
   - 附近有空地 → "Lift a hand to build..."；
   - 有森林 → "Swing your left or right hand to cut that side"；
   - 都没有 → "Walk on"。

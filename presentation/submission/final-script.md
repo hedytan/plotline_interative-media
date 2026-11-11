@@ -171,7 +171,7 @@ Thursday 12 November 2026, 11:00 – 11:15, CB10.04.430, with Jacob Dawson-Daley
 > "ml5 gives 21 points per hand. For each finger I compare tip-to-wrist with joint-to-wrist: straight or curled. Only the index straight is one finger, three or more straight is an open hand, none is a fist. An unclear shape builds nothing, and a new shape must be seen three frames in a row."
 
 **Q: How do you know which hand is left or right?**
-> "ml5 labels each hand Left or Right, but what that means depends on the camera, so the sketch learns it in the first few seconds from hands seen clearly on one side. After that your right hand always works the right side, even across the middle."
+> "ml5 labels each hand Left or Right, but what that means depends on the camera, so the sketch learns it whenever both hands are in the picture, far apart. With one hand, it goes by where the hand is, and a hand that keeps moving keeps its side, so a swing across the middle still cuts its own side. After that your right hand always works the right side, even across the middle."
 
 **Q: How is a chop detected?**
 > "A sideways move of more than 18% of the picture within 0.4 seconds, and more sideways than vertical, so lifting never counts as chopping."

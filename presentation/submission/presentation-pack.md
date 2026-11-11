@@ -118,7 +118,7 @@ Thursday 12 November 2026, 11:00 – 11:15, CB10.04.430, with Jacob Dawson-Daley
 >
 > **Second: removing features made it clearer.** My first version was a Monopoly street full of signs and rules, and my tutor said the meaning was unclear. When I cut it down to forest, clearing and building, the piece became calm and needed no reading. Next time I'll test whether people understand the core interaction before I add visual detail.
 >
-> **Third: meaningful and dependable are two different jobs.** A gesture has to say something, and it also has to respond every time. That's why every gesture has a keyboard fallback, and why a lift with no cleared land clears it first, so a gesture is never wasted.
+> **Third: meaningful and dependable are two different jobs.** A gesture has to say something, and it also has to respond every time. That's why every gesture has a keyboard fallback and why a lift only builds on land you have already cut.
 
 最后一句可以说：
 > Overall it reaches its main aim: the cost of building is felt, not read. What I still don't know is whether strangers read it the way I intend, so that's the next thing I'd test.
@@ -287,7 +287,7 @@ growLot(L, lift * 3 * Math.pow(8 / Math.max(8, L.H), 0.3), 0.97);
 > "I keep the last 0.4 seconds of each hand's positions. A chop is a sideways move of more than 18% of the picture, and it has to be more sideways than vertical. That last rule is what stops a lift from chopping."
 
 **Q15. How do you know which hand is which?**
-> "ml5 labels each hand Left or Right, but what that label means depends on the camera, so the sketch learns it while you play: a hand seen clearly on one side of the mirrored picture is a vote. Once it knows, your right hand always works the right side, even reaching across the middle. Before that, a hand that keeps moving keeps its side, so a swing across the middle stays one swing. Mixing up the hands was my biggest bug."
+> "ml5 labels each hand Left or Right, but what that label means depends on the camera, so the sketch learns it when both hands are in the picture, far apart. Once it knows, your right hand always works the right side, even reaching across the middle. Before that, a hand that keeps moving keeps its side, so a swing across the middle stays one swing. Mixing up the hands was my biggest bug."
 
 **Q16. How does walking on the spot work? Is it machine learning?**
 > "No, it's frame differencing. Fifteen times a second I shrink the camera image to 48 by 36 grey pixels and count how many changed, only in the middle where your body is, and I cut out every hand ml5 finds plus the arm below it. So hand gestures never start or stop walking, and you can cut and build while you walk. It also needs about half a second of steady movement before you move. A two-second calibration at the start measures the room's noise and subtracts it."
@@ -347,7 +347,7 @@ growLot(L, lift * 3 * Math.pow(8 / Math.max(8, L.H), 0.3), 0.97);
 `[DO: 打开 world.js，搜 handShape，指出判断 fist / point / open 的三行。]`
 
 **Q33. "What happens if I lift my hand but there's no cleared land?"**
-> "It cuts the nearest forest first and remembers what you asked for, so the building starts as soon as the trees are down. A gesture is never wasted."
+> "Nothing. You always cut first, then lift; it tells you to cut that side. A lift also has to be real: the swing itself and small twitches never build."
 
 **Q34. "Why does the building keep growing after I stop?"**
 > "On purpose: 0.25 seconds after you stop lifting, it tops out at the size your hand reached, so you don't have to hold your arm up."
