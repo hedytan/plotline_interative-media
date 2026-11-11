@@ -7,7 +7,7 @@ Thursday 12 November 2026, 11:00 - 11:15, room CB10.04.430, with Jacob Dawson-Da
 |---|---|---|---|
 | 1 | A2B presentation (slides 1-6, live demo) | 5 min | 11:00 - 11:05 |
 | 2 | A2B Q&A | 3 min | 11:05 - 11:08 |
-| 3 | A2C reflection (no slides) | 3 min | 11:08 - 11:11 |
+| 3 | A2C reflection (2 reflection slides) | 3 min | 11:08 - 11:11 |
 | 4 | A2C Q&A | 2 min | 11:11 - 11:13 |
 | | spare | 2 min | |
 
@@ -28,6 +28,7 @@ Thursday 12 November 2026, 11:00 - 11:15, room CB10.04.430, with Jacob Dawson-Da
 - [ ] Press **R** to start again; leave it on the opening card.
 - [ ] Second tab: `sketch-all.js` open (p5 editor or VS Code) for slide 5 / questions.
 - [ ] Slides open on slide 1. Notifications off.
+- [ ] Reflection slides (`We Build Our World - A2C reflection slides.pptx`) open in a second window, ready for Part 3.
 - [ ] Wait outside until you are called.
 
 ## Controls (backup if the camera fails)
@@ -214,22 +215,32 @@ Let the forest slowly grow back when you stop building, so restraint has a visib
 
 ---
 
-# PART 3: A2C REFLECTION (3 minutes, no slides)
+# PART 3: A2C REFLECTION (3 minutes, 2 slides)
 
-Talk about insights and future practice, not the whole story.
+Talk about insights and future practice, not the whole story. Switch to the reflection slides.
+
+## Reflection slide 1: The bugs were between the code and the body
 
 **Opening (10 s)**
-My reflection has two key features, and what they taught me about my practice.
+My reflection has two key insights, and what they taught me about my practice.
 
 **Insight 1: Interaction bugs live between the algorithm and a real body (about 1 min)**
 Chopping kept failing, and the problem wasn't the model, it was my rules. I assigned hands by which half of the picture they were in, so one swing across the middle became two half-swings. Then I over-corrected with a big rewrite that changed many thresholds at once, and it felt worse. I rolled back with version control and re-applied only two small fixes.
 
 For my practice: I'll test with a real camera and real people early, change one thing at a time, and commit small working steps so I can always go back. Even this week, testing with my own hands led me to change the gestures, let walking and building happen together, and teach the sketch which hand is which.
 
+*(Point to the dark box: FOR MY PRACTICE.)*
+
+## Reflection slide 2: Let the world answer, not the words
+
+*(Point to the BEFORE picture, then the NOW picture.)*
+
 **Insight 2: Let the world answer instead of explaining with words (about 1 min)**
 My first version was a Monopoly street full of signs and scores, and the feedback was that the meaning was unclear. I pivoted to forest-to-city and removed most of the text. The piece became calmer and clearer, because a consequence you cause yourself is more persuasive than a slogan. The pivot also showed that old Monopoly code was still running; removing it and caching colours made every frame twice as fast.
 
 For my practice: I'll prototype the core interaction first and check that people understand it before adding detail; write down what the player should feel and judge every feature against it; and remove old code as soon as the direction changes.
+
+*(Point to the gold line at the bottom.)*
 
 **Closing (20 s)**
 Overall, the work reaches its main aim: the cost of building is felt rather than read. The biggest lessons were about process: simplify the message until the interaction carries it, test with real bodies early, and use version control as a safety net that makes bold decisions possible.
