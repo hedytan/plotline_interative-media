@@ -179,7 +179,7 @@ function draw() {
   const dt = Math.min(deltaTime / 1000, 0.05); if (!paused) {clockT += dt;}
   // Input.
   const focus = document.activeElement === canvasNode, back = held('ArrowDown');
-  const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
+  const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight') || held('ArrowUp');   // the up arrow walks fast
   let target = 0;
   const busy = intro || ending || backT > 0.01;   // a card is up, or you are turning round: stand still
   if (busy) { target = 0; }

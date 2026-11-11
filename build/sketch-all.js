@@ -556,7 +556,7 @@ function draw() {
   const dt = Math.min(deltaTime / 1000, 0.05); if (!paused) {clockT += dt;}
   // Input.
   const focus = document.activeElement === canvasNode, back = held('ArrowDown');
-  const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight');
+  const fwd = held('KeyW') || held('ArrowUp') || pointerHeld, hurry = held('ShiftLeft') || held('ShiftRight') || held('ArrowUp');   // the up arrow walks fast
   let target = 0;
   const busy = intro || ending || backT > 0.01;   // a card is up, or you are turning round: stand still
   if (busy) { target = 0; }
@@ -2301,7 +2301,7 @@ function drawOpening() {
   // The three moves.
   const rows = [['L  R', 'Swing your left / right hand: cut the forest on that side'], ['1', 'Lift one finger: homes (higher = taller)'], ['OPEN', 'Lift an open hand: shops, diners, malls'], ['FIST', 'Lift a fist: car parks, factories, towers']];
   rows.forEach(([k, label], i) => { const ry = y + 126 + i * 32; textSize(15); const kw = 62; fill(255); stroke(90, 100, 85); strokeWeight(1.5); rect(x + 40, ry, kw, 28, 6); noStroke(); fill(30, 40, 30); textAlign(CENTER, CENTER); text(k, x + 40 + kw / 2, ry + 14); textAlign(LEFT, CENTER); textStyle(NORMAL); textSize(16); text(label, x + 40 + kw + 16, ry + 14); textStyle(BOLD); });
-  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press C for the camera: walk or run on the spot to move.   T: turn round.', cx, y + 268); text('F when you are finished.   M sound.   No camera: Z / X cut, hold H homes, S shops, B towers.', cx, y + 286);
+  textAlign(CENTER, CENTER); textStyle(ITALIC); textSize(12); fill(110, 120, 105); text('Press C for the camera: walk or run on the spot to move.   T: turn round.', cx, y + 268); text('F when you are finished.   M sound.   No camera: up arrow walks, left / right cut, H homes, S shops, B towers.', cx, y + 286);
   textStyle(BOLD); textSize(16); fill(col); drawingContext.globalAlpha = 0.55 + 0.45 * pulse; text('Click or press E to start', cx, y + h - 26); drawingContext.globalAlpha = 1;
   pop();
 }
